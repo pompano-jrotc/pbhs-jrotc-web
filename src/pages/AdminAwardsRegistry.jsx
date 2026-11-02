@@ -64,6 +64,7 @@ const ITEM_TYPES = {
     collection:   'medalTypes',
     awards:       'medalAwards',
     itemLabel:    'Medal Type',
+    hasCategory:  false,
   },
   cord: {
     label:        'Cord',
@@ -75,6 +76,7 @@ const ITEM_TYPES = {
     collection:   'cordTypes',
     awards:       'cordAwards',
     itemLabel:    'Cord Type',
+    hasCategory:  false,
   },
 };
 
