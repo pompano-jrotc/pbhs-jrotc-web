@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="302"    label="Patches"     />
-        <Stat value="635"    label="Commits"     />
+        <Stat value="303"    label="Patches"     />
+        <Stat value="636"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="246d"   label="In Dev"      />
-        <Stat value="v1.8.113" label="Current"     />
+        <Stat value="v1.8.114" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,12 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.113" date="Nov 2" title="Polls on Command Feed + staff results preview" isCurrent changes={<>
+        <Release versions="v1.8.114" date="Nov 2" title="Poll voter visibility for staff" isCurrent changes={<>
+          <C type="feat">Staff can now see who voted on any non-anonymous poll — a "Who Voted" button appears in the poll header when results are visible (staff 70+, non-anonymous polls only)</C>
+          <C type="feat">Voter names are displayed grouped by the option they chose; names are stored at vote time so no extra lookups are needed</C>
+          <C type="fix">Voter name is now saved to the pollVotes document when submitting — new votes include the cadet's full name alongside their user ID</C>
+        </>} />
+        <Release versions="v1.8.113" date="Nov 2" title="Polls on Command Feed + staff results preview" isCurrent={false} changes={<>
           <C type="feat">Polls on global broadcasts now appear directly in the Command Feed on the admin dashboard — cadets and staff can vote without leaving the dashboard</C>
           <C type="feat">Broadcast cards in the Command Feed now show the announcement title (if set) and preserve line breaks in the content</C>
           <C type="feat">Staff-only "Results" toggle added to polls — staff can peek at live vote counts before casting their own vote; clicking "Vote" returns to the voting interface</C>

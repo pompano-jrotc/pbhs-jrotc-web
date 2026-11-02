@@ -3,10 +3,10 @@ import { db } from '../firebase';
 import { doc, getDoc, setDoc, collection, query, where, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { ROLE_HIERARCHY, STAFF_LEVEL } from '../constants';
-import { BarChart2, CheckCircle2, Eye } from 'lucide-react';
+import { BarChart2, CheckCircle2, Eye, Users, ChevronDown, ChevronUp } from 'lucide-react';
 
 const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' }) => {
-  const { user, role } = useAuth();
+  const { user, role, userData } = useAuth();
   const userId    = user?.uid;
   const userPower = ROLE_HIERARCHY[role] || 1;
   const isStaff   = userPower >= STAFF_LEVEL;
@@ -18,6 +18,7 @@ const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' })
   const [voting,       setVoting]       = useState(false);
   const [voteErr,      setVoteErr]      = useState('');
   const [peekResults,  setPeekResults]  = useState(false);
+  const [showVoters,   setShowVoters]   = useState(false);
 
   // Check if current user has already voted
   useEffect(() => {
@@ -60,6 +61,7 @@ const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' })
         pollId: announcementId,
         collectionName,
         userId,
+        voterName: userData?.fullName || '',
         optionIds: selected,
         timestamp: serverTimestamp(),
       });
@@ -97,6 +99,15 @@ const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' })
             className="ml-auto flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-yellow-500 transition-colors"
           >
             <Eye size={10} /> {peekResults ? 'Vote' : 'Results'}
+          </button>
+        )}
+        {isStaff && !poll.anonymous && votes !== null && totalVoters > 0 && (hasVoted || peekResults) && (
+          <button
+            onClick={() => setShowVoters(v => !v)}
+            className={`${(!hasVoted && !peekResults) ? 'ml-auto' : ''} flex items-center gap-1 text-[9px] font-black uppercase tracking-widest transition-colors ${showVoters ? 'text-yellow-500' : 'text-slate-400 hover:text-yellow-500'}`}
+          >
+            <Users size={10} /> {showVoters ? 'Hide' : 'Who Voted'}
+            {showVoters ? <ChevronUp size={9} /> : <ChevronDown size={9} />}
           </button>
         )}
         {hasVoted && votes !== null && totalVoters === 0 && (
@@ -167,6 +178,33 @@ const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' })
           );
         })}
       </div>
+
+      {/* ── Staff voter list ── */}
+      {isStaff && !poll.anonymous && showVoters && votes !== null && (
+        <div className="mt-3 rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
+          {poll.options.map((opt, i) => {
+            const optVoters = votes.filter(v => v.optionIds.includes(opt.id));
+            if (optVoters.length === 0) return null;
+            return (
+              <div key={opt.id} className="border-b border-slate-100 dark:border-white/5 last:border-0">
+                <p className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-white/[0.02]">
+                  {String.fromCharCode(65 + i)}: {opt.text} — {optVoters.length}
+                </p>
+                <div className="px-3 py-2 flex flex-wrap gap-1.5">
+                  {optVoters.map(v => (
+                    <span key={v.userId} className="text-[10px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md">
+                      {v.voterName || v.userId}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {totalVoters === 0 && (
+            <p className="px-3 py-3 text-[10px] text-slate-400 text-center">No votes yet</p>
+          )}
+        </div>
+      )}
 
       {/* Submit / sign-in nudge / voted confirmation */}
       {!hasVoted && (
