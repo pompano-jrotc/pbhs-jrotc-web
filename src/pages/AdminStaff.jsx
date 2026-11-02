@@ -14,11 +14,10 @@ import {
   ClipboardList, Shield, Sparkles, Laptop, Users2, Package,
   Ruler, ShoppingCart, Shirt, NotepadText, ClipboardCheck,
   ScrollText, MessageSquare, Swords, Trophy, BarChart3, CalendarDays,
-  Tent, ListChecks, Bell, Lock, Award, Star,
+  Tent, ListChecks, Bell, Lock, Star,
 } from 'lucide-react';
 import AdminPageHeader from '../components/AdminPageHeader';
 import AdminS1 from './AdminS1';
-import AdminRibbonRegistry from './AdminRibbonRegistry';
 import AdminAwardsRegistry from './AdminAwardsRegistry';
 import AdminS2 from './AdminS2';
 import AdminS5 from './AdminS5';
@@ -56,7 +55,6 @@ const AdminStaff = () => {
   const canSeeMeetingLogs    = userLevel >= 5;
   const canSeeCamps          = isBattalionStaff;
   const canSeeParticipation  = isBattalionStaff;
-  const canSeeRibbonRegistry = userLevel >= 45;
   const canSeeAwardsRegistry = userLevel >= 45;
 
   // ── S3 sub-tab visibility ─────────────────────────────────────────────────────
@@ -111,8 +109,7 @@ const AdminStaff = () => {
     { key: 'meeting-logs',     label: 'Meeting Logs',        icon: NotepadText,   show: canSeeMeetingLogs },
     { key: 'camps',            label: 'Camp Attendance',     icon: Tent,          show: canSeeCamps },
     { key: 'participation',    label: 'Participation',       icon: ListChecks,    show: canSeeParticipation },
-    { key: 'ribbon-registry',  label: 'Ribbon Registry',     icon: Award,         show: canSeeRibbonRegistry },
-    { key: 'awards-registry',  label: 'Arcs, Medals & Cords', icon: Star,          show: canSeeAwardsRegistry },
+    { key: 'awards-registry',  label: 'Awards Registry',     icon: Star,          show: canSeeAwardsRegistry },
   ].filter(t => t.show);
   const [s1SubTab, setS1SubTab] = useState(s1SubTabs[0]?.key || '');
 
@@ -200,7 +197,6 @@ const AdminStaff = () => {
           {s1SubTab === 'meeting-logs'    && canSeeMeetingLogs && <AdminMeetingLogs hideHeader />}
           {s1SubTab === 'camps'           && canSeeCamps && <AdminCamps hideHeader />}
           {s1SubTab === 'participation'   && canSeeParticipation && <AdminParticipation hideHeader />}
-          {s1SubTab === 'ribbon-registry' && canSeeRibbonRegistry && <AdminRibbonRegistry hideHeader />}
           {s1SubTab === 'awards-registry' && canSeeAwardsRegistry && <AdminAwardsRegistry hideHeader />}
         </div>
       )}

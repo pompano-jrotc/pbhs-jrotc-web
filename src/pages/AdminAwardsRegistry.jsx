@@ -16,7 +16,7 @@ import { useAuth } from '../hooks/useAuth';
 import { ROLE_HIERARCHY, ADMIN_LEVEL, STAFF_LEVEL, COMMAND_LEVEL } from '../constants';
 import {
   Plus, Trash2, Pencil, X, Loader2, AlertTriangle, Users, CheckSquare, Square,
-  GripVertical, ListOrdered, Check, Circle, Medal, Star, Gem,
+  GripVertical, ListOrdered, Check, Circle, Medal, Star, Gem, Award, Download,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -31,6 +31,17 @@ import { usePageMeta } from '../hooks/usePageMeta';
 
 // ── Item type definitions ──────────────────────────────────────────────────────
 const ITEM_TYPES = {
+  ribbon: {
+    label:        'Ribbon',
+    plural:       'Ribbons',
+    Icon:         Award,
+    color:        'text-yellow-500',
+    accentBg:     'bg-yellow-500/10',
+    accentBorder: 'border-yellow-500/20',
+    collection:   'ribbonTypes',
+    awards:       'ribbonAwards',
+    itemLabel:    'Ribbon Type',
+  },
   arc: {
     label:        'Arc',
     plural:       'Arcs',
@@ -90,6 +101,78 @@ const BLANK = { name: '', code: '', description: '', category: '' };
 
 // ── Standard items for each type ───────────────────────────────────────────────
 const STANDARD_ITEMS = {
+  ribbon: [
+    { name: 'Distinguished Cadet Award',                              code: 'N-1-1',  category: 'achievement' },
+    { name: 'Academic Excellence Award',                              code: 'N-1-2',  category: 'academic'    },
+    { name: 'Academic Achievement Award',                             code: 'N-1-3',  category: 'academic'    },
+    { name: 'Perfect Attendance Award',                               code: 'N-1-4',  category: 'academic'    },
+    { name: 'Student Government Award',                               code: 'N-1-5',  category: 'leadership'  },
+    { name: 'Leadership Education & Training',                        code: 'N-1-6',  category: 'leadership'  },
+    { name: 'Superior Instructor',                                    code: 'N-1-7',  category: 'leadership'  },
+    { name: 'CPR First Aid',                                          code: 'N-1-8',  category: 'service'     },
+    { name: 'Distinguished Cadet',                                    code: 'N-1-9',  category: 'achievement' },
+    { name: 'Honor Cadet',                                            code: 'N-1-10', category: 'achievement' },
+    { name: 'Varsity Athletics',                                      code: 'N-2-1',  category: 'physical'    },
+    { name: 'Physical Fitness',                                       code: 'N-2-2',  category: 'physical'    },
+    { name: 'JROTC Athletics',                                        code: 'N-2-3',  category: 'physical'    },
+    { name: 'Junior Varsity Athletics',                               code: 'N-2-4',  category: 'physical'    },
+    { name: 'Athletic Service',                                       code: 'N-2-5',  category: 'physical'    },
+    { name: 'Dai/Sai Instructor Leadership',                          code: 'N-3-1',  category: 'leadership'  },
+    { name: 'Personal Appearance',                                    code: 'N-3-2',  category: 'military'    },
+    { name: 'Proficiency',                                            code: 'N-3-3',  category: 'achievement' },
+    { name: 'Drill Team',                                             code: 'N-3-4',  category: 'military'    },
+    { name: 'Orienteering',                                           code: 'N-3-5',  category: 'military'    },
+    { name: 'Color/Honor Guard',                                      code: 'N-3-6',  category: 'military'    },
+    { name: 'Rifle/Marksmanship Team',                                code: 'N-3-7',  category: 'military'    },
+    { name: 'Adventure Training Team',                                code: 'N-3-8',  category: 'military'    },
+    { name: 'Commendation',                                           code: 'N-3-9',  category: 'achievement' },
+    { name: 'Good Conduct',                                           code: 'N-3-10', category: 'military'    },
+    { name: 'JCLC Participation',                                     code: 'N-3-11', category: 'military'    },
+    { name: 'Championship Drill Team',                                code: 'N-3-12', category: 'military'    },
+    { name: 'Raider Team',                                            code: 'N-3-13', category: 'military'    },
+    { name: 'Recondo/Rappelling',                                     code: 'N-3-14', category: 'military'    },
+    { name: 'Meritorious Actions',                                    code: 'N-3-15', category: 'achievement' },
+    { name: 'Parade',                                                 code: 'N-4-1',  category: 'service'     },
+    { name: 'Recruiting',                                             code: 'N-4-2',  category: 'service'     },
+    { name: 'School Support',                                         code: 'N-4-3',  category: 'service'     },
+    { name: 'Community Service',                                      code: 'N-4-4',  category: 'service'     },
+    { name: 'Confidence Course',                                      code: 'N-4-5',  category: 'military'    },
+    { name: 'Service Learning',                                       code: 'N-4-6',  category: 'service'     },
+    { name: 'Excellent Staff Performance',                            code: 'N-4-7',  category: 'leadership'  },
+    { name: 'Medal for Heroism',                                      code: '',        category: 'achievement' },
+    { name: 'Superior Cadet Award',                                   code: '',        category: 'achievement' },
+    { name: 'Military Appreciation Ribbon',                           code: '',        category: 'military'    },
+    { name: 'Q1 Company Cadet of the Quarter',                        code: '',        category: 'achievement' },
+    { name: 'Q1 Company of the Quarter',                              code: '',        category: 'achievement' },
+    { name: 'Q2 Company Cadet of the Quarter',                        code: '',        category: 'achievement' },
+    { name: 'Q2 Company of the Quarter',                              code: '',        category: 'achievement' },
+    { name: 'Q3 Company Cadet of the Quarter',                        code: '',        category: 'achievement' },
+    { name: 'Q3 Company of the Quarter',                              code: '',        category: 'achievement' },
+    { name: 'Q4 Company Cadet of the Quarter',                        code: '',        category: 'achievement' },
+    { name: 'Q4 Company of the Quarter',                              code: '',        category: 'achievement' },
+    { name: 'Funeral Ribbon',                                         code: '',        category: 'service'     },
+    { name: 'Honor Company Ribbon',                                   code: '',        category: 'achievement' },
+    { name: 'Experience Camp Attendance Ribbon',                      code: '',        category: 'military'    },
+    { name: 'Experience Camp Honor Cadet Ribbon',                     code: '',        category: 'achievement' },
+    { name: 'Experience Camp Honor Company Ribbon',                   code: '',        category: 'achievement' },
+    { name: 'Company Flag Requirements Ribbon',                       code: '',        category: 'military'    },
+    { name: 'Company Commander of the Quarter Ribbon',                code: '',        category: 'leadership'  },
+    { name: 'Company XO of the Quarter Ribbon',                       code: '',        category: 'leadership'  },
+    { name: 'Company First Sergeant of the Quarter Ribbon',           code: '',        category: 'leadership'  },
+    { name: 'Platoon Leader of the Quarter Ribbon',                   code: '',        category: 'leadership'  },
+    { name: 'Platoon Sergeant of the Quarter Ribbon',                 code: '',        category: 'leadership'  },
+    { name: 'Squad Leader of the Quarter Ribbon',                     code: '',        category: 'leadership'  },
+    { name: 'Squad Member of the Quarter Ribbon',                     code: '',        category: 'achievement' },
+    { name: 'Company Platoon Leader of the Quarter Ribbon',           code: '',        category: 'leadership'  },
+    { name: 'Company Platoon Sergeant of the Quarter Ribbon',         code: '',        category: 'leadership'  },
+    { name: 'Company Squad Leader of the Quarter Ribbon',             code: '',        category: 'leadership'  },
+    { name: 'Company Squad Member of the Quarter Ribbon',             code: '',        category: 'achievement' },
+    { name: 'Experience Camp Cadet Cadre Ribbon',                     code: '',        category: 'leadership'  },
+    { name: 'JPA Ribbon',                                             code: '',        category: 'service'     },
+    { name: 'DAI Award Ribbon',                                       code: '',        category: 'achievement' },
+    { name: '100 Flags Ribbon',                                       code: '',        category: 'service'     },
+    { name: 'Highest Amount of Flags Ribbon',                         code: '',        category: 'service'     },
+  ],
   arc: [
     { name: 'Achievement Arc',           code: '', category: 'achievement' },
     { name: 'Academic Arc',              code: '', category: 'academic'    },
@@ -539,7 +622,7 @@ const AdminAwardsRegistry = ({ hideHeader = false }) => {
                 disabled={importing}
                 className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 dark:bg-white/10 dark:hover:bg-white/15 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors disabled:opacity-50"
               >
-                {importing ? <Loader2 size={13} className="animate-spin" /> : <cfg.Icon size={13} />}
+                {importing ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
                 {importing ? 'Importing…' : `Import Standard ${cfg.plural}`}
               </button>
               <button

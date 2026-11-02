@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="305"    label="Patches"     />
-        <Stat value="638"    label="Commits"     />
+        <Stat value="306"    label="Patches"     />
+        <Stat value="639"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="246d"   label="In Dev"      />
-        <Stat value="v1.8.116" label="Current"     />
+        <Stat value="v1.8.117" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.116" date="Nov 2" title="Awards Registry — Arcs, Medals & Cords" isCurrent changes={<>
+        <Release versions="v1.8.117" date="Nov 2" title="Awards Registry — Ribbons, Arcs, Medals & Cords combined" isCurrent changes={<>
+          <C type="feat">Ribbon Registry and Arcs/Medals/Cords merged into a single "Awards Registry" tab — four item types (Ribbon, Arc, Medal, Cord) accessible via a type selector at the top of one unified page</C>
+          <C type="feat">All 67 standard US Army JROTC ribbons remain importable via "Import Standard Ribbons"; arcs, medals, and cords each have 10 standard items of their own</C>
+        </>} />
+        <Release versions="v1.8.116" date="Nov 2" title="Awards Registry — Arcs, Medals & Cords" isCurrent={false} changes={<>
           <C type="feat">New "Arcs, Medals &amp; Cords" sub-tab added to S1 Shop (accessible at command level 45+) — a full registry page for managing arc, medal, and cord types with the same Catalog, Reorder, and Mass Award workflow as the Ribbon Registry</C>
           <C type="feat">Arc, Medal, and Cord each have their own Firestore collection (arcTypes / medalTypes / cordTypes) and awards collection (arcAwards / medalAwards / cordAwards); type selector at the top switches between them instantly</C>
           <C type="feat">Each type ships with 10 common JROTC standard items importable via "Import Standard" button; all three types support drag-and-drop reordering</C>
