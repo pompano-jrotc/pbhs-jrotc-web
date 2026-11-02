@@ -52,6 +52,7 @@ const ITEM_TYPES = {
     collection:   'arcTypes',
     awards:       'arcAwards',
     itemLabel:    'Arc Type',
+    hasCategory:  false,
   },
   medal: {
     label:        'Medal',
@@ -212,7 +213,7 @@ const STANDARD_ITEMS = {
 };
 
 // ── Drag-and-drop sortable row ─────────────────────────────────────────────────
-const SortableRow = ({ item }) => {
+const SortableRow = ({ item, showCategory = true }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -237,7 +238,7 @@ const SortableRow = ({ item }) => {
         <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{item.name}</p>
         {item.code && <p className="text-[10px] font-mono text-slate-400">{item.code}</p>}
       </div>
-      {item.category && (
+      {showCategory && item.category && (
         <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${CAT_CHIP[item.category] || 'bg-slate-100 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}>
           {item.category}
         </span>
@@ -666,7 +667,7 @@ const AdminAwardsRegistry = ({ hideHeader = false }) => {
                   {reorderList.map((item, idx) => (
                     <div key={item.id} className="flex items-center gap-3">
                       <span className="w-6 text-right text-[10px] font-black text-slate-300 dark:text-slate-600 shrink-0">{idx + 1}</span>
-                      <div className="flex-1"><SortableRow item={item} /></div>
+                      <div className="flex-1"><SortableRow item={item} showCategory={cfg.hasCategory !== false} /></div>
                     </div>
                   ))}
                 </div>
@@ -722,7 +723,7 @@ const AdminAwardsRegistry = ({ hideHeader = false }) => {
                         #{item.precedence}
                       </span>
                     )}
-                    {item.category && (
+                    {cfg.hasCategory !== false && item.category && (
                       <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${CAT_CHIP[item.category] || 'bg-slate-100 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}>
                         {item.category}
                       </span>
@@ -928,13 +929,15 @@ const AdminAwardsRegistry = ({ hideHeader = false }) => {
                 className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-yellow-500/40" />
             </div>
 
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Category</label>
-              <select value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40">
-                {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
+            {cfg.hasCategory !== false && (
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Category</label>
+                <select value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40">
+                  {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Description</label>
@@ -990,13 +993,15 @@ const AdminAwardsRegistry = ({ hideHeader = false }) => {
                 className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-yellow-500/40" />
             </div>
 
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Category</label>
-              <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40">
-                {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
+            {cfg.hasCategory !== false && (
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Category</label>
+                <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40">
+                  {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Description</label>
