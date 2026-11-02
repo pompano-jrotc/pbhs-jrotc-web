@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="303"    label="Patches"     />
-        <Stat value="636"    label="Commits"     />
+        <Stat value="304"    label="Patches"     />
+        <Stat value="637"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="246d"   label="In Dev"      />
-        <Stat value="v1.8.114" label="Current"     />
+        <Stat value="v1.8.115" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.114" date="Nov 2" title="Poll voter visibility for staff" isCurrent changes={<>
+        <Release versions="v1.8.115" date="Nov 2" title="Fix: voter names on pre-v1.8.114 poll votes" isCurrent changes={<>
+          <C type="fix">Voter chips in the "Who Voted" panel now look up the cadet's full name from Firestore for votes cast before v1.8.114 that lack a stored voterName; raw UIDs no longer appear</C>
+        </>} />
+        <Release versions="v1.8.114" date="Nov 2" title="Poll voter visibility for staff" isCurrent={false} changes={<>
           <C type="feat">Staff can now see who voted on any non-anonymous poll — a "Who Voted" button appears in the poll header when results are visible (staff 70+, non-anonymous polls only)</C>
           <C type="feat">Voter names are displayed grouped by the option they chose; names are stored at vote time so no extra lookups are needed</C>
           <C type="fix">Voter name is now saved to the pollVotes document when submitting — new votes include the cadet's full name alongside their user ID</C>

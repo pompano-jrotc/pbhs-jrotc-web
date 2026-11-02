@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { doc, getDoc, setDoc, collection, query, where, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, onSnapshot, serverTimestamp, getDocs } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { ROLE_HIERARCHY, STAFF_LEVEL } from '../constants';
 import { BarChart2, CheckCircle2, Eye, Users, ChevronDown, ChevronUp } from 'lucide-react';
@@ -19,6 +19,7 @@ const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' })
   const [voteErr,      setVoteErr]      = useState('');
   const [peekResults,  setPeekResults]  = useState(false);
   const [showVoters,   setShowVoters]   = useState(false);
+  const [voterNames,   setVoterNames]   = useState({});
 
   // Check if current user has already voted
   useEffect(() => {
@@ -41,6 +42,20 @@ const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' })
     const q = query(collection(db, 'pollVotes'), where('pollId', '==', announcementId));
     return onSnapshot(q, snap => setVotes(snap.docs.map(d => d.data())));
   }, [showResults, announcementId]);
+
+  // Back-fill voter names for votes that predate voterName storage
+  useEffect(() => {
+    if (!votes) return;
+    const missing = votes.filter(v => !v.voterName && v.userId).map(v => v.userId);
+    if (!missing.length) return;
+    const unresolved = missing.filter(uid => !voterNames[uid]);
+    if (!unresolved.length) return;
+    Promise.all(unresolved.map(uid => getDoc(doc(db, 'users', uid)))).then(snaps => {
+      const patch = {};
+      snaps.forEach(s => { if (s.exists()) patch[s.id] = s.data().fullName || s.id; });
+      if (Object.keys(patch).length) setVoterNames(prev => ({ ...prev, ...patch }));
+    });
+  }, [votes]);
 
   const toggleOption = (id) => {
     if (poll.type === 'single') {
@@ -193,7 +208,7 @@ const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' })
                 <div className="px-3 py-2 flex flex-wrap gap-1.5">
                   {optVoters.map(v => (
                     <span key={v.userId} className="text-[10px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md">
-                      {v.voterName || v.userId}
+                      {v.voterName || voterNames[v.userId] || v.userId}
                     </span>
                   ))}
                 </div>
