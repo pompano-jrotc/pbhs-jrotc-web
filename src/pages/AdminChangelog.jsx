@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="300"    label="Patches"     />
-        <Stat value="633"    label="Commits"     />
+        <Stat value="301"    label="Patches"     />
+        <Stat value="634"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="246d"   label="In Dev"      />
-        <Stat value="v1.8.111" label="Current"     />
+        <Stat value="v1.8.112" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.111" date="Nov 2" title="Ribbon Registry — drag-and-drop wear order" isCurrent changes={<>
+        <Release versions="v1.8.112" date="Nov 2" title="Fix: staff/command users can now vote on polls" isCurrent changes={<>
+          <C type="fix">Staff and command-level users were blocked from voting on announcement polls — the results view replaced the voting interface immediately for any user above command level, making the poll unresponsive</C>
+          <C type="fix">Fixed: all users (including staff) now see the voting interface until they cast their vote; staff still see full results immediately after voting even when resultsVisibility is set to "never"</C>
+        </>} />
+        <Release versions="v1.8.111" date="Nov 2" title="Ribbon Registry — drag-and-drop wear order" isCurrent={false} changes={<>
           <C type="feat">New "Reorder" button in the Ribbon Registry catalog (staff 70+) — enters a drag-and-drop mode showing all ribbons in a sortable list with numbered positions and grip handles</C>
           <C type="feat">Dragging ribbons up or down sets the wear order; "Save Order" batch-writes precedence values in one shot and exits reorder mode</C>
           <C type="fix">Removed the manual Order of Precedence number field from the edit and create modals — wear order is now managed exclusively through the drag interface</C>
