@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="308"    label="Patches"     />
-        <Stat value="641"    label="Commits"     />
+        <Stat value="309"    label="Patches"     />
+        <Stat value="642"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="246d"   label="In Dev"      />
-        <Stat value="v1.8.119" label="Current"     />
+        <Stat value="v1.8.120" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.119" date="Nov 2" title="Remove category from Medals and Cords" isCurrent changes={<>
+        <Release versions="v1.8.120" date="Nov 2" title="Arcs always sort alphabetically — no Reorder" isCurrent changes={<>
+          <C type="fix">Reorder button hidden for Arcs — arc order is always alphabetical so drag-and-drop was unnecessary</C>
+        </>} />
+        <Release versions="v1.8.119" date="Nov 2" title="Remove category from Medals and Cords" isCurrent={false} changes={<>
           <C type="fix">Medals and Cords no longer show or accept a category field, matching the same behavior as Arcs; Ribbons remain categorized</C>
         </>} />
         <Release versions="v1.8.118" date="Nov 2" title="Arcs have no category in Awards Registry" isCurrent={false} changes={<>
