@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, Mail, MapPin, ExternalLink, Instagram, Youtube, Phone } from 'lucide-react';
 
-const PORTAL_VERSION = 'v1.6.41';
+const PORTAL_VERSION = 'v1.8.108';
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
@@ -69,6 +69,7 @@ const Footer = () => {
                 { name: 'Rank Structure',            path: '/cadet-info' },
                 { name: 'Promotion Study Guide',     path: '/promotion-board' },
                 { name: 'Documents & Regulations',   path: '/documents' },
+                { name: 'Recommend a Cadet',         path: '/recommend' },
               ].map(link => (
                 <li key={link.name}>
                   <Link
@@ -161,6 +162,14 @@ const Footer = () => {
             <Link to="/admin" className="hover:text-yellow-500 transition-colors">
               Admin Portal
             </Link>
+            <a
+              href="https://pbhsjrotc.instatus.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 hover:text-yellow-500 transition-colors"
+            >
+              System Status <ExternalLink size={9} />
+            </a>
             <a
               href="https://www.usarmyjrotc.com/"
               target="_blank"
