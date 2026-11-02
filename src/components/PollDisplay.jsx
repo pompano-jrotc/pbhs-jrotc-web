@@ -3,7 +3,7 @@ import { db } from '../firebase';
 import { doc, getDoc, setDoc, collection, query, where, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { ROLE_HIERARCHY, STAFF_LEVEL } from '../constants';
-import { BarChart2, CheckCircle2 } from 'lucide-react';
+import { BarChart2, CheckCircle2, Eye } from 'lucide-react';
 
 const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' }) => {
   const { user, role } = useAuth();
@@ -12,11 +12,12 @@ const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' })
   const isStaff   = userPower >= STAFF_LEVEL;
 
   // undefined=loading, null=hasn't voted, string[]=voted option IDs
-  const [myVote,   setMyVote]   = useState(undefined);
-  const [selected, setSelected] = useState([]);
-  const [votes,    setVotes]    = useState(null);
-  const [voting,   setVoting]   = useState(false);
-  const [voteErr,  setVoteErr]  = useState('');
+  const [myVote,       setMyVote]       = useState(undefined);
+  const [selected,     setSelected]     = useState([]);
+  const [votes,        setVotes]        = useState(null);
+  const [voting,       setVoting]       = useState(false);
+  const [voteErr,      setVoteErr]      = useState('');
+  const [peekResults,  setPeekResults]  = useState(false);
 
   // Check if current user has already voted
   useEffect(() => {
@@ -28,10 +29,10 @@ const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' })
 
   const hasVoted    = Array.isArray(myVote);
   // Staff always see results after voting (even if resultsVisibility='never').
-  // Everyone, including staff, must vote first — the old isStaff-only guard
-  // blocked staff from voting by immediately showing the results view.
+  // Staff may also peek at results before voting via the peekResults toggle.
   const showResults = (hasVoted && (poll.resultsVisibility !== 'never' || isStaff))
-    || poll.resultsVisibility === 'always';
+    || poll.resultsVisibility === 'always'
+    || (isStaff && peekResults);
 
   // Subscribe to all votes for this poll when results need to be shown
   useEffect(() => {
@@ -86,9 +87,20 @@ const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' })
         <BarChart2 size={13} className="text-yellow-500 shrink-0" />
         <p className="text-[10px] font-black uppercase tracking-widest text-yellow-500">Poll</p>
         {votes !== null && totalVoters > 0 && (
-          <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 ml-auto">
+          <span className="text-[9px] font-black text-slate-400 dark:text-slate-500">
             {totalVoters} response{totalVoters !== 1 ? 's' : ''}
           </span>
+        )}
+        {isStaff && !hasVoted && poll.resultsVisibility !== 'always' && (
+          <button
+            onClick={() => setPeekResults(p => !p)}
+            className="ml-auto flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-yellow-500 transition-colors"
+          >
+            <Eye size={10} /> {peekResults ? 'Vote' : 'Results'}
+          </button>
+        )}
+        {hasVoted && votes !== null && totalVoters === 0 && (
+          <span className="ml-auto text-[9px] font-black text-slate-400 dark:text-slate-500">0 responses yet</span>
         )}
       </div>
 
@@ -100,7 +112,7 @@ const PollDisplay = ({ poll, announcementId, collectionName = 'announcements' })
           const pct     = totalVoters > 0 ? Math.round((count / totalVoters) * 100) : 0;
           const isMyPick = hasVoted && myVote.includes(opt.id);
 
-          if (showResults && votes !== null) {
+          if (showResults && votes !== null && (hasVoted || peekResults || poll.resultsVisibility === 'always')) {
             return (
               <div
                 key={opt.id}

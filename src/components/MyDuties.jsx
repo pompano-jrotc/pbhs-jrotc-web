@@ -1,93 +1,127 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { 
-  collection, 
-  query, 
-  where, 
-  onSnapshot, 
-  doc, 
-  updateDoc, 
-  orderBy,
-  serverTimestamp 
+import {
+  collection, query, where, onSnapshot,
+  doc, updateDoc, orderBy,
 } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
-import { CheckCircle2, Circle, Bell, ClipboardCheck } from 'lucide-react';
+import { CheckCircle2, Circle, Megaphone, ClipboardCheck, AlertTriangle, Clock, FileText, ExternalLink } from 'lucide-react';
+import { ROLE_HIERARCHY } from '../constants';
+import PollDisplay from './PollDisplay';
+
+const PRIORITY_COLOR = {
+  high:   'text-rose-500',
+  medium: 'text-amber-500',
+  low:    'text-slate-400',
+};
+
+const isOverdue = (dueDate) => {
+  if (!dueDate) return false;
+  return new Date(dueDate + 'T23:59:59') < new Date();
+};
+
+const fmtDue = (dueDate) => {
+  if (!dueDate) return null;
+  const d = new Date(dueDate + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
 
 const MyDuties = () => {
   const { userData, role } = useAuth();
-  const [myTasks, setMyTasks] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [leadershipTasks, setLeadershipTasks] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [loadingTasks, setLoadingTasks]   = useState(true);
+
+  const myCompany  = userData?.company  || '';
+  const myPosition = userData?.position || '';
+  const userLevel  = ROLE_HIERARCHY[role] || 0;
+  const isBattalion = userLevel >= 70;
+  const canToggle   = !!myCompany && !isBattalion;
+
+  const isCompletedByMe = (t) => t.completedByCompany?.[myCompany] === true;
+
+  // Filter to tasks assigned to this user's company + position
+  const visibleTasks = leadershipTasks.filter(t => {
+    if (t.assignedCompanies !== undefined) {
+      const cos = t.assignedCompanies || [];
+      const pos = t.assignedPositions || [];
+      const compOk = cos.length === 0 || cos.includes(myCompany);
+      const posOk  = pos.length === 0 || pos.includes(myPosition);
+      return compOk && posOk;
+    }
+    // old schema backward-compat
+    if (t.assignedScope === 'all') return true;
+    if (t.assignedScope === 'company') return t.assignedCompany === myCompany;
+    if (t.assignedScope === 'position') return (t.assignedPositions || []).includes(myPosition);
+    return false;
+  });
+
+  const pendingTasks = visibleTasks.filter(t => !isCompletedByMe(t));
+  const doneTasks    = visibleTasks.filter(t =>  isCompletedByMe(t));
 
   useEffect(() => {
-    if (!role || !userData?.position || !userData?.company) return;
+    if (!role || !userData?.company) return;
 
-    // Intentional: resets the loading state when role/position/company
-    // change (e.g. a live reassignment), not just on mount (loading already
-    // starts true there) - the fresh onSnapshot listeners below set it back
-    // to false once they resolve. Not something a lazy initializer or
-    // derived value can express, since this needs to re-fire on dep change.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true);
-
-    // TASK QUERY: Position specific
+    // Leadership tasks — assigned only; Firestore rules scope to what this user can read
     const qTasks = query(
-      collection(db, "tasks"), 
-      where("assignedToPosition", "==", userData.position)
+      collection(db, 'leadershipTasks'),
+      where('isAssigned', '==', true),
+      orderBy('dueDate'),
     );
 
-    // ORDER QUERY: Targeting Logic
-    const qOrders = query(
-      collection(db, "orders"),
-      where("active", "==", true),
-      where("targets", "array-contains-any", [
-        "All Battalion", 
-        "Staff", 
-        "Top 4",
-        userData.company,               
-        `${userData.company} Company`,   
-        userData.position,
-        "All"
-      ]),
-      orderBy("timestamp", "desc")
+    // Global broadcasts — active announcements addressed to everyone
+    const qAnnouncements = query(
+      collection(db, 'announcements'),
+      where('active', '==', true),
+      where('target', '==', 'All'),
+      orderBy('timestamp', 'desc'),
     );
 
-    const unsubTasks = onSnapshot(qTasks, (snapshot) => {
-      setMyTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => console.error("Task Query Failed:", error));
+    const unsubTasks = onSnapshot(
+      qTasks,
+      (snap) => {
+        setLeadershipTasks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setLoadingTasks(false);
+      },
+      (err) => { console.error('Task query failed:', err); setLoadingTasks(false); },
+    );
 
-    const unsubOrders = onSnapshot(qOrders, (snapshot) => {
-      setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      setLoading(false); 
-    }, (error) => {
-      console.error("Order Query Failed:", error);
-      setLoading(false); 
-    });
+    const unsubAnnouncements = onSnapshot(
+      qAnnouncements,
+      (snap) => {
+        const now = Date.now();
+        const active = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(a => !a.expiresAt || a.expiresAt > now);
+        setAnnouncements(active);
+        setLoadingOrders(false);
+      },
+      (err) => { console.error('Announcements query failed:', err); setLoadingOrders(false); },
+    );
 
-    return () => {
-      unsubTasks();
-      unsubOrders();
-    };
-  }, [role, userData?.position, userData?.company]);
+    return () => { unsubTasks(); unsubAnnouncements(); };
+  }, [role, myCompany, myPosition]);
 
-  const toggleComplete = async (id, currentStatus) => {
-    if (!id) return;
+  const toggleTask = async (task) => {
+    if (!canToggle) return;
+    const done = task.completedByCompany?.[myCompany] === true;
     try {
-      const taskRef = doc(db, "tasks", id);
-      await updateDoc(taskRef, {
-        status: currentStatus === 'pending' ? 'completed' : 'pending',
-        lastUpdated: serverTimestamp()
+      await updateDoc(doc(db, 'leadershipTasks', task.id), {
+        [`completedByCompany.${myCompany}`]: !done,
       });
-    } catch (error) {
-      console.error("Update Error:", error);
+    } catch (err) {
+      console.error('Toggle failed:', err);
     }
   };
+
+  const loading = loadingOrders || loadingTasks;
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <div className="w-6 h-6 border-2 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin"></div>
-        <p className="text-blue-600 dark:text-slate-500 animate-pulse text-[10px] font-black uppercase tracking-[0.2em]">
+        <div className="w-6 h-6 border-2 border-yellow-500/20 border-t-yellow-500 rounded-full animate-spin" />
+        <p className="text-slate-400 dark:text-slate-500 animate-pulse text-[10px] font-black uppercase tracking-[0.2em]">
           Syncing HQ Transmissions...
         </p>
       </div>
@@ -96,43 +130,57 @@ const MyDuties = () => {
 
   return (
     <div className="space-y-10">
-      {/* --- SECTION 1: ACTIVE ORDERS (TRANSMISSIONS) --- */}
+      {/* ── GLOBAL BROADCASTS ──────────────────────────────────────────── */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <div className="w-1 h-4 bg-yellow-500 rounded-full"></div>
+          <div className="w-1 h-4 bg-yellow-500 rounded-full" />
           <h4 className="text-[10px] font-black text-yellow-500 uppercase tracking-widest flex items-center gap-2">
-            <Bell size={14} /> Priority Orders
+            <Megaphone size={14} /> Global Broadcasts
           </h4>
         </div>
 
         <div className="space-y-3">
-          {orders.length === 0 ? (
-            <div className="pl-4 py-4 border-l border-blue-100 dark:border-white/5">
-              <p className="text-blue-600 dark:text-slate-400 text-[10px] uppercase font-bold tracking-tight">No current broadcast orders.</p>
+          {announcements.length === 0 ? (
+            <div className="pl-4 py-4 border-l border-slate-200 dark:border-white/5">
+              <p className="text-slate-400 text-[10px] uppercase font-bold tracking-tight">No active broadcasts.</p>
             </div>
           ) : (
-            orders.map((order) => (
-              <div 
-                key={order.id} 
-                className="group relative bg-blue-50/50 dark:bg-slate-950/50 border border-blue-100 dark:border-white/5 p-5 rounded-2xl transition-all shadow-sm"
+            announcements.map(a => (
+              <div
+                key={a.id}
+                className="group relative bg-slate-50 dark:bg-slate-950/50 border border-slate-200 dark:border-white/5 p-5 rounded-2xl transition-all shadow-sm"
               >
-                {/* Visual Identity Strip */}
-                <div className="absolute left-0 top-4 bottom-4 w-[3px] bg-yellow-500 rounded-r-full shadow-[0_0_8px_rgba(212,175,55,0.3)]"></div>
-                
-                <div className="flex justify-between items-start pl-3">
-                  <div className="space-y-2">
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-relaxed">
-                      {order.content}
-                    </p>
-                    <div className="flex items-center gap-3 text-[9px] font-black uppercase tracking-widest">
-                      <span className="text-blue-600 dark:text-slate-500">Issuer: {order.issuer}</span>
-                      <span className="w-1 h-1 bg-blue-200 dark:bg-slate-800 rounded-full"></span>
-                      <span className="text-yellow-500 opacity-80">Command Feed</span>
-                    </div>
+                <div className="absolute left-0 top-4 bottom-4 w-[3px] bg-yellow-500 rounded-r-full shadow-[0_0_8px_rgba(212,175,55,0.3)]" />
+                <div className="pl-3 space-y-2">
+                  {a.title && (
+                    <p className="text-[10px] font-black text-yellow-500 uppercase tracking-widest">{a.title}</p>
+                  )}
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+                    {a.content}
+                  </p>
+                  <div className="flex items-center gap-3 text-[9px] font-black uppercase tracking-widest flex-wrap">
+                    <span className="text-slate-400 dark:text-slate-500">By: {a.issuer}</span>
+                    {a.expiresAt && (
+                      <>
+                        <span className="w-1 h-1 bg-slate-300 dark:bg-slate-700 rounded-full" />
+                        <span className="text-slate-400">Ends {new Date(a.expiresAt).toLocaleDateString()}</span>
+                      </>
+                    )}
+                    {a.pdfUrl && (
+                      <a
+                        href={a.pdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-yellow-500 hover:text-yellow-400 transition-colors"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <FileText size={10} /> {a.pdfFileName || 'View PDF'} <ExternalLink size={9} />
+                      </a>
+                    )}
                   </div>
-                  <span className="text-[9px] font-black text-blue-600 dark:text-slate-400 tabular-nums">
-                    {order.timestamp?.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) || "RECENT"}
-                  </span>
+                  {a.poll && (
+                    <PollDisplay poll={a.poll} announcementId={a.id} collectionName="announcements" />
+                  )}
                 </div>
               </div>
             ))
@@ -140,57 +188,117 @@ const MyDuties = () => {
         </div>
       </div>
 
-      {/* --- SECTION 2: ACTION ITEMS (TASKS) --- */}
+      {/* ── ASSIGNED TASKS ─────────────────────────────────────────────── */}
       <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="w-1 h-4 bg-blue-500 dark:bg-blue-600 rounded-full"></div>
-          <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-2">
-            <ClipboardCheck size={14} /> My Action Items
-          </h4>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-4 bg-violet-500 rounded-full" />
+            <h4 className="text-[10px] font-black text-violet-400 uppercase tracking-widest flex items-center gap-2">
+              <ClipboardCheck size={14} /> My Action Items
+            </h4>
+          </div>
+          {visibleTasks.length > 0 && (
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+              {pendingTasks.length} pending · {doneTasks.length} done
+            </span>
+          )}
         </div>
 
-        {myTasks.length === 0 ? (
-          <div className="text-center py-10 border-2 border-dashed border-blue-100 dark:border-white/5 bg-blue-50/20 dark:bg-white/[0.02] rounded-3xl">
-            <p className="text-blue-200 dark:text-slate-800 text-[10px] uppercase font-black tracking-widest">
-              No tasks assigned to your position.
+        {isBattalion ? (
+          // Battalion: they assign tasks, not complete them — link to calendar
+          <div className="text-center py-8 border-2 border-dashed border-white/5 bg-white/[0.02] rounded-3xl">
+            <p className="text-slate-500 text-[10px] uppercase font-black tracking-widest">
+              Manage assigned tasks in the Leadership Calendar.
+            </p>
+          </div>
+        ) : visibleTasks.length === 0 ? (
+          <div className="text-center py-10 border-2 border-dashed border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02] rounded-3xl">
+            <p className="text-slate-300 dark:text-slate-800 text-[10px] uppercase font-black tracking-widest">
+              No tasks assigned to your company.
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {myTasks.map(task => (
-              <div 
-                key={task.id} 
-                className={`p-5 rounded-2xl border transition-all ${
-                  task.status === 'completed' 
-                    ? 'bg-green-500/5 border-green-500/10 opacity-60' 
-                    : 'bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 shadow-sm'
-                }`}
-              >
-                <div className="flex gap-4 items-center">
-                  <button 
-                    onClick={() => toggleComplete(task.id, task.status)} 
-                    className="transition-transform active:scale-90"
-                  >
-                    {task.status === 'completed' 
-                      ? <CheckCircle2 className="text-green-500" size={22} /> 
-                      : <Circle className="text-blue-100 dark:text-slate-800 group-hover:text-blue-500" size={22} />
-                    }
-                  </button>
-                  <div className="flex-1">
-                    <p className={`text-sm font-bold leading-tight ${
-                      task.status === 'completed' 
-                        ? 'text-slate-400 line-through' 
-                        : 'text-slate-800 dark:text-slate-200'
-                    }`}>
-                      {task.taskContent}
-                    </p>
-                    <p className="text-[9px] font-black text-blue-600 dark:text-slate-400 uppercase mt-1 tracking-widest">
-                      Assigner: {task.assignedByPos}
-                    </p>
+          <div className="space-y-2">
+            {/* Pending tasks */}
+            {pendingTasks.map(task => {
+              const overdue = isOverdue(task.dueDate);
+              return (
+                <div
+                  key={task.id}
+                  className={`p-4 rounded-2xl border transition-all ${
+                    overdue
+                      ? 'bg-rose-500/5 border-rose-500/15'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/5 shadow-sm'
+                  }`}
+                >
+                  <div className="flex gap-3 items-center">
+                    <button
+                      onClick={() => toggleTask(task)}
+                      disabled={!canToggle}
+                      className="shrink-0 transition-transform active:scale-90 disabled:cursor-default"
+                    >
+                      <Circle
+                        className={`transition-colors ${
+                          canToggle
+                            ? 'text-slate-300 dark:text-slate-700 hover:text-violet-500'
+                            : 'text-slate-200 dark:text-slate-800'
+                        }`}
+                        size={20}
+                      />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-tight truncate">
+                        {task.title}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        {overdue ? (
+                          <span className="flex items-center gap-1 text-[9px] font-black text-rose-500 uppercase tracking-widest">
+                            <AlertTriangle size={9} /> Overdue · {fmtDue(task.dueDate)}
+                          </span>
+                        ) : task.dueDate && (
+                          <span className="flex items-center gap-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            <Clock size={9} /> Due {fmtDue(task.dueDate)}
+                          </span>
+                        )}
+                        {task.priority && task.priority !== 'medium' && (
+                          <span className={`text-[9px] font-black uppercase tracking-widest ${PRIORITY_COLOR[task.priority]}`}>
+                            · {task.priority}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
+              );
+            })}
+
+            {/* Completed tasks (collapsed under a divider) */}
+            {doneTasks.length > 0 && (
+              <div className="pt-2 space-y-2">
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-600 pl-1">
+                  Completed
+                </p>
+                {doneTasks.map(task => (
+                  <div
+                    key={task.id}
+                    className="p-4 rounded-2xl border border-emerald-500/10 bg-emerald-500/5 opacity-60"
+                  >
+                    <div className="flex gap-3 items-center">
+                      <button
+                        onClick={() => toggleTask(task)}
+                        disabled={!canToggle}
+                        className="shrink-0 transition-transform active:scale-90 disabled:cursor-default"
+                      >
+                        <CheckCircle2 className="text-emerald-500" size={20} />
+                      </button>
+                      <p className="text-sm font-bold text-slate-400 line-through leading-tight truncate flex-1">
+                        {task.title}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>

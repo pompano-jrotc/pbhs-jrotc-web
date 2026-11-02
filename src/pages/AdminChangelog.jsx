@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="301"    label="Patches"     />
-        <Stat value="634"    label="Commits"     />
+        <Stat value="302"    label="Patches"     />
+        <Stat value="635"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="246d"   label="In Dev"      />
-        <Stat value="v1.8.112" label="Current"     />
+        <Stat value="v1.8.113" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,12 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.112" date="Nov 2" title="Fix: staff/command users can now vote on polls" isCurrent changes={<>
+        <Release versions="v1.8.113" date="Nov 2" title="Polls on Command Feed + staff results preview" isCurrent changes={<>
+          <C type="feat">Polls on global broadcasts now appear directly in the Command Feed on the admin dashboard — cadets and staff can vote without leaving the dashboard</C>
+          <C type="feat">Broadcast cards in the Command Feed now show the announcement title (if set) and preserve line breaks in the content</C>
+          <C type="feat">Staff-only "Results" toggle added to polls — staff can peek at live vote counts before casting their own vote; clicking "Vote" returns to the voting interface</C>
+        </>} />
+        <Release versions="v1.8.112" date="Nov 2" title="Fix: staff/command users can now vote on polls" isCurrent={false} changes={<>
           <C type="fix">Staff and command-level users were blocked from voting on announcement polls — the results view replaced the voting interface immediately for any user above command level, making the poll unresponsive</C>
           <C type="fix">Fixed: all users (including staff) now see the voting interface until they cast their vote; staff still see full results immediately after voting even when resultsVisibility is set to "never"</C>
         </>} />
