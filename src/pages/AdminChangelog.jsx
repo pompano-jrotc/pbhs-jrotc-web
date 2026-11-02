@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="299"    label="Patches"     />
-        <Stat value="632"    label="Commits"     />
+        <Stat value="300"    label="Patches"     />
+        <Stat value="633"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="246d"   label="In Dev"      />
-        <Stat value="v1.8.110" label="Current"     />
+        <Stat value="v1.8.111" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,12 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.110" date="Nov 2" title="Print Roster — PDF download" isCurrent changes={<>
+        <Release versions="v1.8.111" date="Nov 2" title="Ribbon Registry — drag-and-drop wear order" isCurrent changes={<>
+          <C type="feat">New "Reorder" button in the Ribbon Registry catalog (staff 70+) — enters a drag-and-drop mode showing all ribbons in a sortable list with numbered positions and grip handles</C>
+          <C type="feat">Dragging ribbons up or down sets the wear order; "Save Order" batch-writes precedence values in one shot and exits reorder mode</C>
+          <C type="fix">Removed the manual Order of Precedence number field from the edit and create modals — wear order is now managed exclusively through the drag interface</C>
+        </>} />
+        <Release versions="v1.8.110" date="Nov 2" title="Print Roster — PDF download" isCurrent={false} changes={<>
           <C type="feat">Print Roster now generates and auto-downloads a PDF file instead of opening the browser print dialog — uses jsPDF + autotable for a clean, formatted letter-size document</C>
           <C type="feat">PDF includes cadets grouped by LET level, sorted alphabetically; LET number is shown right-aligned in the name column on the first cadet of each group</C>
           <C type="feat">LET breakdown and total cadet count are included at the bottom of the PDF</C>

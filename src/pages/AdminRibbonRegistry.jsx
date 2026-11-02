@@ -15,7 +15,16 @@ import { useAuth } from '../hooks/useAuth';
 import { ROLE_HIERARCHY, ADMIN_LEVEL, STAFF_LEVEL, COMMAND_LEVEL } from '../constants';
 import {
   Award, Plus, Trash2, Pencil, X, Loader2, AlertTriangle, Users, CheckSquare, Square, Download,
+  GripVertical, ListOrdered, Check,
 } from 'lucide-react';
+import {
+  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext, sortableKeyboardCoordinates, useSortable,
+  verticalListSortingStrategy, arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import AdminPageHeader from '../components/AdminPageHeader';
 import { usePageMeta } from '../hooks/usePageMeta';
 
@@ -38,7 +47,42 @@ const CAT_CHIP = {
   leadership:  'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
 };
 
-const BLANK_RT = { name: '', code: '', description: '', category: '', precedence: '' };
+const BLANK_RT = { name: '', code: '', description: '', category: '' };
+
+// ── Drag-and-drop sortable row ─────────────────────────────────────────────────
+const SortableRow = ({ rt }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: rt.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex:  isDragging ? 10 : 'auto',
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl"
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 cursor-grab active:cursor-grabbing touch-none"
+      >
+        <GripVertical size={16} />
+      </button>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{rt.name}</p>
+        {rt.code && <p className="text-[10px] font-mono text-slate-400">{rt.code}</p>}
+      </div>
+      {rt.category && (
+        <span className={`shrink-0 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${CAT_CHIP[rt.category] || 'bg-slate-100 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}>
+          {rt.category}
+        </span>
+      )}
+    </div>
+  );
+};
 
 const STANDARD_JROTC_RIBBONS = [
   // N-1-x  Achievement / Academic
@@ -142,6 +186,9 @@ const AdminRibbonRegistry = ({ hideHeader = false }) => {
   const [editingRibbon, setEditingRibbon] = useState(null);
   const [editForm,     setEditForm]     = useState(BLANK_RT);
   const [editSaving,   setEditSaving]   = useState(false);
+  const [reordering,   setReordering]   = useState(false);
+  const [reorderList,  setReorderList]  = useState([]);
+  const [reorderSaving, setReorderSaving] = useState(false);
 
   // Mass award state
   const [roster,          setRoster]          = useState([]);
@@ -210,7 +257,7 @@ const AdminRibbonRegistry = ({ hideHeader = false }) => {
         code:          form.code.trim(),
         description:   form.description.trim(),
         category:      form.category,
-        precedence:    form.precedence !== '' ? Number(form.precedence) : null,
+        precedence:    null,
         createdAt:     serverTimestamp(),
         createdByUid:  user?.uid || '',
         createdByName: userData?.fullName || '',
@@ -239,11 +286,10 @@ const AdminRibbonRegistry = ({ hideHeader = false }) => {
   // ── Edit ribbon type ──────────────────────────────────────────────────────
   const openEdit = rt => {
     setEditForm({
-      name:       rt.name || '',
-      code:       rt.code || '',
+      name:        rt.name || '',
+      code:        rt.code || '',
       description: rt.description || '',
-      category:   rt.category || '',
-      precedence: rt.precedence != null ? String(rt.precedence) : '',
+      category:    rt.category || '',
     });
     setEditingRibbon(rt);
   };
@@ -257,7 +303,6 @@ const AdminRibbonRegistry = ({ hideHeader = false }) => {
         code:        editForm.code.trim(),
         description: editForm.description.trim(),
         category:    editForm.category,
-        precedence:  editForm.precedence !== '' ? Number(editForm.precedence) : null,
       });
       showToast('Ribbon updated');
       setEditingRibbon(null);
@@ -361,6 +406,52 @@ const AdminRibbonRegistry = ({ hideHeader = false }) => {
     }
   };
 
+  // ── Drag-and-drop reorder ─────────────────────────────────────────────────
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const enterReorder = () => {
+    setReorderList([...sortedRibbonTypes]);
+    setReordering(true);
+  };
+
+  const cancelReorder = () => {
+    setReordering(false);
+    setReorderList([]);
+  };
+
+  const handleDragEnd = ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    setReorderList(items => {
+      const oldIdx = items.findIndex(i => i.id === active.id);
+      const newIdx = items.findIndex(i => i.id === over.id);
+      return arrayMove(items, oldIdx, newIdx);
+    });
+  };
+
+  const saveReorder = async () => {
+    setReorderSaving(true);
+    try {
+      const CHUNK = 499;
+      for (let i = 0; i < reorderList.length; i += CHUNK) {
+        const batch = writeBatch(db);
+        reorderList.slice(i, i + CHUNK).forEach((rt, j) => {
+          batch.update(doc(db, 'ribbonTypes', rt.id), { precedence: i + j + 1 });
+        });
+        await batch.commit();
+      }
+      showToast('Order saved');
+      setReordering(false);
+      setReorderList([]);
+    } catch {
+      showToast('Save failed — try again', 'err');
+    } finally {
+      setReorderSaving(false);
+    }
+  };
+
   // ── Access guard ──────────────────────────────────────────────────────────
   if (!authLoading && !canView) {
     return (
@@ -420,8 +511,16 @@ const AdminRibbonRegistry = ({ hideHeader = false }) => {
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
             {ribbonTypes.length} type{ribbonTypes.length !== 1 ? 's' : ''} in catalog
           </p>
-          {canManage && (
+          {canManage && !reordering && (
             <div className="flex items-center gap-2 flex-wrap">
+              {ribbonTypes.length > 1 && (
+                <button
+                  onClick={enterReorder}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors"
+                >
+                  <ListOrdered size={13} /> Reorder
+                </button>
+              )}
               <button
                 onClick={handleImportStandard}
                 disabled={importing}
@@ -438,63 +537,106 @@ const AdminRibbonRegistry = ({ hideHeader = false }) => {
               </button>
             </div>
           )}
+          {reordering && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={cancelReorder}
+                disabled={reorderSaving}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveReorder}
+                disabled={reorderSaving}
+                className="flex items-center gap-2 px-4 py-2.5 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-slate-950 text-[10px] font-black uppercase tracking-widest rounded-xl transition-colors"
+              >
+                {reorderSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                {reorderSaving ? 'Saving…' : 'Save Order'}
+              </button>
+            </div>
+          )}
         </div>
 
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="animate-spin text-yellow-500" size={32} />
-          </div>
-        ) : ribbonTypes.length === 0 ? (
-          <div className="text-center py-20 border-2 border-dashed border-slate-200 dark:border-white/5 rounded-3xl">
-            <Award className="mx-auto text-slate-300 dark:text-slate-700 mb-4" size={36} />
-            <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">No ribbon types yet</p>
-            {canManage && <p className="text-xs text-slate-400 mt-2">Click "New Ribbon Type" to add the first one.</p>}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sortedRibbonTypes.map(rt => (
-              <div key={rt.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl p-4 flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-black text-slate-800 dark:text-white leading-snug">{rt.name}</p>
-                    {rt.code && <p className="text-[10px] font-mono text-slate-400 mt-0.5">{rt.code}</p>}
+        {/* ── Reorder mode ── */}
+        {reordering && (
+          <>
+            <p className="text-[10px] text-slate-400 mb-3">Drag ribbons into wear order — most prestigious first. Click <strong>Save Order</strong> when done.</p>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={reorderList.map(r => r.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {reorderList.map((rt, idx) => (
+                    <div key={rt.id} className="flex items-center gap-3">
+                      <span className="w-6 text-right text-[10px] font-black text-slate-300 dark:text-slate-600 shrink-0">{idx + 1}</span>
+                      <div className="flex-1">
+                        <SortableRow rt={rt} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </>
+        )}
+
+        {/* ── Normal catalog grid ── */}
+        {!reordering && (
+          loading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="animate-spin text-yellow-500" size={32} />
+            </div>
+          ) : ribbonTypes.length === 0 ? (
+            <div className="text-center py-20 border-2 border-dashed border-slate-200 dark:border-white/5 rounded-3xl">
+              <Award className="mx-auto text-slate-300 dark:text-slate-700 mb-4" size={36} />
+              <p className="text-slate-400 font-bold uppercase tracking-widest text-sm">No ribbon types yet</p>
+              {canManage && <p className="text-xs text-slate-400 mt-2">Click "New Ribbon Type" to add the first one.</p>}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sortedRibbonTypes.map(rt => (
+                <div key={rt.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl p-4 flex flex-col gap-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-black text-slate-800 dark:text-white leading-snug">{rt.name}</p>
+                      {rt.code && <p className="text-[10px] font-mono text-slate-400 mt-0.5">{rt.code}</p>}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {canManage && (
+                        <button
+                          onClick={() => openEdit(rt)}
+                          className="p-1.5 rounded-lg text-slate-300 dark:text-slate-600 hover:text-yellow-500 hover:bg-yellow-500/10 transition-colors"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          onClick={() => handleDelete(rt.id, rt.name)}
+                          className="p-1.5 rounded-lg text-slate-300 dark:text-slate-600 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {canManage && (
-                      <button
-                        onClick={() => openEdit(rt)}
-                        className="p-1.5 rounded-lg text-slate-300 dark:text-slate-600 hover:text-yellow-500 hover:bg-yellow-500/10 transition-colors"
-                      >
-                        <Pencil size={13} />
-                      </button>
+                  {rt.description && <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">{rt.description}</p>}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {rt.precedence != null && (
+                      <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20">
+                        #{rt.precedence}
+                      </span>
                     )}
-                    {canDelete && (
-                      <button
-                        onClick={() => handleDelete(rt.id, rt.name)}
-                        className="p-1.5 rounded-lg text-slate-300 dark:text-slate-600 hover:text-red-500 hover:bg-red-500/10 transition-colors"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                    {rt.category && (
+                      <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${CAT_CHIP[rt.category] || 'bg-slate-100 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}>
+                        {rt.category}
+                      </span>
                     )}
+                    {rt.createdByName && <span className="text-[9px] text-slate-400">Added by {rt.createdByName}</span>}
                   </div>
                 </div>
-                {rt.description && <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">{rt.description}</p>}
-                <div className="flex items-center gap-2 flex-wrap">
-                  {rt.precedence != null && (
-                    <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20">
-                      #{rt.precedence}
-                    </span>
-                  )}
-                  {rt.category && (
-                    <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${CAT_CHIP[rt.category] || 'bg-slate-100 dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}>
-                      {rt.category}
-                    </span>
-                  )}
-                  {rt.createdByName && <span className="text-[9px] text-slate-400">Added by {rt.createdByName}</span>}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
         )}
       </>)}
 
@@ -718,18 +860,16 @@ const AdminRibbonRegistry = ({ hideHeader = false }) => {
             </div>
 
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Order of Precedence</label>
-              <input type="number" min="1" value={editForm.precedence} onChange={e => setEditForm(f => ({ ...f, precedence: e.target.value }))}
-                placeholder="Lower = higher precedence (e.g. 1 = most prestigious)"
-                className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-yellow-500/40" />
-            </div>
-
-            <div>
               <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Description</label>
               <textarea value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
                 rows={2} placeholder="Optional — criteria or notes"
                 className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-yellow-500/40 resize-none" />
             </div>
+
+            <p className="text-[10px] text-slate-400 flex items-center gap-1.5">
+              <ListOrdered size={11} className="shrink-0" />
+              Use <strong>Reorder</strong> in the catalog to set wear order.
+            </p>
 
             <div className="flex gap-3 pt-1">
               <button onClick={() => setEditingRibbon(null)}
@@ -780,13 +920,6 @@ const AdminRibbonRegistry = ({ hideHeader = false }) => {
                 className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 text-sm text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/40">
                 {CATEGORY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">Order of Precedence</label>
-              <input type="number" min="1" value={form.precedence} onChange={e => setForm(f => ({ ...f, precedence: e.target.value }))}
-                placeholder="Optional — lower = higher precedence"
-                className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 px-3 py-2.5 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-yellow-500/40" />
             </div>
 
             <div>
