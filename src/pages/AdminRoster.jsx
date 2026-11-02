@@ -11,29 +11,47 @@
 // Cadet Challenge scores are joined client-side by cadetName from the
 // cadet_challenge collection (most-recent record per cadet).
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../firebase';
 import {
-  collection, doc, addDoc, updateDoc, deleteDoc,
+  collection, doc, addDoc, updateDoc, deleteDoc, setDoc,
   onSnapshot, query, orderBy, where, serverTimestamp, getDocs,
+  writeBatch, Timestamp, increment, deleteField, runTransaction,
 } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { writeLog } from '../lib/writeLog';
 import { useCompanies } from '../hooks/useCompanies';
+import { normalizeCompany } from '../utils/normalizeCompany';
 import {
   ROLE_HIERARCHY, STAFF_LEVEL, COMMAND_LEVEL, ADMIN_LEVEL,
-  JROTC_RANKS, JROTC_POSITIONS, BATTALION_POSITIONS,
+  JROTC_RANKS, JROTC_POSITIONS, BATTALION_POSITIONS, POSITION_RANKS, SECONDARY_POSITIONS,
   COMPANY_HQ_LOCKED_POSITIONS, COMPANY_HQ_DEFAULT_POSITIONS,
+  rankExceedsMax, boardTargetRank,
 } from '../constants';
 import {
   Link2, UserCircle, Plus, Edit3, Trash2, X,
   Loader2, CheckCircle2, Search, ChevronDown, Eye, RefreshCw,
   History, GraduationCap, Trophy, Tent, BookOpen, ChevronRight, Filter,
-  ShieldAlert, Clock, CheckCheck, XCircle, AlertTriangle,
+  ShieldAlert, Clock, CheckCheck, XCircle, AlertTriangle, TrendingUp, Download, Hash, Printer,
 } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import ScrambleText from '../components/ScrambleText';
 import AdminPageHeader from '../components/AdminPageHeader';
+import { printRoster } from '../utils/printRoster';
+import { groupByLet } from '../utils/groupByLet';
+import { exportCSV } from '../utils/exportCSV';
+
+// Maps a secondary-position label to the team keyword used in /admin/teams?team=
+function teamKeyFromPosition(pos) {
+  if (!pos) return null;
+  const p = pos.toLowerCase();
+  if (p.includes('color guard')) return 'Color Guard';
+  if (p.includes('drill'))       return 'Drill';
+  if (p.includes('rifle'))       return 'Rifle';
+  if (p.includes('raider'))      return 'Raider';
+  return null;
+}
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -53,7 +71,7 @@ const AUTHORITY_FIELDS = ['position', 'rank', 'letLevel', 'company', 'linkedUid'
 
 // Fields captured in the rosterChangelog snapshot (excludes timestamps).
 const CHANGELOG_FIELDS = [
-  'fullName', 'rank', 'position', 'company', 'platoon', 'squad',
+  'fullName', 'rank', 'position', 'secondaryPosition', 'company', 'platoon', 'squad',
   'gender', 'letLevel', 'linkedUid', 'secondaryCompany', 'notes',
 ];
 
@@ -61,8 +79,40 @@ const CHANGELOG_FIELDS = [
 // All new records use 'Battalion'. Both are treated as HQ throughout.
 const BATTALION_COMPANIES = ['Battalion', 'Zulu'];
 
+// Positions that auto-sync to the publicly-readable `leadership` Firestore
+// collection whenever a roster entry is saved. This keeps the public
+// Leadership page populated from the roster without manual Publishing Hub entries.
+// companyLevel: true → doc ID includes the company; false → fixed battalion-level doc ID.
+const LEADERSHIP_SYNC_CONFIG = {
+  'Battalion Commander':        { docId: 'battalion_commander', role: 'Battalion Commander',   companyLevel: false },
+  'Battalion XO':               { docId: 'battalion_xo',        role: 'Executive Officer',      companyLevel: false },
+  'Battalion CSM':              { docId: 'battalion_csm',        role: 'Command Sergeant Major', companyLevel: false },
+  'Sergeant Major':             { docId: 'sergeant_major',       role: 'Sergeant Major',         companyLevel: false },
+  'Battalion Deputy Commander': { docId: 'battalion_dco',        role: 'Deputy Commander',       companyLevel: false },
+  'Battalion Staff (S-1)':      { docId: 'staff_s1',             role: 'S-1',                    companyLevel: false },
+  'Battalion Staff (S-2)':      { docId: 'staff_s2',             role: 'S-2',                    companyLevel: false },
+  'Battalion Staff (S-3)':      { docId: 'staff_s3',             role: 'S-3',                    companyLevel: false },
+  'Battalion Staff (S-4)':      { docId: 'staff_s4',             role: 'S-4',                    companyLevel: false },
+  'Battalion Staff (S-5)':      { docId: 'staff_s5',             role: 'S-5',                    companyLevel: false },
+  'Battalion Staff (S-6)':      { docId: 'staff_s6',             role: 'S-6',                    companyLevel: false },
+  'Battalion Staff (S-7)':      { docId: 'staff_s7',             role: 'S-7',                    companyLevel: false },
+  'Company Commander':          { docIdPrefix: 'commander_',     role: 'Commander',              companyLevel: true  },
+  'Company XO':                 { docIdPrefix: 'xo_',            role: 'Executive Officer',      companyLevel: true  },
+  'First Sergeant':             { docIdPrefix: '1sg_',           role: 'First Sergeant',         companyLevel: true  },
+  'Master Sergeant':            { docIdPrefix: 'msgt_',          role: 'Master Sergeant',        companyLevel: true  },
+};
+
+function leadershipDocId(position, company) {
+  const cfg = LEADERSHIP_SYNC_CONFIG[position];
+  if (!cfg) return null;
+  if (cfg.companyLevel) {
+    return `${cfg.docIdPrefix}${(company || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+  }
+  return cfg.docId;
+}
+
 const EMPTY_FORM = {
-  fullName: '', rank: '', position: '', company: '',
+  fullName: '', rank: '', position: '', secondaryPosition: '', company: '',
   platoon: '', squad: '', gender: '', letLevel: '',
   notes: '', linkedUid: '', secondaryCompany: '',
   syncMaster: 'roster',
@@ -95,7 +145,7 @@ const ScoreBadge = ({ label, value }) => {
 
 // ── main ──────────────────────────────────────────────────────────────────────
 
-const AdminRoster = () => {
+const AdminRoster = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
   const { companies } = useCompanies();
 
@@ -124,12 +174,28 @@ const AdminRoster = () => {
   const canApproveDeletion = userLevel >= STAFF_LEVEL;
 
   // Staff default to the Battalion tab; company command default to their own company.
+  // Persists last-used company across profile visits via sessionStorage.
   const [activeCompany, setActiveCompany] = useState('');
+  const [searchParams]  = useSearchParams();
+  const editIdParam     = searchParams.get('editId');
+  const editIdOpenedRef = useRef(false);
 
-  // set the tab once auth is ready
+  const changeCompany = (co) => {
+    setActiveCompany(co);
+    if (canManageAll) try { sessionStorage.setItem('rosterCompany', co); } catch (_) {}
+  };
+
+  // set the tab once auth is ready, restoring last-used company for staff
   useEffect(() => {
     if (!authLoading && !activeCompany) {
-      setActiveCompany(canManageAll ? 'Battalion' : myCompany);
+      let initial;
+      if (canManageAll) {
+        try { initial = sessionStorage.getItem('rosterCompany'); } catch (_) {}
+        if (!initial) initial = 'Battalion';
+      } else {
+        initial = myCompany;
+      }
+      setActiveCompany(initial);
     }
   }, [authLoading, canManageAll, myCompany, activeCompany]);
 
@@ -138,18 +204,29 @@ const AdminRoster = () => {
   const [portalUsers,      setPortalUsers]      = useState([]);
   const [dataLoading,      setDataLoading]      = useState(true);
   const [search,           setSearch]           = useState('');
+  const [groupLet,         setGroupLet]         = useState(false);
+  // Battalion members whose secondaryCompany attaches them to the active
+  // company period — fetched via a separate subscription for non-admin users.
+  const [bnInPeriodDocs,   setBnInPeriodDocs]   = useState([]);
 
   const [showModal,   setShowModal]   = useState(false);
   const [editingId,   setEditingId]   = useState(null);
   const [form,        setForm]        = useState(EMPTY_FORM);
+
+  // ── Promotion Board ──────────────────────────────────────────────────────────
+  const [boardModal,   setBoardModal]   = useState(false);
+  const [boardNum,     setBoardNum]     = useState(1);
+  const [boardRunning, setBoardRunning] = useState(false);
+  const [boardEntries, setBoardEntries] = useState([]); // full roster snapshot for preview
   // Must come AFTER editingId and form useState declarations — const is not
   // hoisted, so placing these before their dependencies causes a TDZ crash
   // in the production bundle where esbuild preserves the declaration order.
   const accountLocked     = !!editingId && !!form.linkedUid;
   const platoonAutoLocked = COMPANY_HQ_LOCKED_POSITIONS.includes(form.position);
-  const [saving,      setSaving]      = useState(false);
-  const [deleteConf,  setDeleteConf]  = useState(null);
-  const [toast,       setToast]       = useState(null);
+  const [saving,       setSaving]       = useState(false);
+  const [backfilling,  setBackfilling]  = useState(false);
+  const [deleteConf,   setDeleteConf]   = useState(null);
+  const [toast,        setToast]        = useState(null);
 
   // ── Pending deletion requests (Battalion S1 approval queue) ────────────────
   const [pendingActions,    setPendingActions]    = useState([]);
@@ -192,15 +269,45 @@ const AdminRoster = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, activeCompany, canManageAll]);
 
-  // All challenge records (for client-side join)
+  // All challenge records (for client-side join).
+  // Reads from cadetChallengeRecords (current system). No orderBy so no
+  // composite index is needed — sorting happens client-side in challengeMap.
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || !activeCompany) return;
+    const q = canManageAll
+      ? query(collection(db, 'cadetChallengeRecords'))
+      : query(collection(db, 'cadetChallengeRecords'),
+          where('company', '==', activeCompany));
     const unsub = onSnapshot(
-      query(collection(db, 'cadet_challenge'), orderBy('submittedAt', 'desc')),
+      q,
       (snap) => setChallengeRecords(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
     );
     return () => unsub();
-  }, [authLoading]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, activeCompany, canManageAll]);
+
+  // Battalion-in-period subscription — for non-admin users, fetch roster docs
+  // whose secondaryCompany matches the active company tab.  Admin users already
+  // receive all roster entries from the main subscription above.
+  useEffect(() => {
+    if (authLoading || canManageAll || !activeCompany || BATTALION_COMPANIES.includes(activeCompany)) {
+      setBnInPeriodDocs([]);
+      return;
+    }
+    const q = query(
+      collection(db, 'roster'),
+      where('secondaryCompany', '==', activeCompany),
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setBnInPeriodDocs(
+        snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(e => BATTALION_COMPANIES.includes(e.company)),
+      );
+    }, () => setBnInPeriodDocs([]));
+    return () => unsub();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, activeCompany, canManageAll]);
 
   // Portal users (for link picker and account indicator)
   useEffect(() => {
@@ -231,15 +338,42 @@ const AdminRoster = () => {
 
   // ── derived data ──────────────────────────────────────────────────────────
 
-  // Map: normalised cadetName → most recent challenge record
+  // Map: normalised cadetName → best challenge record to display.
+  // "Best" = highest cycleNumber that has at least one actual score (or a medical
+  // exemption). This keeps Cycle 1 locked data visible in the column even after
+  // Cycle 2 opens but before anyone has entered scores for the new cycle.
+  const hasScores = (rec) =>
+    rec?.medicalExempt ||
+    rec?.exemptEvents?.length > 0 ||
+    rec?.pushUps    != null ||
+    rec?.sitUps     != null ||
+    rec?.shuttleRun != null ||
+    rec?.oneMile    != null ||
+    rec?.sitNReach  != null;
+
   const challengeMap = useMemo(() => {
     const map = {};
-    // Records are already sorted newest-first; keep only the first hit per cadet
-    for (const rec of challengeRecords) {
+    // Sort: highest cycleNumber first; tie-break by createdAt desc
+    const sorted = [...challengeRecords].sort((a, b) => {
+      const cn = (b.cycleNumber || 0) - (a.cycleNumber || 0);
+      if (cn !== 0) return cn;
+      return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+    });
+    // Two-pass: first pass keeps best record with actual scores per cadet;
+    // second pass fills in cadets who have records but all scores are null
+    // (so the cycle badge still shows even for fully exempt cadets etc.)
+    for (const rec of sorted) {
+      const key = normalize(rec.cadetName);
+      if (!key) continue;
+      if (!map[key] && hasScores(rec)) map[key] = rec;
+    }
+    // Fallback: if no scored record exists yet, use the most recent record anyway
+    for (const rec of sorted) {
       const key = normalize(rec.cadetName);
       if (key && !map[key]) map[key] = rec;
     }
     return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [challengeRecords]);
 
   // Map: uid → user (for linkedUid lookups)
@@ -249,42 +383,80 @@ const AdminRoster = () => {
     return m;
   }, [portalUsers]);
 
-  // Entries for the active company tab, filtered by search.
-  // Battalion tab shows both 'Battalion' and legacy 'Zulu' records.
+  // When battalion staff type a search, scan every company at once.
+  // Without a search, behaviour is unchanged (company-tab filtered).
+  const isAllCompanies = activeCompany === 'All';
+  const isSearchingAll = canManageAll && !isAllCompanies && search.trim().length > 0;
+
   const visibleEntries = useMemo(() => {
-    const base = rosterEntries.filter(e =>
-      BATTALION_COMPANIES.includes(activeCompany)
-        ? BATTALION_COMPANIES.includes(e.company)
-        : e.company === activeCompany
-    );
-    if (!search.trim()) return base;
-    const q = normalize(search);
+    const rawQ = search.trim();
+    const q = normalize(rawQ.replace(/^#/, ''));
+    if (isSearchingAll) {
+      return rosterEntries.filter(e =>
+        normalize(e.fullName).includes(q) ||
+        normalize(e.position).includes(q) ||
+        normalize(e.rank).includes(q) ||
+        normalize(e.platoon).includes(q) ||
+        normalize(e.company).includes(q) ||
+        String(e.cadetNumber ?? '').includes(rawQ.replace(/^#/, '')),
+      );
+    }
+    const base = isAllCompanies
+      ? rosterEntries
+      : rosterEntries.filter(e =>
+          BATTALION_COMPANIES.includes(activeCompany)
+            ? BATTALION_COMPANIES.includes(e.company)
+            : e.company === activeCompany
+        );
+    if (!rawQ) return base;
     return base.filter(e =>
       normalize(e.fullName).includes(q) ||
       normalize(e.position).includes(q) ||
       normalize(e.rank).includes(q) ||
-      normalize(e.platoon).includes(q),
+      normalize(e.platoon).includes(q) ||
+      normalize(e.company).includes(q) ||
+      String(e.cadetNumber ?? '').includes(rawQ.replace(/^#/, '')),
     );
-  }, [rosterEntries, activeCompany, search]);
+  }, [rosterEntries, activeCompany, search, isSearchingAll, isAllCompanies]);
 
   // ── Period counts ─────────────────────────────────────────────────────────
   // isOnBattalionTab: viewing the HQ tab — battalion-in-period concept N/A.
   // companyTotal: unfiltered headcount for the active company/tab.
   // battalionInPeriod: battalion HQ members whose secondaryCompany attaches
   //   them to this company's class period — adds to the room's headcount.
-  const isOnBattalionTab = BATTALION_COMPANIES.includes(activeCompany);
-  const companyTotal = isOnBattalionTab
-    ? rosterEntries.filter(e => BATTALION_COMPANIES.includes(e.company)).length
-    : rosterEntries.filter(e => e.company === activeCompany).length;
-  const battalionInPeriod = isOnBattalionTab
-    ? 0
-    : rosterEntries.filter(e =>
-        BATTALION_COMPANIES.includes(e.company) && e.secondaryCompany === activeCompany
-      ).length;
+  const isOnBattalionTab = !isAllCompanies && BATTALION_COMPANIES.includes(activeCompany);
+  const companyTotal = isAllCompanies
+    ? rosterEntries.length
+    : isOnBattalionTab
+      ? rosterEntries.filter(e => BATTALION_COMPANIES.includes(e.company)).length
+      : rosterEntries.filter(e => e.company === activeCompany).length;
+  // Battalion members whose secondaryCompany attaches them to this company's period.
+  // Admin users filter from the already-complete rosterEntries; non-admin users
+  // get these from the dedicated bnInPeriodDocs subscription (separate query).
+  const battalionInPeriodEntries = useMemo(() => {
+    if (isOnBattalionTab || isAllCompanies) return [];
+    if (canManageAll) {
+      return rosterEntries.filter(e =>
+        BATTALION_COMPANIES.includes(e.company) && e.secondaryCompany === activeCompany,
+      );
+    }
+    return bnInPeriodDocs;
+  }, [rosterEntries, bnInPeriodDocs, activeCompany, isOnBattalionTab, canManageAll]);
+  const battalionInPeriod = battalionInPeriodEntries.length;
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
   const showToast = (msg, isError = false) => { setToast({ msg, isError }); setTimeout(() => setToast(null), 3000); };
+
+  // Auto-open edit modal when navigated back from a profile with ?editId=
+  useEffect(() => {
+    if (!editIdParam || editIdOpenedRef.current || dataLoading || !rosterEntries.length) return;
+    const entry = rosterEntries.find(e => e.id === editIdParam);
+    if (entry) {
+      editIdOpenedRef.current = true;
+      openEdit(entry); // eslint-disable-line
+    }
+  }, [editIdParam, rosterEntries, dataLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openCreate = () => {
     setForm({ ...EMPTY_FORM, company: activeCompany });
@@ -304,8 +476,9 @@ const AdminRoster = () => {
       letLevel:         entry.letLevel         || '',
       notes:            entry.notes            || '',
       linkedUid:        entry.linkedUid        || '',
-      secondaryCompany: entry.secondaryCompany || '',
-      syncMaster:       entry.syncMaster       || 'roster',
+      secondaryPosition: entry.secondaryPosition || '',
+      secondaryCompany:  entry.secondaryCompany  || '',
+      syncMaster:        entry.syncMaster        || 'roster',
     });
     setEditingId(entry.id);
     setShowModal(true);
@@ -313,11 +486,77 @@ const AdminRoster = () => {
 
   const closeModal = () => { setShowModal(false); setEditingId(null); setForm(EMPTY_FORM); };
 
+  const handleBackfillIds = async () => {
+    const unassigned = rosterEntries
+      .filter(e => !e.cadetNumber)
+      .sort((a, b) => ((a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0)));
+    if (!unassigned.length) { showToast('All cadets already have an ID'); return; }
+    if (!window.confirm(`Assign cadet IDs to ${unassigned.length} cadet${unassigned.length !== 1 ? 's' : ''} without one? IDs are permanent.`)) return;
+    setBackfilling(true);
+    try {
+      const counterRef = doc(db, 'settings', 'cadetCounter');
+      let startNum;
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(counterRef);
+        startNum = snap.exists() ? (snap.data().count || 0) : 0;
+        tx.set(counterRef, { count: startNum + unassigned.length }, { merge: true });
+      });
+      const batch = writeBatch(db);
+      unassigned.forEach((entry, i) => {
+        batch.update(doc(db, 'roster', entry.id), { cadetNumber: startNum + i + 1 });
+      });
+      await batch.commit();
+      showToast(`Assigned IDs to ${unassigned.length} cadet${unassigned.length !== 1 ? 's' : ''}`);
+    } catch (err) {
+      console.error('Backfill failed:', err);
+      showToast('Backfill failed — see console', true);
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
+  const handleExportRoster = () => {
+    const rows = visibleEntries.map(e => ({
+      fullName: e.fullName || '',
+      rank: e.rank || '',
+      position: e.position || '',
+      secondaryPosition: e.secondaryPosition || '',
+      company: e.company || '',
+      platoon: e.platoon || '',
+      squad: e.squad || '',
+      gender: e.gender || '',
+      letLevel: e.letLevel || '',
+    }));
+    const company = isSearchingAll ? 'all' : (activeCompany || 'roster').toLowerCase().replace(/\s+/g, '_');
+    exportCSV(rows, `roster_${company}_${new Date().toISOString().slice(0,10)}.csv`, [
+      { key: 'fullName',          label: 'Full Name' },
+      { key: 'rank',              label: 'Rank' },
+      { key: 'position',          label: 'Position' },
+      { key: 'secondaryPosition', label: 'Secondary Position' },
+      { key: 'company',           label: 'Company' },
+      { key: 'platoon',           label: 'Platoon' },
+      { key: 'squad',             label: 'Squad' },
+      { key: 'gender',            label: 'Gender' },
+      { key: 'letLevel',          label: 'LET Level' },
+    ]);
+  };
+
   // ── CRUD ─────────────────────────────────────────────────────────────────
 
   const handleSave = async (e) => {
     e.preventDefault();
     if (!form.fullName.trim()) return;
+
+    // ── Rank ceiling enforcement ──────────────────────────────────────────────
+    // A cadet's rank must never exceed the authorized max for their position.
+    if (rankExceedsMax(form.rank, form.position)) {
+      showToast(
+        `${form.rank} is above the authorized max rank (${POSITION_RANKS[form.position]}) for ${form.position}. Correct the rank before saving.`,
+        true,
+      );
+      return;
+    }
+
     setSaving(true);
     try {
       const isBn = BATTALION_COMPANIES.includes(form.company || activeCompany);
@@ -330,12 +569,13 @@ const AdminRoster = () => {
 
     const payload = {
         fullName:         form.fullName.trim().toUpperCase(),
-        rank:             form.rank      || null,
-        position:         form.position  || null,
-        company:          resolvedCompany,
-        platoon:          isBn ? null : (form.platoon || null),
-        squad:            isBn ? null : (form.squad   || null),
-        secondaryCompany: isBn ? (form.secondaryCompany || null) : null,
+        rank:              form.rank             || null,
+        position:          form.position         || null,
+        secondaryPosition: form.secondaryPosition || null,
+        company:           resolvedCompany,
+        platoon:           isBn ? null : (form.platoon || null),
+        squad:             isBn ? null : (form.squad   || null),
+        secondaryCompany:  isBn ? (form.secondaryCompany || null) : null,
         gender:           form.gender    || null,
         letLevel:         form.letLevel  || null,
         notes:            form.notes.trim() || null,
@@ -405,8 +645,23 @@ const AdminRoster = () => {
           setSaving(false);
           return;
         }
+        // Atomically assign the next 5-digit cadet number
+        const counterRef = doc(db, 'settings', 'cadetCounter');
+        let cadetNumber = null;
+        try {
+          await runTransaction(db, async (tx) => {
+            const snap = await tx.get(counterRef);
+            const current = snap.exists() ? (snap.data().count || 0) : 0;
+            cadetNumber = current + 1;
+            tx.set(counterRef, { count: cadetNumber }, { merge: true });
+          });
+        } catch (numErr) {
+          console.warn('cadetCounter transaction failed (non-fatal):', numErr);
+        }
+
         const newDoc = await addDoc(collection(db, 'roster'), {
           ...payload,
+          ...(cadetNumber != null ? { cadetNumber } : {}),
           createdAt:  serverTimestamp(),
           updatedAt:  serverTimestamp(),
           createdBy:  user?.uid || '',
@@ -418,6 +673,63 @@ const AdminRoster = () => {
           userId: user?.uid || '', userFullName: userData?.fullName || '',
           userRole: role || '', targetId: newDoc.id, targetName: payload.fullName,
         });
+
+        // ── Auto-sync to active S1 Tracker events ───────────────────────────
+        // Find every form event that is still open (dueDate in the future) and
+        // covers this cadet's company (battalion-wide or same company), then
+        // create a pending submission for them so they appear in the tracker.
+        // Runs after the roster save succeeds; failures are non-fatal.
+        try {
+          const now = Timestamp.now();
+          const evSnap = await getDocs(
+            query(collection(db, 'formEvents'), where('dueDate', '>=', now))
+          );
+          const matchingEvents = evSnap.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(e => e.scope === 'battalion' || e.company === payload.company);
+
+          if (matchingEvents.length > 0) {
+            // Check which events already have a submission for this roster doc
+            // (guards against duplicate inserts if called twice by accident).
+            const existSnap = await getDocs(
+              query(collection(db, 'formSubmissions'), where('rosterDocId', '==', newDoc.id))
+            );
+            const existingEventIds = new Set(existSnap.docs.map(d => d.data().eventId));
+            const missing = matchingEvents.filter(e => !existingEventIds.has(e.id));
+
+            if (missing.length > 0) {
+              const syncBatch = writeBatch(db);
+              missing.forEach(event => {
+                const subRef = doc(collection(db, 'formSubmissions'));
+                syncBatch.set(subRef, {
+                  eventId:          event.id,
+                  rosterDocId:      newDoc.id,
+                  linkedUid:        payload.linkedUid        || null,
+                  cadetName:        payload.fullName         || '',
+                  rank:             payload.rank             || '',
+                  company:          payload.company          || '',
+                  secondaryCompany: payload.secondaryCompany || '',
+                  letLevel:         payload.letLevel         || '',
+                  status:           'pending',
+                  turnedInAt:       null,
+                  turnedInBy:       null,
+                  turnedInByName:   null,
+                  notes:            '',
+                  fileUrl:          null,
+                  fileStoragePath:  null,
+                });
+                syncBatch.update(doc(db, 'formEvents', event.id), {
+                  totalCadets: increment(1),
+                });
+              });
+              await syncBatch.commit();
+              console.log(`S1 sync: added ${payload.fullName} to ${missing.length} active event(s)`);
+            }
+          }
+        } catch (syncErr) {
+          // Non-fatal — the cadet is on the roster; S1 can manually add them if needed.
+          console.warn('S1 event auto-sync failed (non-fatal):', syncErr);
+        }
       }
 
       // ── Roster → account sync ────────────────────────────────────────────
@@ -446,6 +758,43 @@ const AdminRoster = () => {
         }
       }
 
+      // ── Roster → Leadership sync ─────────────────────────────────────────
+      // If this entry holds a public-facing leadership position, mirror
+      // name/rank/portrait into the publicly-readable `leadership` collection
+      // so the public Leadership page stays in sync without manual Publishing Hub entries.
+      try {
+        const oldEntry   = editingId ? rosterEntries.find(e => e.id === editingId) : null;
+        const oldDocId   = oldEntry?.position ? leadershipDocId(oldEntry.position, oldEntry.company) : null;
+        const newDocId   = payload.position   ? leadershipDocId(payload.position,  payload.company)  : null;
+
+        // If position or company changed, remove the stale leadership entry
+        if (oldDocId && oldDocId !== newDocId) {
+          await deleteDoc(doc(db, 'leadership', oldDocId)).catch(() => {});
+        }
+
+        if (newDocId) {
+          const cfg      = LEADERSHIP_SYNC_CONFIG[payload.position];
+          const portrait = userMap[form.linkedUid]?.portrait || '';
+          const syncData = {
+            name:        payload.fullName,
+            rank:        payload.rank || 'N/A',
+            role:        cfg.role,
+            company:     cfg.companyLevel ? `${payload.company} Company` : '',
+            _rosterSync: true,
+          };
+          // Only write portrait if we actually have one — preserves a manually-uploaded photo
+          if (portrait) syncData.portrait = portrait;
+          await setDoc(
+            doc(db, 'leadership', newDocId),
+            syncData,
+            { merge: true },  // preserves manually-set desc/quote/portrait from Publishing Hub
+          );
+        }
+      } catch (lErr) {
+        // Non-fatal — leadership display may be stale until next save or manual update
+        console.warn('Roster→leadership sync failed (non-fatal):', lErr);
+      }
+
       closeModal();
     } catch (err) {
       console.error('Roster save failed:', err);
@@ -459,6 +808,27 @@ const AdminRoster = () => {
     }
   };
 
+  // deleteSubmissionsForCadet: removes all formSubmissions tied to a roster doc.
+  // Called before deleting the roster doc so S1 Tracker stays clean.
+  // Non-fatal — a failure here should not block the roster deletion.
+  const deleteSubmissionsForCadet = async (rosterId) => {
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'formSubmissions'), where('rosterDocId', '==', rosterId))
+      );
+      if (snap.empty) return;
+      // Batch-delete in chunks of 490 to stay under the 500-op limit
+      const docs = snap.docs;
+      for (let i = 0; i < docs.length; i += 490) {
+        const batch = writeBatch(db);
+        docs.slice(i, i + 490).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+    } catch (err) {
+      console.warn('S1 submission cleanup failed (non-fatal):', err);
+    }
+  };
+
   // handleDelete: staff (70+) can delete immediately; everyone else submits a
   // pending action for Battalion S1 to approve. The actual Firestore delete is
   // gated by rules to level 70+ only.
@@ -467,8 +837,12 @@ const AdminRoster = () => {
     const entry = deleteConf;
     try {
       if (canApproveDeletion) {
-        // Staff (70+): immediate delete
+        // Staff (70+): immediate delete — clean up S1 submissions first
+        await deleteSubmissionsForCadet(entry.id);
         await deleteDoc(doc(db, 'roster', entry.id));
+        // Remove the leadership entry if this cadet held a public-facing position
+        const lDocId = entry.position ? leadershipDocId(entry.position, entry.company) : null;
+        if (lDocId) deleteDoc(doc(db, 'leadership', lDocId)).catch(() => {});
         writeLog({
           type: 'roster', action: 'delete',
           description: `Removed ${entry.fullName} from the roster`,
@@ -511,7 +885,14 @@ const AdminRoster = () => {
     if (approvingAction) return;
     setApprovingAction(action.id);
     try {
+      // Clean up S1 Tracker submissions before removing the roster doc
+      await deleteSubmissionsForCadet(action.rosterId);
       await deleteDoc(doc(db, 'roster', action.rosterId));
+      // Remove stale leadership entry if the cadet held a public-facing position
+      if (action.cadetPosition) {
+        const lDocId = leadershipDocId(action.cadetPosition, action.cadetCompany || '');
+        if (lDocId) deleteDoc(doc(db, 'leadership', lDocId)).catch(() => {});
+      }
       await updateDoc(doc(db, 'rosterPendingActions', action.id), {
         status:          'approved',
         reviewedBy:      user?.uid || '',
@@ -585,14 +966,39 @@ const AdminRoster = () => {
     if (!graduateConf) return;
     setGraduating(true);
     try {
-      await updateDoc(doc(db, 'roster', graduateConf.id), {
-        graduated:   true,
-        graduatedAt: serverTimestamp(),
+      const rosterId = graduateConf.id;
+      const batch = writeBatch(db);
+
+      // Delete all associated records across collections
+      const relatedCollections = [
+        { col: 'fundraiserEntries',      field: 'cadetId'    },
+        { col: 'cadetChallengeRecords',  field: 'cadetId'    },
+        { col: 'uniformSizes',           field: 'cadetId'    },
+        { col: 'cadetYearlyHistory',     field: 'rosterId'   },
+        { col: 'formSubmissions',        field: 'rosterDocId' },
+      ];
+      for (const { col, field } of relatedCollections) {
+        const snap = await getDocs(query(collection(db, col), where(field, '==', rosterId)));
+        snap.forEach(d => batch.delete(d.ref));
+      }
+
+      // Remove cadet from any S5 Shop completions maps
+      const s5Snap = await getDocs(collection(db, 's5Shop'));
+      s5Snap.forEach(taskDoc => {
+        if (taskDoc.data().completions?.[rosterId] !== undefined) {
+          batch.update(taskDoc.ref, { [`completions.${rosterId}`]: deleteField() });
+        }
       });
+
+      // Delete the roster doc itself
+      batch.delete(doc(db, 'roster', rosterId));
+
+      await batch.commit();
       setGraduateConf(null);
-      showToast(`${graduateConf.fullName} marked as graduated`);
-    } catch {
-      showToast('Update failed');
+      showToast(`${graduateConf.fullName} removed from roster`);
+    } catch (err) {
+      console.error('Graduation delete failed:', err);
+      showToast('Delete failed — try again');
     } finally {
       setGraduating(false);
     }
@@ -616,15 +1022,246 @@ const AdminRoster = () => {
     </div>
   );
 
+  // ── render helpers ────────────────────────────────────────────────────────
+  // Defined here (not inside JSX) so both the main tbody and the
+  // Battalion-in-period section can share the same function.
+  // forceReadOnly = true → hides Edit/Delete/Graduate (used for battalion
+  // entries shown inside a company tab for non-canManageAll users).
+  const renderRow = (entry, idx, forceReadOnly = false) => {
+    const rowCanEdit = canEdit && !forceReadOnly;
+    const ch  = latestChallenge(entry.fullName, challengeMap);
+    const acc = entry.linkedUid ? userMap[entry.linkedUid] : null;
+    const hasAccount = Boolean(entry.linkedUid);
+    const isSelfEntry    = Boolean(user?.uid && entry.linkedUid === user.uid);
+    const selfEditBlocked = isSelfEntry && !isSelfEditExempt;
+
+    return (
+      <tr
+        key={entry.id}
+        className={`border-b border-blue-50 dark:border-white/[0.03] hover:bg-yellow-50/30 dark:hover:bg-yellow-500/5 transition-colors ${idx % 2 === 0 ? '' : 'bg-slate-50/50 dark:bg-slate-900/30'}`}
+      >
+        {/* Rank */}
+        <td className="px-4 py-3 whitespace-nowrap">
+          <span className="text-[10px] font-black uppercase text-yellow-600 dark:text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-full">
+            {entry.rank || '—'}
+          </span>
+        </td>
+
+        {/* Name + account indicator + company badge (global search) */}
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-black text-xs text-slate-900 dark:text-white uppercase tracking-tight whitespace-nowrap">
+              {entry.fullName}
+            </span>
+            {entry.cadetNumber != null && (
+              <span
+                title={`Cadet ID #${String(entry.cadetNumber).padStart(5, '0')}`}
+                className="inline-flex items-center gap-0.5 text-[9px] font-black tracking-wider text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-1.5 py-0.5 rounded-full whitespace-nowrap font-mono"
+              >
+                <Hash size={8} />
+                {String(entry.cadetNumber).padStart(5, '0')}
+              </span>
+            )}
+            {isSearchingAll && entry.company && (
+              <span className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-white/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+                {BATTALION_COMPANIES.includes(entry.company) ? 'Battalion' : `${entry.company} Co.`}
+              </span>
+            )}
+            {hasAccount && (
+              <span
+                title={acc ? `Portal: ${acc.fullName}` : 'Has portal account'}
+                className="text-blue-400 shrink-0"
+              >
+                <Link2 size={12} />
+              </span>
+            )}
+            {BATTALION_COMPANIES.includes(entry.company) && entry.secondaryCompany && (
+              <span
+                title={`Watches over ${entry.secondaryCompany} Company`}
+                className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full"
+              >
+                <Eye size={9} />
+                {entry.secondaryCompany}
+              </span>
+            )}
+          </div>
+          {entry.letLevel && (
+            <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase mt-0.5">{entry.letLevel}</p>
+          )}
+        </td>
+
+        {/* Position */}
+        <td className="px-4 py-3 whitespace-nowrap">
+          <span className="text-xs text-slate-600 dark:text-slate-300 font-bold">{entry.position || '—'}</span>
+          {entry.secondaryPosition && (() => {
+            const teamKey = teamKeyFromPosition(entry.secondaryPosition);
+            const cls = "ml-2 inline-flex items-center text-[9px] font-black uppercase tracking-wider text-indigo-700 dark:text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded-full";
+            return teamKey ? (
+              <Link
+                to={`/admin/teams?team=${encodeURIComponent(teamKey)}`}
+                title={`Go to ${teamKey} team`}
+                className={`${cls} hover:bg-indigo-500/20 hover:border-indigo-500/40 transition-colors`}
+              >
+                {entry.secondaryPosition}
+              </Link>
+            ) : (
+              <span title={`Secondary: ${entry.secondaryPosition}`} className={cls}>
+                {entry.secondaryPosition}
+              </span>
+            );
+          })()}
+        </td>
+
+        {/* Platoon */}
+        <td className="px-4 py-3 whitespace-nowrap">
+          <span className="text-xs text-slate-500 dark:text-slate-400">{entry.platoon || '—'}</span>
+        </td>
+
+        {/* Squad */}
+        <td className="px-4 py-3 whitespace-nowrap">
+          <span className="text-xs text-slate-500 dark:text-slate-400">{entry.squad || '—'}</span>
+        </td>
+
+        {/* Gender */}
+        <td className="px-4 py-3 whitespace-nowrap">
+          {entry.gender ? (
+            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+              entry.gender === 'Male'
+                ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                : entry.gender === 'Female'
+                  ? 'bg-pink-500/10 text-pink-600 dark:text-pink-400'
+                  : 'bg-slate-100 dark:bg-white/5 text-slate-500'
+            }`}>
+              {entry.gender === 'Male' ? 'M' : entry.gender === 'Female' ? 'F' : entry.gender}
+            </span>
+          ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+        </td>
+
+        {/* Challenge scores */}
+        <td className="px-4 py-3">
+          {ch ? (
+            <div className="flex flex-wrap items-start gap-x-0">
+              {/* Cycle badge */}
+              <span className="inline-flex items-center self-center mr-1.5 mb-1 text-[8px] font-black uppercase tracking-wider text-yellow-600 dark:text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 px-1.5 py-0.5 rounded-full">
+                C{ch.cycleNumber ?? '?'}
+              </span>
+              {ch.medicalExempt ? (
+                <span className="text-[10px] text-orange-500 font-bold uppercase self-center">Med. Exempt</span>
+              ) : (
+                <>
+                  <ScoreBadge label="PU"   value={ch.pushUps} />
+                  <ScoreBadge label="SU"   value={ch.sitUps} />
+                  <ScoreBadge label="Sht"  value={ch.shuttleRun} />
+                  <ScoreBadge label="Mile" value={ch.oneMile} />
+                  <ScoreBadge label="S&R"  value={ch.sitNReach} />
+                  {(!ch.pushUps && !ch.sitUps && !ch.shuttleRun && !ch.oneMile && !ch.sitNReach) && (
+                    <span className="text-[10px] text-slate-400 font-bold self-center">No scores yet</span>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <span className="text-[10px] text-slate-300 dark:text-slate-700 font-bold uppercase">No record</span>
+          )}
+        </td>
+
+        {/* Actions */}
+        <td className="px-4 py-3 whitespace-nowrap">
+          <div className="flex items-center gap-1">
+            <Link
+              to={`/admin/personnel/${entry.id}`}
+              title="View cadet profile"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-500/10 transition-all"
+            >
+              <UserCircle size={14} />
+            </Link>
+            {(canManageAll || canManageOwn) && (
+              <button
+                onClick={() => openHistory(entry)}
+                title="View cadet history"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all"
+              >
+                <History size={14} />
+              </button>
+            )}
+            {rowCanEdit && (
+              <>
+                <button
+                  onClick={() => {
+                    if (selfEditBlocked) {
+                      writeLog({
+                        type: 'roster', action: 'self_edit_blocked',
+                        description: `${userData?.fullName || 'Unknown'} attempted to edit their own roster entry`,
+                        userId: user?.uid || '', userFullName: userData?.fullName || '',
+                        userRole: role || '', targetId: entry.id, targetName: entry.fullName,
+                        category: 'security',
+                      });
+                      if (userLevel >= COMMAND_LEVEL) {
+                        user?.getIdToken?.().then(idToken => {
+                          fetch('/api/notify-security', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              idToken,
+                              event: 'self_edit_attempt',
+                              actorName: userData?.fullName || '',
+                              actorRole: role || '',
+                              targetName: entry.fullName,
+                              targetId: entry.id,
+                            }),
+                          }).catch(() => {});
+                        }).catch(() => {});
+                      }
+                      showToast('You cannot edit your own roster entry — contact a staff member');
+                      return;
+                    }
+                    openEdit(entry);
+                  }}
+                  title={selfEditBlocked ? 'Self-editing blocked — contact staff' : 'Edit entry'}
+                  className={`p-1.5 rounded-lg transition-all ${
+                    selfEditBlocked
+                      ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                      : 'text-slate-400 hover:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-500/10'
+                  }`}
+                >
+                  {selfEditBlocked ? <ShieldAlert size={14} /> : <Edit3 size={14} />}
+                </button>
+                <button
+                  onClick={() => setDeleteConf({ id: entry.id, fullName: entry.fullName, company: entry.company, rank: entry.rank, position: entry.position })}
+                  title={canApproveDeletion ? 'Remove from roster' : 'Request removal (requires S1 approval)'}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </>
+            )}
+            {!forceReadOnly && userLevel >= ADMIN_LEVEL && !entry.graduated && (
+              <button
+                onClick={() => setGraduateConf({ id: entry.id, fullName: entry.fullName })}
+                title="Mark as graduated"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-500/10 transition-all"
+              >
+                <GraduationCap size={14} />
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
   // ── render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
-      <AdminPageHeader icon={UserCircle} title="Battalion Roster" />
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+      {!hideHeader && <AdminPageHeader icon={UserCircle} title="Battalion Roster" />}
 
         {/* ── Header actions ── */}
         <div className="flex items-center justify-end mb-8 gap-4 flex-wrap">
-          {canEdit && (
+          {/* Promotion board moved to S1 → Promotion Board page (closed board detail) */}
+          {/* Only canManageAll (staff 70+) can add cadets to the Battalion tab.
+              Company leadership (canManageOwn) can only add to their own company. */}
+          {canEdit && (!isOnBattalionTab || canManageAll) && (
             <button
               onClick={openCreate}
               className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-black text-xs uppercase tracking-widest px-5 py-3 rounded-xl transition-all shadow-lg shadow-yellow-500/20"
@@ -704,9 +1341,10 @@ const AdminRoster = () => {
               <Filter size={13} className="text-slate-400 shrink-0" />
               <select
                 value={activeCompany}
-                onChange={e => setActiveCompany(e.target.value)}
+                onChange={e => changeCompany(e.target.value)}
                 className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-transparent outline-none pr-2 cursor-pointer"
               >
+                <option value="All">All Companies</option>
                 {['Battalion', ...companies].filter(Boolean).map(co => (
                   <option key={co} value={co}>
                     {BATTALION_COMPANIES.includes(co) ? `${co} · HQ` : `${co} Company`}
@@ -736,16 +1374,71 @@ const AdminRoster = () => {
           </div>
         </div>
 
-        {/* ── Search ── */}
-        <div className="relative mb-5">
-          <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name, rank, or position…"
-            className="w-full max-w-sm pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-blue-100 dark:border-white/5 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-yellow-500 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600"
-          />
+        {/* ── Search + LET group toggle ── */}
+        <div className="flex items-center gap-3 mb-5 flex-wrap">
+          <div className="flex-1 min-w-[200px] max-w-sm space-y-1">
+            <div className="relative">
+              <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={canManageAll ? 'Search by name, rank, position, or #ID…' : 'Search by name, rank, or position…'}
+                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-blue-100 dark:border-white/5 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none focus:border-yellow-500 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-600"
+              />
+            </div>
+            {isSearchingAll && (
+              <p className="text-[10px] font-black uppercase tracking-widest text-yellow-600 dark:text-yellow-500 pl-1">
+                Searching all companies · {visibleEntries.length} result{visibleEntries.length !== 1 ? 's' : ''}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => setGroupLet(g => !g)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all border ${
+              groupLet
+                ? 'bg-yellow-500 text-slate-950 border-yellow-500'
+                : 'bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            <GraduationCap size={13} /> Group by LET
+          </button>
+          {visibleEntries.length > 0 && (
+            <button
+              onClick={handleExportRoster}
+              title="Export to CSV"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all border bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 text-slate-500 dark:text-slate-400 hover:border-yellow-500 hover:text-yellow-600"
+            >
+              <Download size={13} /> Export CSV
+            </button>
+          )}
+          {visibleEntries.length > 0 && (
+            <button
+              onClick={() => {
+                const title = isAllCompanies
+                  ? 'All Companies Roster'
+                  : BATTALION_COMPANIES.includes(activeCompany)
+                    ? 'Battalion Roster'
+                    : `${activeCompany} Company Roster`;
+                printRoster(visibleEntries, title);
+              }}
+              title="Print roster"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all border bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 text-slate-500 dark:text-slate-400 hover:border-yellow-500 hover:text-yellow-600"
+            >
+              <Printer size={13} /> Print Roster
+            </button>
+          )}
+          {userLevel >= ADMIN_LEVEL && rosterEntries.some(e => !e.cadetNumber) && (
+            <button
+              onClick={handleBackfillIds}
+              disabled={backfilling}
+              title="Assign cadet IDs to cadets who don't have one yet"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all border bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 text-slate-500 dark:text-slate-400 hover:border-indigo-500 hover:text-indigo-600 disabled:opacity-50"
+            >
+              {backfilling ? <Loader2 size={13} className="animate-spin" /> : <Hash size={13} />}
+              {backfilling ? 'Assigning…' : 'Assign IDs'}
+            </button>
+          )}
         </div>
 
         {/* ── Roster table ── */}
@@ -759,7 +1452,7 @@ const AdminRoster = () => {
           <div className="text-center py-24 border-2 border-dashed border-slate-200 dark:border-white/5 rounded-3xl">
             <UserCircle className="mx-auto text-slate-300 dark:text-slate-700 mb-4" size={40} />
             <p className="text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest text-sm">
-              {search ? 'No cadets match your search' : `No cadets in ${activeCompany} Company yet`}
+              {isSearchingAll ? 'No cadets match your search across any company' : search ? 'No cadets match your search' : `No cadets in ${activeCompany} Company yet`}
             </p>
             {!search && canEdit && (
               <button onClick={openCreate} className="mt-4 text-yellow-500 text-xs font-black uppercase tracking-widest hover:text-yellow-400 transition-colors">
@@ -768,6 +1461,7 @@ const AdminRoster = () => {
             )}
           </div>
         ) : (
+          <>
           <div className="overflow-x-auto rounded-2xl border border-blue-100 dark:border-white/5 shadow-sm">
             <table className="w-full text-sm">
               <thead>
@@ -780,190 +1474,197 @@ const AdminRoster = () => {
                 </tr>
               </thead>
               <tbody>
-                {visibleEntries.map((entry, idx) => {
-                  const ch  = latestChallenge(entry.fullName, challengeMap);
-                  const acc = entry.linkedUid ? userMap[entry.linkedUid] : null;
-                  const hasAccount = Boolean(entry.linkedUid);
-                  // Self-edit check: is this the current user's own roster entry?
-                  const isSelfEntry    = Boolean(user?.uid && entry.linkedUid === user.uid);
-                  const selfEditBlocked = isSelfEntry && !isSelfEditExempt;
-
-                  return (
-                    <tr
-                      key={entry.id}
-                      className={`border-b border-blue-50 dark:border-white/[0.03] hover:bg-yellow-50/30 dark:hover:bg-yellow-500/5 transition-colors ${idx % 2 === 0 ? '' : 'bg-slate-50/50 dark:bg-slate-900/30'}`}
-                    >
-                      {/* Rank */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-[10px] font-black uppercase text-yellow-600 dark:text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-full">
-                          {entry.rank || '—'}
-                        </span>
-                      </td>
-
-                      {/* Name + account indicator + company-watch badge for Battalion */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-black text-xs text-slate-900 dark:text-white uppercase tracking-tight whitespace-nowrap">
-                            {entry.fullName}
-                          </span>
-                          {hasAccount && (
-                            <span
-                              title={acc ? `Portal: ${acc.fullName}` : 'Has portal account'}
-                              className="text-blue-400 shrink-0"
-                            >
-                              <Link2 size={12} />
-                            </span>
-                          )}
-                          {/* "Watches over" badge — only shown for Battalion members */}
-                          {BATTALION_COMPANIES.includes(entry.company) && entry.secondaryCompany && (
-                            <span
-                              title={`Watches over ${entry.secondaryCompany} Company`}
-                              className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full"
-                            >
-                              <Eye size={9} />
-                              {entry.secondaryCompany}
-                            </span>
-                          )}
-                        </div>
-                        {entry.letLevel && (
-                          <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase mt-0.5">{entry.letLevel}</p>
-                        )}
-                      </td>
-
-                      {/* Position */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-xs text-slate-600 dark:text-slate-300 font-bold">{entry.position || '—'}</span>
-                      </td>
-
-                      {/* Platoon */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-xs text-slate-500 dark:text-slate-400">{entry.platoon || '—'}</span>
-                      </td>
-
-                      {/* Squad */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className="text-xs text-slate-500 dark:text-slate-400">{entry.squad || '—'}</span>
-                      </td>
-
-                      {/* Gender */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {entry.gender ? (
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                            entry.gender === 'Male'
-                              ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                              : entry.gender === 'Female'
-                                ? 'bg-pink-500/10 text-pink-600 dark:text-pink-400'
-                                : 'bg-slate-100 dark:bg-white/5 text-slate-500'
-                          }`}>
-                            {entry.gender === 'Male' ? 'M' : entry.gender === 'Female' ? 'F' : entry.gender}
-                          </span>
-                        ) : <span className="text-slate-300 dark:text-slate-700">—</span>}
-                      </td>
-
-                      {/* Challenge scores */}
-                      <td className="px-4 py-3">
-                        {ch ? (
-                          <div className="flex flex-wrap">
-                            <ScoreBadge label="PU"   value={ch.pushUps} />
-                            <ScoreBadge label="SU"   value={ch.sitUps} />
-                            <ScoreBadge label="Pull" value={ch.pullUps} />
-                            <ScoreBadge label="Mile" value={ch.milePace} />
-                            <ScoreBadge label="Sht"  value={ch.shuttleRun} />
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-slate-300 dark:text-slate-700 font-bold uppercase">No record</span>
-                        )}
-                      </td>
-
-                      {/* Actions — hidden for read-only roles (S1/S3 assistants) */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1">
-                          {/* History — visible to any staff/command viewer */}
-                          {(canManageAll || canManageOwn) && (
-                            <button
-                              onClick={() => openHistory(entry)}
-                              title="View cadet history"
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all"
-                            >
-                              <History size={14} />
-                            </button>
-                          )}
-                          {canEdit && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  if (selfEditBlocked) {
-                                    // Log and block the attempt
-                                    writeLog({
-                                      type: 'roster', action: 'self_edit_blocked',
-                                      description: `${userData?.fullName || 'Unknown'} attempted to edit their own roster entry`,
-                                      userId: user?.uid || '', userFullName: userData?.fullName || '',
-                                      userRole: role || '', targetId: entry.id, targetName: entry.fullName,
-                                      category: 'security',
-                                    });
-                                    // Immediate security alert for commander+ accounts
-                                    if (userLevel >= COMMAND_LEVEL) {
-                                      user?.getIdToken?.().then(idToken => {
-                                        fetch('/api/notify-security', {
-                                          method: 'POST',
-                                          headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({
-                                            idToken,
-                                            event: 'self_edit_attempt',
-                                            actorName: userData?.fullName || '',
-                                            actorRole: role || '',
-                                            targetName: entry.fullName,
-                                            targetId: entry.id,
-                                          }),
-                                        }).catch(() => {});
-                                      }).catch(() => {});
-                                    }
-                                    showToast('You cannot edit your own roster entry — contact a staff member');
-                                    return;
-                                  }
-                                  openEdit(entry);
-                                }}
-                                title={selfEditBlocked ? 'Self-editing blocked — contact staff' : 'Edit entry'}
-                                className={`p-1.5 rounded-lg transition-all ${
-                                  selfEditBlocked
-                                    ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                                    : 'text-slate-400 hover:text-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-500/10'
-                                }`}
-                              >
-                                {selfEditBlocked
-                                  ? <ShieldAlert size={14} />
-                                  : <Edit3 size={14} />
-                                }
-                              </button>
-                              <button
-                                onClick={() => setDeleteConf({ id: entry.id, fullName: entry.fullName, company: entry.company, rank: entry.rank, position: entry.position })}
-                                title={canApproveDeletion ? 'Remove from roster' : 'Request removal (requires S1 approval)'}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </>
-                          )}
-                          {/* Graduate — admin only, only for non-graduated cadets */}
-                          {userLevel >= ADMIN_LEVEL && !entry.graduated && (
-                            <button
-                              onClick={() => setGraduateConf({ id: entry.id, fullName: entry.fullName })}
-                              title="Mark as graduated"
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-500/10 transition-all"
-                            >
-                              <GraduationCap size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {groupLet
+                  ? groupByLet(visibleEntries, e => e.letLevel, e => e.fullName).map(({ level, entries: group }) => (
+                      <React.Fragment key={level}>
+                        <tr>
+                          <td colSpan={999} className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest text-yellow-700 dark:text-yellow-500 bg-yellow-50 dark:bg-yellow-500/10 border-y border-yellow-200 dark:border-yellow-500/20">
+                            {level}
+                          </td>
+                        </tr>
+                        {group.map((entry, idx) => renderRow(entry, idx))}
+                      </React.Fragment>
+                    ))
+                  : visibleEntries.map((entry, idx) => renderRow(entry, idx))
+                }
               </tbody>
             </table>
           </div>
+
+          {/* ── Battalion members in period (company tabs only) ── */}
+          {!isOnBattalionTab && battalionInPeriodEntries.length > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center gap-3 mb-2 px-1">
+                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                  <Eye size={10} /> Battalion · In Period
+                </span>
+                <span className="text-[9px] text-slate-400 dark:text-slate-500">
+                  — HQ staff attached to this company's class period
+                </span>
+                {!canManageAll && (
+                  <span className="ml-auto text-[9px] font-black uppercase tracking-wider text-slate-400 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-full">
+                    View only
+                  </span>
+                )}
+              </div>
+              <div className="overflow-x-auto rounded-2xl border border-amber-200 dark:border-amber-500/20 shadow-sm">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-amber-50 dark:bg-amber-900/10 border-b border-amber-200 dark:border-amber-500/20">
+                      {['Rank','Name','Position','Platoon','Squad','Gender','Challenge Scores',''].map(h => (
+                        <th key={h} className="text-left text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-500 px-4 py-3 whitespace-nowrap">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      // Battalion entries in company tabs are read-only for company leadership.
+                      // canManageAll (staff 70+) retains full edit access.
+                      const bnReadOnly = !canManageAll;
+                      const bnEntries = groupLet
+                        ? groupByLet(battalionInPeriodEntries, e => e.letLevel, e => e.fullName)
+                            .flatMap(({ level, entries: grp }) => [
+                              <tr key={`bn-hdr-${level}`}>
+                                <td colSpan={999} className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest text-yellow-700 dark:text-yellow-500 bg-yellow-50 dark:bg-yellow-500/10 border-y border-yellow-200 dark:border-yellow-500/20">
+                                  {level}
+                                </td>
+                              </tr>,
+                              ...grp.map((entry, idx) => renderRow(entry, idx, bnReadOnly)),
+                            ])
+                        : battalionInPeriodEntries.map((entry, idx) => renderRow(entry, idx, bnReadOnly));
+                      return bnEntries;
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          </>
         )}
 
+
+      {/* ── Promotion Board Modal ── */}
+      {boardModal && (() => {
+        // Compute eligible cadets for the selected board number
+        const eligible = boardEntries
+          .filter(e => {
+            const target = boardTargetRank(e.position, boardNum);
+            if (!target || !e.rank) return false;
+            const curIdx = JROTC_RANKS.indexOf(e.rank);
+            const tgtIdx = JROTC_RANKS.indexOf(target);
+            return curIdx >= 0 && curIdx < tgtIdx;
+          })
+          .map(e => ({ ...e, targetRank: boardTargetRank(e.position, boardNum) }))
+          .sort((a, b) => (a.company || '').localeCompare(b.company || '') || a.fullName.localeCompare(b.fullName));
+
+        const runBoard = async () => {
+          setBoardRunning(true);
+          try {
+            await Promise.all(eligible.map(async e => {
+              // Update roster entry
+              await updateDoc(doc(db, 'roster', e.id), { rank: e.targetRank });
+              // Sync to linked portal account if present
+              if (e.linkedUid) {
+                try { await updateDoc(doc(db, 'users', e.linkedUid), { rank: e.targetRank }); }
+                catch { /* non-fatal */ }
+              }
+            }));
+            await writeLog({
+              type: 'roster', action: 'update',
+              description: `Promotion Board ${boardNum} run — ${eligible.length} cadet${eligible.length !== 1 ? 's' : ''} promoted`,
+              userId: user?.uid || '', userFullName: userData?.fullName || '', userRole: role || '',
+              targetId: '', targetName: '',
+            });
+            setBoardModal(false);
+            showToast(`Board ${boardNum} complete — ${eligible.length} cadet${eligible.length !== 1 ? 's' : ''} promoted`);
+          } catch (err) {
+            console.error('Board failed:', err);
+            showToast('Promotion board failed — check console', true);
+          } finally {
+            setBoardRunning(false);
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+            <div className="modal-enter bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl w-full max-w-xl max-h-[90vh] flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/10">
+                <div className="flex items-center gap-3">
+                  <TrendingUp size={18} className="text-indigo-500" />
+                  <span className="font-black uppercase text-sm tracking-widest text-slate-900 dark:text-white">Promotion Board</span>
+                </div>
+                <button onClick={() => setBoardModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Board selector */}
+              <div className="px-6 pt-5 pb-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Select Board</p>
+                <div className="flex gap-3">
+                  {[1, 2].map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setBoardNum(n)}
+                      className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-widest border transition-all ${boardNum === n ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:border-indigo-400'}`}
+                    >
+                      Board {n}
+                      <span className="block text-[9px] font-bold normal-case tracking-normal mt-0.5 opacity-70">
+                        {n === 1 ? 'Promote to one rank below max' : 'Promote to max authorized rank'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preview list */}
+              <div className="flex-1 overflow-y-auto px-6 pb-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 mt-2">
+                  {eligible.length} cadet{eligible.length !== 1 ? 's' : ''} eligible for promotion
+                </p>
+                {eligible.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic py-6 text-center">
+                    All cadets are already at or above the Board {boardNum} target — no promotions needed.
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {eligible.map(e => (
+                      <div key={e.id} className="flex items-center justify-between px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/5 text-sm">
+                        <div>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{e.fullName}</span>
+                          <span className="text-[10px] text-slate-400 ml-2">{normalizeCompany(e.company)}{e.position ? ` · ${e.position}` : ''}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[10px] font-black text-slate-400 bg-slate-100 dark:bg-white/10 px-2 py-0.5 rounded">{e.rank || '—'}</span>
+                          <span className="text-slate-300 dark:text-slate-600 text-xs">→</span>
+                          <span className="text-[10px] font-black text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded">{e.targetRank}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-slate-100 dark:border-white/10 flex gap-3">
+                <button onClick={() => setBoardModal(false)} className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-sm font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all">
+                  Cancel
+                </button>
+                <button
+                  disabled={eligible.length === 0 || boardRunning}
+                  onClick={runBoard}
+                  className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                >
+                  {boardRunning ? <><Loader2 size={14} className="animate-spin" /> Running…</> : <><TrendingUp size={14} /> Run Board {boardNum}</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Add / Edit Modal ── */}
       {showModal && (
@@ -992,11 +1693,41 @@ const AdminRoster = () => {
                         Managed by Portal Account
                       </p>
                       <p className="text-[11px] text-blue-600 dark:text-blue-400 leading-relaxed">
-                        This cadet's name, rank, position, company, and platoon are pulled directly from their portal account — managed by the <strong>Battalion S1</strong>. To change any of these fields, contact S1 who will update it in the Accounts page. Only <strong>notes</strong> can be edited here.
+                        {canS1Edit
+                          ? <>This cadet has a portal account. <strong>Name, rank, position, and company</strong> are locked — contact Battalion S1 to change those. You can freely update <strong>LET level, gender, platoon, squad, and notes</strong>.</>
+                          : <>This cadet's name, rank, position, company, and platoon are pulled directly from their portal account — managed by the <strong>Battalion S1</strong>. To change any of these fields, contact S1 who will update it in the Accounts page. Only <strong>notes</strong> can be edited here.</>
+                        }
                       </p>
                     </div>
                   </div>
                 )}
+
+                {/* LET Level — first field; drives defaults below */}
+                <div>
+                  <label className={lCls}>LET Level *</label>
+                  <select
+                    value={form.letLevel}
+                    disabled={accountLocked && !canS1Edit}
+                    onChange={accountLocked && !canS1Edit ? undefined : e => {
+                      const lvl = e.target.value;
+                      setForm(f => ({
+                        ...f,
+                        letLevel: lvl,
+                        // LET 1 → lock position to Squad Member if none set yet
+                        ...(!f.position && lvl === 'LET 1' ? { position: 'Squad Member' } : {}),
+                      }));
+                    }}
+                    className={`${iCls} ${accountLocked && !canS1Edit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  >
+                    <option value="">— Select —</option>
+                    {LET_LEVELS.map(l => <option key={l}>{l}</option>)}
+                  </select>
+                  {form.letLevel === 'LET 1' && (
+                    <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold">
+                      LET 1 cadets default to Squad Member — change below if needed.
+                    </p>
+                  )}
+                </div>
 
                 {/* Full Name — locked for S1 assistants and for linked account entries */}
                 {(() => {
@@ -1026,7 +1757,9 @@ const AdminRoster = () => {
                   {/* Rank — locked for linked-account entries (account is master) and for
                       company-level officers on existing entries (Firestore rank/position lock). */}
                   {(() => {
-                    const rankLocked = accountLocked || (!canManageAll && !!editingId);
+                    // v1.6.61: rank lock temporarily removed — company leadership
+                    // needs to assign ranks during initial roster setup.
+                    const rankLocked = accountLocked;
                     return (
                       <div>
                         <label className={lCls}>
@@ -1044,28 +1777,57 @@ const AdminRoster = () => {
                           <option value="">— Select —</option>
                           {JROTC_RANKS.map(r => <option key={r}>{r}</option>)}
                         </select>
-                        {!rankLocked && (
-                          <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold">
-                            Must reflect the cadet's current issued uniform rank — not a desired or future rank.
-                          </p>
-                        )}
+                        {!rankLocked && (() => {
+                          const authRank = POSITION_RANKS[form.position] || '';
+                          const isOver   = authRank && form.rank && rankExceedsMax(form.rank, form.position);
+                          const isUnder  = authRank && form.rank && !isOver && form.rank !== authRank;
+                          return (
+                            <>
+                              <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400 font-bold">
+                                Must reflect the cadet's current issued uniform rank — not a desired or future rank.
+                              </p>
+                              {authRank && (
+                                <p className={`mt-0.5 text-[10px] font-bold flex items-center flex-wrap gap-1.5 ${isOver ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                                  {isOver
+                                    ? <span className="font-black">⛔ OVER RANK — max for this position is {authRank}.</span>
+                                    : <><span>Max rank for this position:</span><span className="font-black">{authRank}</span></>
+                                  }
+                                  {(isOver || isUnder) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setForm(f => ({ ...f, rank: authRank }))}
+                                      className="ml-1 underline underline-offset-2 hover:opacity-70 transition-opacity"
+                                    >
+                                      Use {authRank}
+                                    </button>
+                                  )}
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     );
                   })()}
 
                   {/* Gender */}
-                  <div>
-                    <label className={lCls}>Gender</label>
-                    <select
-                      value={form.gender}
-                      disabled={accountLocked}
-                      onChange={accountLocked ? undefined : e => setForm(f => ({ ...f, gender: e.target.value }))}
-                      className={`${iCls} ${accountLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
-                    >
-                      <option value="">— Select —</option>
-                      {GENDERS.map(g => <option key={g}>{g}</option>)}
-                    </select>
-                  </div>
+                  {(() => {
+                    const genderLocked = accountLocked && !canS1Edit;
+                    return (
+                      <div>
+                        <label className={lCls}>Gender</label>
+                        <select
+                          value={form.gender}
+                          disabled={genderLocked}
+                          onChange={genderLocked ? undefined : e => setForm(f => ({ ...f, gender: e.target.value }))}
+                          className={`${iCls} ${genderLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        >
+                          <option value="">— Select —</option>
+                          {GENDERS.map(g => <option key={g}>{g}</option>)}
+                        </select>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Position — three-layer gate:
@@ -1075,7 +1837,8 @@ const AdminRoster = () => {
                     3. Battalion-level positions are hidden from sub-staff even on creates
                        (Firestore create rule enforces the same). */}
                 {(() => {
-                  const posLocked = accountLocked || (!canManageAll && !!editingId);
+                  // v1.6.61: position lock temporarily removed — see rankLocked note above.
+                  const posLocked = accountLocked;
                   return (
                     <div>
                       <label className={lCls}>
@@ -1091,11 +1854,14 @@ const AdminRoster = () => {
                           const newPos = e.target.value;
                           const isHqLocked   = COMPANY_HQ_LOCKED_POSITIONS.includes(newPos);
                           const isHqDefault  = COMPANY_HQ_DEFAULT_POSITIONS.includes(newPos);
+                          const authRank     = POSITION_RANKS[newPos] || '';
                           setForm(f => ({
                             ...f,
                             position: newPos,
+                            // Auto-fill rank when the field is blank and the regulation
+                            // specifies an authorized rank for this position.
+                            ...(!f.rank && authRank ? { rank: authRank } : {}),
                             // Auto-assign Company HQ platoon for command/staff positions.
-                            // Locked positions cannot override it; default positions can.
                             ...(isHqLocked || isHqDefault ? { platoon: 'Company HQ', squad: '' } : {}),
                           }));
                         }}
@@ -1109,6 +1875,26 @@ const AdminRoster = () => {
                     </div>
                   );
                 })()}
+
+                {/* Special Assignment (secondary position) — staff-only billet held in
+                    addition to the primary position (e.g. Company Commander + Raider Team Commander).
+                    Only staff (70+) can assign these. */}
+                {canManageAll && (
+                  <div>
+                    <label className={lCls}>Special Assignment <span className="normal-case tracking-normal font-bold text-slate-400">(secondary — optional)</span></label>
+                    <select
+                      value={form.secondaryPosition}
+                      onChange={e => setForm(f => ({ ...f, secondaryPosition: e.target.value }))}
+                      className={iCls}
+                    >
+                      <option value="">— None —</option>
+                      {SECONDARY_POSITIONS.map(p => <option key={p}>{p}</option>)}
+                    </select>
+                    <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500 font-bold">
+                      Held in addition to the primary position above.
+                    </p>
+                  </div>
+                )}
 
                 {/* Company row + conditional platoon/squad or secondary company */}
                 <div className="grid grid-cols-3 gap-4">
@@ -1134,10 +1920,11 @@ const AdminRoster = () => {
                         )}
                       </label>
                       {/* Locked when portal account is master OR position forces Company HQ. */}
+                      {/* S1 assistants can update platoon even on linked cadets. */}
                       <select
                         value={form.platoon}
-                        disabled={accountLocked || platoonAutoLocked}
-                        onChange={accountLocked || platoonAutoLocked ? undefined : e => {
+                        disabled={(accountLocked && !canS1Edit) || platoonAutoLocked}
+                        onChange={(accountLocked && !canS1Edit) || platoonAutoLocked ? undefined : e => {
                           const next = e.target.value;
                           setForm(f => ({
                             ...f,
@@ -1145,7 +1932,7 @@ const AdminRoster = () => {
                             ...(next === 'Company HQ' ? { squad: '' } : {}),
                           }));
                         }}
-                        className={`${iCls} ${accountLocked || platoonAutoLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        className={`${iCls} ${(accountLocked && !canS1Edit) || platoonAutoLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                       >
                         <option value="">— —</option>
                         {PLATOONS.map(p => <option key={p}>{p}</option>)}
@@ -1158,9 +1945,9 @@ const AdminRoster = () => {
                       <label className={lCls}>Squad</label>
                       <select
                         value={form.squad}
-                        disabled={accountLocked}
-                        onChange={accountLocked ? undefined : e => setForm(f => ({ ...f, squad: e.target.value }))}
-                        className={`${iCls} ${accountLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        disabled={accountLocked && !canS1Edit}
+                        onChange={accountLocked && !canS1Edit ? undefined : e => setForm(f => ({ ...f, squad: e.target.value }))}
+                        className={`${iCls} ${accountLocked && !canS1Edit ? 'opacity-60 cursor-not-allowed' : ''}`}
                       >
                         <option value="">— —</option>
                         {SQUADS.map(s => <option key={s}>{s}</option>)}
@@ -1186,19 +1973,6 @@ const AdminRoster = () => {
                   )}
                 </div>
 
-                {/* LET Level */}
-                <div>
-                  <label className={lCls}>LET Level</label>
-                  <select
-                    value={form.letLevel}
-                    disabled={accountLocked}
-                    onChange={accountLocked ? undefined : e => setForm(f => ({ ...f, letLevel: e.target.value }))}
-                    className={`${iCls} ${accountLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
-                  >
-                    <option value="">— Select —</option>
-                    {LET_LEVELS.map(l => <option key={l}>{l}</option>)}
-                  </select>
-                </div>
 
                 {/* Link to Portal Account */}
                 <div>
@@ -1350,7 +2124,7 @@ const AdminRoster = () => {
                         >
                           <div className="flex items-center gap-3">
                             <span className="font-black text-sm text-slate-900 dark:text-white">{rec.schoolYear}</span>
-                            <span className="text-xs text-slate-500">{rec.rank} · {rec.company ? `${rec.company} Co.` : '—'}</span>
+                            <span className="text-xs text-slate-500">{rec.rank} · {rec.company ? `${normalizeCompany(rec.company)} Co.` : '—'}</span>
                           </div>
                           <ChevronRight size={14} className={`text-slate-400 transition-transform ${historyExpanded === rec.schoolYear ? 'rotate-90' : ''}`} />
                         </button>
@@ -1363,6 +2137,16 @@ const AdminRoster = () => {
                               <div>
                                 <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0.5">Position</p>
                                 <p className="text-slate-700 dark:text-slate-200">{rec.position || '—'}</p>
+                                {rec.secondaryPosition && (() => {
+                                  const tk = teamKeyFromPosition(rec.secondaryPosition);
+                                  return tk ? (
+                                    <Link to={`/admin/teams?team=${encodeURIComponent(tk)}`} className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5 hover:underline block">
+                                      {rec.secondaryPosition}
+                                    </Link>
+                                  ) : (
+                                    <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">{rec.secondaryPosition}</p>
+                                  );
+                                })()}
                               </div>
                               <div>
                                 <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-0.5 flex items-center gap-1"><BookOpen size={9} /> LET Level</p>
@@ -1427,17 +2211,17 @@ const AdminRoster = () => {
         {graduateConf && (
           <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
             <div className="modal-enter bg-white dark:bg-slate-900 border border-green-200 dark:border-green-500/20 rounded-3xl p-8 max-w-sm w-full text-center">
-              <GraduationCap className="mx-auto text-green-500 mb-4" size={32} />
-              <h3 className="font-black uppercase text-sm tracking-widest text-slate-900 dark:text-white mb-2">Mark as Graduated?</h3>
+              <GraduationCap className="mx-auto text-rose-500 mb-4" size={32} />
+              <h3 className="font-black uppercase text-sm tracking-widest text-slate-900 dark:text-white mb-2">Graduate &amp; Remove?</h3>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-                <strong>{graduateConf.fullName}</strong> will be marked as graduated. Their roster entry will remain for historical reference but will be excluded from future year-end archives.
+                <strong>{graduateConf.fullName}</strong> will be permanently removed from the roster and all associated records will be deleted. <span className="text-rose-500 font-bold">This cannot be undone.</span>
               </p>
               <div className="flex gap-3">
                 <button onClick={() => setGraduateConf(null)} className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 font-black text-xs uppercase text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all">
                   Cancel
                 </button>
-                <button onClick={handleGraduate} disabled={graduating} className="flex-1 py-3 rounded-xl bg-green-500 hover:bg-green-600 text-white font-black text-xs uppercase transition-all flex items-center justify-center gap-2 disabled:opacity-60">
-                  {graduating && <Loader2 size={12} className="animate-spin" />} Confirm
+                <button onClick={handleGraduate} disabled={graduating} className="flex-1 py-3 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-black text-xs uppercase transition-all flex items-center justify-center gap-2 disabled:opacity-60">
+                  {graduating && <Loader2 size={12} className="animate-spin" />} Remove
                 </button>
               </div>
             </div>

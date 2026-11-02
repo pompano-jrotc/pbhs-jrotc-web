@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="297"    label="Patches"     />
-        <Stat value="629"    label="Commits"     />
+        <Stat value="298"    label="Patches"     />
+        <Stat value="631"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="246d"   label="In Dev"      />
-        <Stat value="v1.8.108" label="Current"     />
+        <Stat value="v1.8.109" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,13 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.108" date="Nov 2" title="Ribbon Registry: edit types + order of precedence" isCurrent changes={<>
+        <Release versions="v1.8.109" date="Nov 2" title="Print Roster — Personnel Hub, Cadet Challenge, Fundraiser" isCurrent changes={<>
+          <C type="feat">Print Roster button added to Personnel Hub (roster tab) — opens a print-ready window formatted to the standard PBHS JROTC roster: cadets grouped by LET level in "Last, First" order, LET breakdown and total at the bottom, with 6 blank columns for marking</C>
+          <C type="feat">Print Roster button added to Cadet Challenge — prints the current company's roster for the active cycle</C>
+          <C type="feat">Print Roster button added to Fundraiser (Roster tab) — prints the currently visible company's cadet list in the same format</C>
+          <C type="feat">Shared printRoster utility handles LET grouping, name formatting, and opening the print dialog automatically</C>
+        </>} />
+        <Release versions="v1.8.108" date="Nov 2" title="Ribbon Registry: edit types + order of precedence" isCurrent={false} changes={<>
           <C type="feat">Ribbon types can now be edited — a pencil icon on each catalog card (staff 70+) opens an edit modal to change the name, code, category, description, and order of precedence</C>
           <C type="feat">Order of precedence added to ribbon types — an integer field where lower = more prestigious; the catalog is sorted by precedence (then alphabetically for ribbons without one)</C>
           <C type="feat">Standard ribbon import now assigns precedences automatically based on the official US Army JROTC order (N-1-x first, then N-2-x, N-3-x, N-4-x, then battalion-specific ribbons)</C>

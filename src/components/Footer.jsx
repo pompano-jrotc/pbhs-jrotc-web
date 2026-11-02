@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, Mail, MapPin, ExternalLink, Instagram, Youtube, Phone } from 'lucide-react';
 
-const PORTAL_VERSION = 'v1.8.108';
+const PORTAL_VERSION = 'v1.8.109';
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
