@@ -54,8 +54,8 @@ export async function validateUpload(file, kind) {
     return { valid: false, error: 'File type not recognized - only JPEG, PNG, WebP, HEIC images and PDF documents are accepted.' };
   }
 
-  if (kind === 'document' && detectedType !== 'application/pdf') {
-    return { valid: false, error: 'Documents must be PDF files.' };
+  if (kind === 'document' && detectedType !== 'application/pdf' && detectedType !== 'image/webp') {
+    return { valid: false, error: 'Documents must be PDF files or WebP images.' };
   }
   if (kind === 'image' && !IMAGE_TYPES.includes(detectedType)) {
     return { valid: false, error: 'Images must be JPEG, PNG, WebP, or HEIC.' };

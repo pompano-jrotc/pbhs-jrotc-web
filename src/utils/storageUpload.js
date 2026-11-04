@@ -57,3 +57,45 @@ export async function uploadPdfToStorage(file, folder = 'documents', onProgress)
     );
   });
 }
+
+/**
+ * Upload a PDF or image (JPEG, PNG, WebP) to Firebase Storage for announcements.
+ *
+ * @param {File}   file     — the File object (PDF or image)
+ * @param {string} folder   — subfolder under `documents/` (e.g. 'announcements')
+ * @param {function} [onProgress] — optional callback(percent: number)
+ * @returns {Promise<{ url: string, fileName: string, bytes: number, type: 'pdf'|'image' }>}
+ */
+export async function uploadAnnouncementAttachment(file, folder = 'announcements', onProgress) {
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const { valid, error } = await validateUpload(file, isPdf ? 'document' : 'image');
+  if (!valid) throw new Error(error);
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `documents/${folder}/${Date.now()}_${safeName}`;
+  const storageRef = ref(storage, path);
+  const contentType = isPdf ? 'application/pdf' : (file.type || 'application/octet-stream');
+
+  return new Promise((resolve, reject) => {
+    const task = uploadBytesResumable(storageRef, file, { contentType });
+
+    task.on(
+      'state_changed',
+      (snapshot) => {
+        if (onProgress) {
+          const pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          onProgress(pct);
+        }
+      },
+      (err) => reject(err),
+      async () => {
+        try {
+          const url = await getDownloadURL(task.snapshot.ref);
+          resolve({ url, fileName: file.name, bytes: file.size, type: isPdf ? 'pdf' : 'image' });
+        } catch (err) {
+          reject(err);
+        }
+      },
+    );
+  });
+}

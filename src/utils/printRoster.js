@@ -5,13 +5,22 @@
 //
 // cadets — [{fullName, letLevel, ...}]  — names already stored as "LAST, FIRST"
 // title  — string shown centered at the top (e.g. "Alpha Company Roster")
-// opts   — { extraCols: number of blank data columns (default 6) }
+// opts   — {
+//   extraCols: number of blank data columns when columns not provided (default 6)
+//   columns: [{label, getValue(cadet)}] — replaces blank cols with data cols
+// }
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-export function printRoster(cadets, title, { extraCols = 6 } = {}) {
+export function printRoster(cadets, title, { extraCols = 6, columns = null } = {}) {
+  // When columns provided, use them; otherwise build blank placeholder columns
+  const colDefs = columns
+    ? columns
+    : Array.from({ length: extraCols }, () => ({ label: '', getValue: () => '' }));
+  const numExtraCols = colDefs.length;
   const LET_LEVELS = ['LET 1', 'LET 2', 'LET 3', 'LET 4'];
+
 
   const groups = LET_LEVELS
     .map(level => ({
@@ -51,39 +60,39 @@ export function printRoster(cadets, title, { extraCols = 6 } = {}) {
             _letNum: letNum,
           }
         : { content: m.fullName || '' };
-      body.push([nameCell, ...Array(extraCols).fill({ content: '' })]);
+      body.push([nameCell, ...colDefs.map(c => ({ content: String(c.getValue(m) ?? '') }))]);
     });
   });
 
   // ── Summary rows (LET breakdown + total) ─────────────────────────────────
-  body.push([{ content: '', colSpan: extraCols + 1, styles: { cellPadding: 4 } }]);
+  body.push([{ content: '', colSpan: numExtraCols + 1, styles: { cellPadding: 4 } }]);
   counts.forEach(({ level, count }) => {
     body.push([
       { content: `${level}:  ${count}`, styles: { fontStyle: 'normal', halign: 'left', cellPadding: { top: 1, bottom: 1, left: 4 } } },
-      ...Array(extraCols).fill({ content: '', styles: { lineWidth: 0 } }),
+      ...Array(numExtraCols).fill({ content: '', styles: { lineWidth: 0 } }),
     ]);
   });
   body.push([
     { content: `Total:  ${total}`, styles: { fontStyle: 'bold', halign: 'left', cellPadding: { top: 1, bottom: 2, left: 4 } } },
-    ...Array(extraCols).fill({ content: '', styles: { lineWidth: 0 } }),
+    ...Array(numExtraCols).fill({ content: '', styles: { lineWidth: 0 } }),
   ]);
 
-  // ── Column widths: wide name col + equal blank cols ───────────────────────
+  // ── Column widths: wide name col + equal data/blank cols ─────────────────
   const margin  = 36;
   const usable  = pageW - margin * 2;
   const nameCW  = Math.round(usable * 0.38);
-  const blankCW = Math.round((usable - nameCW) / extraCols);
+  const blankCW = Math.round((usable - nameCW) / numExtraCols);
 
   autoTable(doc, {
     startY: 55,
-    head: [['Cadet Name', ...Array(extraCols).fill('')]],
+    head: [['Cadet Name', ...colDefs.map(c => c.label)]],
     body,
     margin: { left: margin, right: margin },
     tableWidth: usable,
     columnStyles: {
       0: { cellWidth: nameCW },
       ...Object.fromEntries(
-        Array.from({ length: extraCols }, (_, i) => [i + 1, { cellWidth: blankCW }])
+        Array.from({ length: numExtraCols }, (_, i) => [i + 1, { cellWidth: blankCW }])
       ),
     },
     headStyles: {
@@ -117,13 +126,14 @@ export function printRoster(cadets, title, { extraCols = 6 } = {}) {
       doc.text(cell._letNum, x + width - 4, y + height / 2 + 3, { align: 'right' });
       doc.setFont('helvetica', 'normal');
     },
-    // Don't draw borders on the summary blank cells
+    // Don't draw borders or fills on the summary blank cells
     willDrawCell(data) {
       if (data.section !== 'body') return;
       const raw = data.row.raw;
       const isSum = Array.isArray(raw) && raw.length > 1 && raw[1]?.styles?.lineWidth === 0;
       if (isSum && data.column.index > 0) {
         data.cell.styles.lineWidth = 0;
+        data.cell.styles.fillColor = false;
       }
     },
   });
