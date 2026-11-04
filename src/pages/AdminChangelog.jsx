@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="309"    label="Patches"     />
-        <Stat value="642"    label="Commits"     />
+        <Stat value="338"    label="Patches"     />
+        <Stat value="676"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
-        <Stat value="246d"   label="In Dev"      />
-        <Stat value="v1.8.120" label="Current"     />
+        <Stat value="247d"   label="In Dev"      />
+        <Stat value="v1.8.144" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,104 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.120" date="Nov 2" title="Arcs always sort alphabetically — no Reorder" isCurrent changes={<>
+        <Release versions="v1.8.144" date="Nov 4" title="Promotion Board — N/A Removes Category from Score Total" isCurrent changes={<>
+          <C type="fix">S1PromotionBoard — selecting N/A for a category now removes that category from the total possible points (e.g. 1 N/A → score shown out of 1000 instead of 1100)</C>
+          <C type="fix">handleScoreChange — stored 'na' as the string 'na' instead of parseInt('na') = NaN which was corrupting totalScore in Firestore</C>
+          <C type="fix">calcPossible helper added — computes denominator as (categories − N/A count) × 100; displayed next to each cadet's score and saved as totalPossible on every score change</C>
+        </>}
+        />
+        <Release versions="v1.8.143" date="Nov 4" title="Security — Email HTML Escaping, Storage Delete Scoping" changes={<>
+          <C type="sec">notify-security.js — all user-supplied values (actorName, actorRole, targetName, targetId, notes) now HTML-escaped before interpolation into alert email body; prevents HTML injection by authenticated users</C>
+          <C type="sec">storage.rules — cadet-documents delete now scoped to owning UID only (request.auth.uid == uid); prevents any cadet from deleting another cadet's documents</C>
+          <C type="fix">storage.rules — added comments clarifying that Storage rules cannot read Firestore roles; app-layer gates remain the primary defense for form-submissions and meeting-attachments</C>
+        </>}
+        />
+        <Release versions="v1.8.142" date="Nov 4" title="Firestore Security — Rules for 6 New Collections" changes={<>
+          <C type="sec">Firestore: added security rules for all 6 new collections added in v1.8.134–140 — serviceHours, attendance, scholarshipBoard, achievementWall, afiSessions, and specialTeams/{`{id}`}/results subcollection</C>
+          <C type="sec">serviceHours — cadets can submit own entries (create any signed-in); staff 70+ can read all and update status; cadet can only read their own (linkedUid check)</C>
+          <C type="sec">attendance — command tier 45+ read; staff 70+ create/delete; command 45+ update (mark attendance)</C>
+          <C type="sec">scholarshipBoard — signed-in read; staff 70+ create/delete; any signed-in may update bookmarkedBy field only; staff 70+ can update any field</C>
+          <C type="sec">achievementWall — signed-in read; staff 70+ create/update/delete</C>
+          <C type="sec">afiSessions — signed-in read; staff 70+ create/delete; command 45+ update (enter cadet ratings)</C>
+          <C type="sec">specialTeams/{`{id}`}/results — signed-in read; command 45+ create/delete</C>
+          <C type="fix">Audit — confirmed email service uses Resend (server-side, ID-token verified, rate-limited); EmailJS memory stale and removed</C>
+        </>}
+        />
+        <Release versions="v1.8.141" date="Nov 4" title="Platform Audit — Bug Fixes, Security Hardening, Mobile Responsiveness" changes={<>
+          <C type="sec">ScholarshipBoard — URL input now validates http(s):// protocol before saving; rejects javascript: and other dangerous schemes</C>
+          <C type="fix">ServiceHours — NaN crash when totalHours is undefined on reduce; totalHours input now enforces min=0.1 step=0.5</C>
+          <C type="fix">AchievementWall — deduplicated redundant visible filter logic (simplify showHidden/showVisible branches)</C>
+          <C type="fix">TeamsPrivate — confirm dialog required before deleting competition result</C>
+          <C type="fix">AFIPrep — bar chart bars now have min-height of 2% so zero-score entries remain visible</C>
+          <C type="fix">Attendance, ScholarshipBoard, AchievementWall — filter pill containers now flex-wrap on mobile so type buttons don't overflow</C>
+          <C type="fix">Accessibility — aria-label added to all icon-only buttons (bookmark, eye/eyeOff, trash) across new 6 feature pages</C>
+          <C type="fix">iOS — PortalViewModel dead code with invalid PTRecord→[String:Any] force cast removed (compile error)</C>
+        </>}
+        />
+        <Release versions="v1.8.134–140" date="Nov 4" title="New Features — Service Hours, Attendance, Scholarship Board, Achievement Wall, AFI Prep, Teams Internal, iOS App" changes={<>
+          <C type="feat">Service Hours — cadets submit community service hours; staff 70+ approve/reject; Cadet Portal shows progress toward FL Graduation (40h) and Bright Futures (100h)</C>
+          <C type="feat">Attendance — events/practices/meetings tracking; command 45+ can mark Present/Excused/Unexcused/Late per cadet from full roster</C>
+          <C type="feat">Scholarship Board — staff post scholarships, internships and programs; cadets bookmark and filter by deadline/category</C>
+          <C type="feat">Achievement Wall — staff post cadet accomplishments (promotions, awards, competitions); opt-out visibility toggle per entry</C>
+          <C type="feat">AFI Prep — Annual Formal Inspection scoring across 6 standard JROTC categories; score trend chart; session finalization lock</C>
+          <C type="feat">Teams Internal — per-team private page with roster (pulled from commanderEmails/memberEmails), competition results, staff-only notes</C>
+          <C type="feat">iOS native app (SwiftUI + Firebase) — full project created at Downloads/PBHSJROTCApp with LoginView, My Record, Announcements, Events, Service Hours, Account tabs</C>
+          <C type="feat">Sidebar — My Tools section with Service Hours, Scholarships, Achievement Wall (all users); Attendance, AFI Prep, Teams Internal (command+ only)</C>
+        </>}
+        />
+        <Release versions="v1.8.133" date="Nov 3" title="Cadet Portal — fix Cadet Challenge scores (remove company filter)" changes={<>
+          <C type="fix">Cadet Challenge Scores no longer restricts by company — records stored under a different company (e.g. Battalion vs Bravo when the cadet has two roster entries) now appear; still filters client-side by cadetId or case-insensitive name</C>
+        </>} />
+        <Release versions="v1.8.132" date="Nov 3" title="Cadet Portal — fix Cadet Challenge scores (company filter)" isCurrent={false} changes={<>
+          <C type="fix">Cadet Challenge Scores now queries by company and filters client-side (case-insensitive name match) — mirrors AdminRoster's approach so scores appear regardless of name capitalisation or which roster entry the records were originally linked to</C>
+        </>} />
+        <Release versions="v1.8.131" date="Nov 3" title="Admin Roster — Sync Leadership button" isCurrent={false} changes={<>
+          <C type="feat">New "Sync Leadership" button in Admin Roster (staff 70+ only) — writes leadership docs for every Platoon Leader and Squad Leader entry in one click, fixing missing PL/SL slots in the Cadet Portal chain of command</C>
+        </>} />
+        <Release versions="v1.8.130" date="Nov 3" title="Cadet Portal — fix Cadet Challenge scores (name query)" isCurrent={false} changes={<>
+          <C type="fix">Cadet Challenge Scores section now queries cadetChallengeRecords by both cadetId and cadetName — records entered before the portal link was set now appear correctly instead of showing "No PT records on file yet"</C>
+        </>} />
+        <Release versions="v1.8.129" date="Nov 3" title="Cadet Portal — chain fix, remove duplicate company stat" isCurrent={false} changes={<>
+          <C type="fix">Company chain (CC/PL/SL) now loads even when no roster entry is linked — falls back to the portal account's own company/platoon/squad fields so the chain always populates</C>
+          <C type="fix">Removed "Company" from the quick stats row in the profile header — it was already shown in the subtitle line</C>
+        </>} />
+        <Release versions="v1.8.128" date="Nov 3" title="Cadet Portal — rename PT section, remove honor roll" isCurrent={false} changes={<>
+          <C type="fix">Renamed "Physical Training" section to "Cadet Challenge Scores"</C>
+          <C type="fix">Removed the Fallen Heroes honor roll section from the Cadet Portal — only the Fallen Heroes Fundraiser tracker remains</C>
+        </>} />
+        <Release versions="v1.8.127" date="Nov 3" title="Cadet Portal — header + chain of command polish" isCurrent={false} changes={<>
+          <C type="fix">Profile header no longer shows position twice — removed the redundant role chip above the name; rank is now rendered inline in yellow before the cadet's name (e.g. "C/SGT DE ALMEIDA, ARTHURO")</C>
+          <C type="fix">Chain of Command card now always shows the full BC → CC → PL → SL breakdown for any cadet with a company assigned, even if individual PL/SL docs haven't been created yet — unassigned slots show "Not assigned" in italic</C>
+        </>} />
+        <Release versions="v1.8.126" date="Nov 3" title="Cadet Portal — Fallen Heroes Fundraiser" isCurrent={false} changes={<>
+          <C type="feat">Fallen Heroes Fundraiser section on the My Record page — shows flag progress bar (flags earned vs. position requirement), total dollars raised, and a full payment history (type, date, amount, flags)</C>
+          <C type="feat">Flag requirement is auto-derived from the cadet's roster position (Squad Member: 30, Squad Leader: 35, up to 80 for Battalion staff); progress bar turns green when the requirement is met</C>
+        </>} />
+        <Release versions="v1.8.125" date="Nov 3" title="Cadet Portal — Fallen Heroes, Promo Scores, Full Chain" isCurrent={false} changes={<>
+          <C type="feat">Fallen Heroes honor roll section added to the Cadet Portal — displays PBHS alumni who served and fell; visible to all signed-in users; staff (70+) can add/update/delete records via Firestore</C>
+          <C type="feat">Promotion Board Scores section shows the cadet's own scores from every board they participated in — categories, per-item scores (green=100, yellow=partial, red=0), extra credit, notes, board title and date</C>
+          <C type="feat">Chain of Command now shows a full contextual chain for company-assigned cadets: Battalion Commander → XO → CSM then Company CC → Platoon Leader → Squad Leader down to their own squad leader</C>
+          <C type="feat">Leadership collection extended to include Platoon Leader and Squad Leader positions — when a roster entry is saved with PL or SL position, the name/rank is mirrored to leadership docs pl_{company}_{platoon} and sl_{company}_{platoon}_{squad} so squad-level cadets can read them without elevated Firestore access</C>
+          <C type="sec">Firestore: promotionBoards now readable by all signed-in users (was myLevel ≥ 35); promotionScores now also readable by the cadet whose linkedUid matches; fallenHeroes collection added (read: signed-in; write: staff 70+)</C>
+        </>} />
+        <Release versions="v1.8.124" date="Nov 3" title="Cadet Portal — My Record" isCurrent={false} changes={<>
+          <C type="feat">New cadet dashboard at /admin/my: profile header with portrait, rank, position, company and LET level; full ribbon rack sorted by award date; Cadet Challenge PT records per cycle (Push-Ups, Sit-Ups, Shuttle Run, One-Mile, Sit-N-Reach); battalion chain of command card; upcoming events and announcements feed</C>
+          <C type="feat">Cadet-level users (squad through company staff assistants, level &lt; 45) now land on the Cadet Portal automatically instead of the staff dashboard on login</C>
+          <C type="feat">Added "My Record" navigation item to the portal sidebar for all users</C>
+        </>} />
+        <Release versions="v1.8.123" date="Nov 3" title="Fix XO display on Cadet Info page" isCurrent={false} changes={<>
+          <C type="fix">Cadet Info page was showing a company XO name instead of the battalion XO — both share role "Executive Officer" in the leadership collection, and the company XO entry (sorted later alphabetically by doc ID) was overwriting the correct entry in the forEach loop; fixed by filtering to battalion-only entries</C>
+        </>} />
+        <Release versions="v1.8.122" date="Nov 2" title="Fix portrait upload for battalion staff roles" isCurrent={false} changes={<>
+          <C type="fix">S5, S2, S3, S4, and S7 battalion staff accounts (level 70) could see the Assign Photo button on cadet profiles but the save was being blocked by Firestore — added a portrait-scoped write rule so all staff-level roles can set portrait fields</C>
+          <C type="fix">Cadet profile page now shows a clearer "Permission denied" error if Firestore rejects the write, instead of the generic "Upload failed"</C>
+        </>} />
+        <Release versions="v1.8.121" date="Nov 2" title="Print roster column picker + battalion leadership" isCurrent={false} changes={<>
+          <C type="feat">Fundraiser and Cadet Challenge "Print Roster" buttons now open a column picker — choose Total Raised, Flags Earned, # Payments, Last Payment (fundraiser) or Push-Ups, Sit-Ups, Shuttle Run, One-Mile, Sit-N-Reach (challenge), or a blank column</C>
+          <C type="feat">Fundraiser roster print: "Include Battalion Leadership" checkbox merges battalion HQ cadets into a company-specific roster print (available to battalion staff viewing a specific company)</C>
+          <C type="feat">Cadet Challenge: battalion leadership cadets are always included in the printed roster (they were already shown in the table view)</C>
+        </>} />
+        <Release versions="v1.8.120" date="Nov 2" title="Arcs always sort alphabetically — no Reorder" isCurrent={false} changes={<>
           <C type="fix">Reorder button hidden for Arcs — arc order is always alphabetical so drag-and-drop was unnecessary</C>
         </>} />
         <Release versions="v1.8.119" date="Nov 2" title="Remove category from Medals and Cords" isCurrent={false} changes={<>
