@@ -37,7 +37,7 @@ import {
 import {
   Trophy, Plus, ChevronLeft, ChevronRight, CheckCircle2, Clock,
   X, ChevronDown, ChevronUp, AlertCircle, Unlock, Lock,
-  ClipboardList, Star, Eye, EyeOff, TrendingUp, BarChart2, Medal,
+  ClipboardList, Star, Eye, EyeOff, TrendingUp, BarChart2, Medal, Printer,
 } from 'lucide-react';
 import { ROLE_HIERARCHY, ADMIN_LEVEL, STAFF_LEVEL, JROTC_RANKS, boardTargetRank, JROTC_POSITIONS, BATTALION_POSITIONS } from '../constants';
 import { writeLog } from '../lib/writeLog';
@@ -528,6 +528,18 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
   const [cadetSearch, setCadetSearch] = useState('');
   const [showCatAvgs, setShowCatAvgs] = useState(false);
 
+  // ── Print Roster modal ────────────────────────────────────────────────────────
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printOpts, setPrintOpts] = useState({
+    showCategories:   true,
+    showEC:           true,
+    showTotal:        true,
+    showPct:          true,
+    showElig:         false,
+    sort:             'let',       // 'let' | 'alpha' | 'score'
+    showNominations:  false,
+  });
+
   const startTesting = () => {
     const cats = selectedBoard?.categories || DEFAULT_CATEGORIES;
     setTestMode({
@@ -975,6 +987,172 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
           .map(([posKey, data]) => ({ position: posKey, ...data })),
       }));
   }, [visibleScores, positionMap, selectedBoard]);
+
+  // ── Print handler ─────────────────────────────────────────────────────────────
+  const handlePrint = () => {
+    const cats    = selectedBoard?.categories || DEFAULT_CATEGORIES;
+    const boardTitle = selectedBoard?.title || 'Promotion Board';
+    const boardDate  = fmtDate(selectedBoard?.boardDate);
+    const opts = printOpts;
+
+    // Sort/group the scores
+    let rows = [...visibleScores];
+    if (opts.sort === 'alpha') {
+      rows.sort((a, b) => (a.cadetName || '').localeCompare(b.cadetName || ''));
+    } else if (opts.sort === 'score') {
+      rows.sort((a, b) => {
+        const pa = calcPossible(a.scores, cats);
+        const pb = calcPossible(b.scores, cats);
+        const pctA = pa > 0 ? calcTotal(a.scores, a.extraCredit, cats) / pa : 0;
+        const pctB = pb > 0 ? calcTotal(b.scores, b.extraCredit, cats) / pb : 0;
+        return pctB - pctA;
+      });
+    } else {
+      rows.sort((a, b) => {
+        const lA = Number(a.letLevel || letLevelMap[a.rosterDocId] || 99);
+        const lB = Number(b.letLevel || letLevelMap[b.rosterDocId] || 99);
+        return lA !== lB ? lA - lB : (a.cadetName || '').localeCompare(b.cadetName || '');
+      });
+    }
+
+    // Build grouped sections
+    const sections = [];
+    if (opts.sort === 'let') {
+      const groups = {};
+      rows.forEach(r => {
+        const lv = r.letLevel || letLevelMap[r.rosterDocId] || 'Unknown';
+        const key = lv !== 'Unknown' ? `LET ${lv}` : 'Unknown';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(r);
+      });
+      const order = ['LET 1','LET 2','LET 3','LET 4'];
+      const keys  = Object.keys(groups).sort((a, b) => {
+        const ia = order.indexOf(a); const ib = order.indexOf(b);
+        if (ia !== -1 && ib !== -1) return ia - ib;
+        if (ia !== -1) return -1; if (ib !== -1) return 1;
+        return a.localeCompare(b);
+      });
+      keys.forEach(k => sections.push({ heading: k, rows: groups[k] }));
+    } else {
+      sections.push({ heading: null, rows });
+    }
+
+    const pctColor = pct => pct >= 90 ? '#16a34a' : pct >= 80 ? '#ca8a04' : pct > 0 ? '#ea580c' : '#94a3b8';
+
+    const colHeaders = [
+      ...(opts.showElig ? ['<th>Forms</th><th>CC</th>'] : []),
+      ...(opts.showCategories ? cats.map(c => `<th>${CAT_SHORT[c.id] || c.label}</th>`) : []),
+      ...(opts.showEC   ? ['<th>EC</th>']    : []),
+      ...(opts.showTotal ? ['<th>Total</th>'] : []),
+      ...(opts.showPct   ? ['<th>%</th>']     : []),
+    ].join('');
+
+    const rowHtml = r => {
+      const total    = calcTotal(r.scores, r.extraCredit, cats);
+      const possible = calcPossible(r.scores, cats);
+      const pct      = possible > 0 ? Math.round((total / possible) * 100) : 0;
+      const cells = [
+        ...(opts.showElig ? [
+          `<td style="text-align:center">${pendingFormMap[r.rosterDocId] ? '✗' : '✓'}</td>`,
+          `<td style="text-align:center">${ccCompleteMap[r.rosterDocId] ? '✓' : '✗'}</td>`,
+        ] : []),
+        ...(opts.showCategories ? cats.map(c => {
+          const v = r.scores?.[c.id];
+          const display = v == null || v === '' ? '—' : v === 'na' ? 'N/A' : v;
+          return `<td style="text-align:center">${display}</td>`;
+        }) : []),
+        ...(opts.showEC    ? [`<td style="text-align:center">${r.extraCredit || 0}</td>`] : []),
+        ...(opts.showTotal ? [`<td style="text-align:center">${total} / ${possible}</td>`] : []),
+        ...(opts.showPct   ? [`<td style="text-align:center;color:${pctColor(pct)};font-weight:900">${pct}%</td>`] : []),
+      ].join('');
+      return `<tr><td><strong>${r.rank || ''} ${r.cadetName || '—'}</strong></td>${cells}</tr>`;
+    };
+
+    const tableHtml = sections.map(({ heading, rows: sRows }) => `
+      ${heading ? `<tr class="let-header"><td colspan="99">${heading}</td></tr>` : ''}
+      ${sRows.map(rowHtml).join('')}
+    `).join('');
+
+    // Nominations section
+    let nomHtml = '';
+    if (opts.showNominations && battalionNominations.length > 0) {
+      const companyNoms = isBattalionLevel
+        ? battalionNominations
+        : battalionNominations.filter(n => n.company === myCompany);
+      nomHtml = `
+        <div class="nominations">
+          <h3>Battalion Board Nominations</h3>
+          ${companyNoms.map(({ company, nominees }) => `
+            <div class="nom-company">
+              ${isBattalionLevel ? `<p class="nom-company-name">${company} Company</p>` : ''}
+              <table class="nom-table">
+                <thead><tr><th>Position</th><th>Cadet</th><th>%</th><th>Score</th></tr></thead>
+                <tbody>
+                  ${nominees.map(({ position, cadetName, rank, pct, total, possible, originalPos }) => {
+                    const label = position === 'Staff Assistant' && originalPos ? `Staff Asst (${originalPos})` : position;
+                    return `<tr>
+                      <td>${label}</td>
+                      <td><strong>${rank || ''} ${cadetName}</strong></td>
+                      <td style="color:${pctColor(pct)};font-weight:900">${pct}%</td>
+                      <td>${total} / ${possible}</td>
+                    </tr>`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `).join('')}
+        </div>`;
+    }
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${boardTitle} — Roster</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; padding: 16px; }
+  h1 { font-size: 14pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+  .meta { font-size: 8pt; color: #555; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 8pt; }
+  th { background: #0f172a; color: #fff; padding: 4px 6px; text-align: center; font-size: 7pt; text-transform: uppercase; letter-spacing: 0.05em; }
+  th:first-child { text-align: left; }
+  td { padding: 3px 6px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+  tr:nth-child(even) { background: #f8fafc; }
+  tr.let-header td { background: #1e293b; color: #f1f5f9; font-weight: 900; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.1em; padding: 5px 6px; }
+  .nominations { margin-top: 20px; border-top: 2px solid #eab308; padding-top: 12px; }
+  .nominations h3 { font-size: 11pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #92400e; margin-bottom: 8px; }
+  .nom-company { margin-bottom: 12px; }
+  .nom-company-name { font-weight: 900; font-size: 9pt; text-transform: uppercase; margin-bottom: 4px; color: #334155; }
+  .nom-table { width: auto; min-width: 400px; }
+  .nom-table th { font-size: 7pt; }
+  @media print { body { padding: 0; } }
+</style>
+</head>
+<body>
+<h1>${boardTitle}</h1>
+<p class="meta">Board Date: ${boardDate} · Printed: ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · ${visibleScores.length} cadet${visibleScores.length !== 1 ? 's' : ''}</p>
+<table>
+  <thead>
+    <tr>
+      <th>Cadet</th>
+      ${colHeaders}
+    </tr>
+  </thead>
+  <tbody>${tableHtml}</tbody>
+</table>
+${nomHtml}
+</body>
+</html>`;
+
+    const w = window.open('', '_blank', 'width=1100,height=800');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); }, 400);
+    setShowPrintModal(false);
+  };
 
   // ── Handlers ──────────────────────────────────────────────────────────────────
   // Creates the board as a DRAFT — no score docs yet, no roster fetch.
@@ -1908,6 +2086,13 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
                 Edit Settings
               </button>
             )}
+            {/* Print roster */}
+            <button
+              onClick={() => setShowPrintModal(true)}
+              className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-colors border border-slate-200 dark:border-white/5"
+            >
+              <Printer size={13} /> Print Roster
+            </button>
             {/* S1: delete board (open or closed) */}
             {canCreateBoard && (
               <button
@@ -2755,6 +2940,88 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
           </p>
         )}
       </div>
+
+      {/* ── Print Roster Modal ──────────────────────────────────────────────── */}
+      {showPrintModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl w-full max-w-md flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/10">
+              <div className="flex items-center gap-3">
+                <Printer size={16} className="text-slate-500" />
+                <p className="font-black uppercase text-sm tracking-widest text-slate-900 dark:text-white">Print Roster</p>
+              </div>
+              <button onClick={() => setShowPrintModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white"><X size={18} /></button>
+            </div>
+            <div className="px-6 py-5 space-y-5 overflow-y-auto">
+              {/* Columns */}
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Columns</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { key: 'showCategories', label: 'Category Scores' },
+                    { key: 'showEC',         label: 'Extra Credit'    },
+                    { key: 'showTotal',      label: 'Total Score'     },
+                    { key: 'showPct',        label: 'Percent Grade'   },
+                    { key: 'showElig',       label: 'Eligibility (Forms / CC)' },
+                  ].map(({ key, label }) => (
+                    <label key={key} className="flex items-center gap-2 cursor-pointer select-none group">
+                      <div
+                        onClick={() => setPrintOpts(o => ({ ...o, [key]: !o[key] }))}
+                        className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${printOpts[key] ? 'bg-yellow-500 border-yellow-500' : 'border-slate-300 dark:border-slate-600 group-hover:border-yellow-400'}`}
+                      >
+                        {printOpts[key] && <span className="text-slate-950 text-[10px] font-black leading-none">✓</span>}
+                      </div>
+                      <span className="text-xs text-slate-700 dark:text-slate-300">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sort / Grouping */}
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Order</p>
+                <div className="space-y-2">
+                  {[
+                    { val: 'let',   label: 'Grouped by LET' },
+                    { val: 'alpha', label: 'Alphabetical (A–Z)' },
+                    { val: 'score', label: 'By score (high → low)' },
+                  ].map(({ val, label }) => (
+                    <label key={val} className="flex items-center gap-2 cursor-pointer select-none group">
+                      <div
+                        onClick={() => setPrintOpts(o => ({ ...o, sort: val }))}
+                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${printOpts.sort === val ? 'border-yellow-500' : 'border-slate-300 dark:border-slate-600 group-hover:border-yellow-400'}`}
+                      >
+                        {printOpts.sort === val && <div className="w-2 h-2 rounded-full bg-yellow-500" />}
+                      </div>
+                      <span className="text-xs text-slate-700 dark:text-slate-300">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Nominations */}
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Extras</p>
+                <label className="flex items-center gap-2 cursor-pointer select-none group">
+                  <div
+                    onClick={() => setPrintOpts(o => ({ ...o, showNominations: !o.showNominations }))}
+                    className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all ${printOpts.showNominations ? 'bg-yellow-500 border-yellow-500' : 'border-slate-300 dark:border-slate-600 group-hover:border-yellow-400'}`}
+                  >
+                    {printOpts.showNominations && <span className="text-slate-950 text-[10px] font-black leading-none">✓</span>}
+                  </div>
+                  <span className="text-xs text-slate-700 dark:text-slate-300">Include Battalion Board Nominations</span>
+                </label>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-white/10 flex justify-end gap-2">
+              <button onClick={() => setShowPrintModal(false)} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-slate-500 hover:text-slate-700 dark:hover:text-white transition-colors">Cancel</button>
+              <button onClick={handlePrint} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-700 dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-black uppercase tracking-wider transition-colors">
+                <Printer size={12} /> Print
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Run-Promotions Modal ────────────────────────────────────────────── */}
       {promoModal && (
