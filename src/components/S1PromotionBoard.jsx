@@ -954,6 +954,10 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
     'Company S4 Assistant', 'Company S5 Assistant', 'Company S6 Assistant',
     'Company S7 Assistant',
   ]);
+  // Positions that are appointed, not filled through the promotion board
+  const APPOINTED_POSITIONS = new Set([
+    'Company Commander', 'Company XO', 'First Sergeant', 'Master Sergeant',
+  ]);
   const battalionNominations = useMemo(() => {
     const cats = selectedBoard?.categories || DEFAULT_CATEGORIES;
     const isBattalionPos = new Set(BATTALION_POSITIONS);
@@ -961,7 +965,7 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
     const best = {};
     visibleScores.forEach(s => {
       const rawPos  = s.position || positionMap[s.rosterDocId] || '';
-      if (!rawPos || isBattalionPos.has(rawPos)) return;
+      if (!rawPos || isBattalionPos.has(rawPos) || APPOINTED_POSITIONS.has(rawPos)) return;
       const posKey  = STAFF_ASST_POSITIONS.has(rawPos) ? 'Staff Assistant' : rawPos;
       const company = s.company || 'Unknown';
       const total   = calcTotal(s.scores, s.extraCredit, cats);

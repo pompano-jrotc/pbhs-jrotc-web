@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="342"    label="Patches"     />
-        <Stat value="680"    label="Commits"     />
+        <Stat value="343"    label="Patches"     />
+        <Stat value="681"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.148" label="Current"     />
+        <Stat value="v1.8.149" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.148" date="Nov 4" title="Promotion Board — Print Roster" isCurrent changes={<>
+        <Release versions="v1.8.149" date="Nov 4" title="Promotion Board — Exclude Appointed Positions from Nominations" isCurrent changes={<>
+          <C type="fix">S1PromotionBoard nominations — Company Commander, Company XO, First Sergeant, and Master Sergeant are now excluded from the Battalion Board Nominations panel; these positions are appointed, not filled through the promotion board process</C>
+        </>}
+        />
+        <Release versions="v1.8.148" date="Nov 4" title="Promotion Board — Print Roster" changes={<>
           <C type="feat">S1PromotionBoard — Print Roster button opens a print options modal; user can toggle category scores, EC, total, percent, eligibility columns, choose LET-grouped / alphabetical / by-score order, and optionally append the Battalion Board Nominations table</C>
           <C type="feat">Print dialog opens a styled print-ready HTML window and auto-triggers the browser print dialog; LET sections render as dark headers, % grades are color-coded green/yellow/orange</C>
         </>}
