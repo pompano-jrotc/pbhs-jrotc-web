@@ -25,7 +25,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../hooks/useAuth';
 import { ROLE_HIERARCHY, STAFF_LEVEL } from '../constants';
 import { Navigate } from 'react-router-dom';
-import Footer from '../components/Footer';
 import ScrambleText from '../components/ScrambleText';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -47,8 +46,9 @@ const LOG_TYPES = [
   { key: 'team',            label: 'Teams' },
   { key: 'honor_company',   label: 'Honor Company' },
   // Events & activities
-  { key: 'event',           label: 'Events' },
-  { key: 'camp',            label: 'Camps' },
+  { key: 'event',                label: 'Events' },
+  { key: 'leadership_calendar',  label: 'Leadership Cal' },
+  { key: 'camp',                 label: 'Camps' },
   { key: 'cadet_challenge', label: 'Cadet Challenge' },
   { key: 'meeting_log',     label: 'Meeting Logs' },
   { key: 'aar_log',         label: 'AAR Logs' },
@@ -87,7 +87,8 @@ const TYPE_META = {
   cadet_challenge: { icon: Trophy,        color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/20',   label: 'Cadet Challenge'},
   content:         { icon: PenLine,       color: 'text-violet-400',  bg: 'bg-violet-500/10',  border: 'border-violet-500/20',  label: 'Content'        },
   document:        { icon: File,          color: 'text-slate-300',   bg: 'bg-slate-500/10',   border: 'border-slate-500/20',   label: 'Document'       },
-  event:           { icon: Calendar,      color: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'border-rose-500/20',    label: 'Event'          },
+  event:                { icon: Calendar,      color: 'text-rose-400',    bg: 'bg-rose-500/10',    border: 'border-rose-500/20',    label: 'Event'              },
+  leadership_calendar:  { icon: Lock,          color: 'text-purple-400',  bg: 'bg-purple-500/10',  border: 'border-purple-500/20',  label: 'Leadership Cal'     },
   feedback:        { icon: MessageSquare, color: 'text-teal-400',    bg: 'bg-teal-500/10',    border: 'border-teal-500/20',    label: 'Feedback'       },
   fundraiser:      { icon: DollarSign,    color: 'text-lime-400',    bg: 'bg-lime-500/10',    border: 'border-lime-500/20',    label: 'Fundraiser'     },
   history:         { icon: Archive,       color: 'text-indigo-400',  bg: 'bg-indigo-500/10',  border: 'border-indigo-500/20',  label: 'History'        },
@@ -173,7 +174,7 @@ function fullDate(ts) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-const AdminLog = () => {
+const AdminLog = ({ hideHeader = false }) => {
   const { role, userData, loading: authLoading } = useAuth();
   const userLevel = ROLE_HIERARCHY[role] || 0;
   const isAuth = userLevel >= STAFF_LEVEL;
@@ -258,7 +259,7 @@ const AdminLog = () => {
   const isFiltered = typeFilter !== 'all' || searchTerm.trim() !== '';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-8 pt-24 font-sans">
+    <div className={hideHeader ? 'w-full' : 'min-h-screen bg-slate-950 text-white p-8 pt-24 font-sans'}>
 
       {/* Notification */}
       <AnimatePresence>
@@ -280,31 +281,43 @@ const AdminLog = () => {
       </AnimatePresence>
 
       {/* Header */}
-      <div className="max-w-5xl mx-auto mb-8 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <Link to="/admin/dashboard" className="text-yellow-500 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-2 hover:opacity-70 transition-all">
-            <span className="text-base leading-none">&#8592;</span> Back to Command
-          </Link>
-          <h1 className="text-4xl font-black uppercase italic tracking-tighter flex items-center gap-3">
-            <ScrollText className="text-yellow-500" />
-            <ScrambleText text="Activity Log" trigger="mount" />
-          </h1>
-          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mt-1">
-            {isFiltered
-              ? `${filtered.length} of ${entries.length} entries`
-              : `${entries.length} total entries`}
-          </p>
+      {!hideHeader && (
+        <div className="mb-8 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <Link to="/admin/dashboard" className="text-yellow-500 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-2 hover:opacity-70 transition-all">
+              <span className="text-base leading-none">&#8592;</span> Back to Command
+            </Link>
+            <h1 className="text-4xl font-black uppercase italic tracking-tighter flex items-center gap-3">
+              <ScrollText className="text-yellow-500" />
+              <ScrambleText text="Activity Log" trigger="mount" />
+            </h1>
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mt-1">
+              {isFiltered
+                ? `${filtered.length} of ${entries.length} entries`
+                : `${entries.length} total entries`}
+            </p>
+          </div>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="flex items-center gap-2 bg-yellow-500 text-slate-950 px-6 py-2.5 rounded-xl text-xs font-black uppercase hover:bg-yellow-400 transition-all shadow-lg shadow-yellow-500/10"
+          >
+            <Plus size={16} /> Add Duty Log Entry
+          </button>
         </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 bg-yellow-500 text-slate-950 px-6 py-2.5 rounded-xl text-xs font-black uppercase hover:bg-yellow-400 transition-all shadow-lg shadow-yellow-500/10"
-        >
-          <Plus size={16} /> Add Duty Log Entry
-        </button>
-      </div>
+      )}
+      {hideHeader && (
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={() => setModalOpen(true)}
+            className="flex items-center gap-2 bg-yellow-500 text-slate-950 px-5 py-2.5 rounded-xl text-xs font-black uppercase hover:bg-yellow-400 transition-all shadow-lg shadow-yellow-500/20"
+          >
+            <Plus size={16} /> Add Duty Log Entry
+          </button>
+        </div>
+      )}
 
       {/* Search */}
-      <div className="max-w-5xl mx-auto mb-4">
+      <div className="mb-4">
         <div className="relative">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
           <input
@@ -327,7 +340,7 @@ const AdminLog = () => {
 
       {/* Type filter tabs — horizontal scroll */}
       <div
-        className="max-w-5xl mx-auto mb-6 overflow-x-auto pb-2"
+        className="mb-6 overflow-x-auto pb-2"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         <div className="flex gap-2" style={{ minWidth: 'max-content' }}>
@@ -359,7 +372,7 @@ const AdminLog = () => {
       </div>
 
       {/* Feed */}
-      <div className="max-w-5xl mx-auto space-y-2">
+      <div className="space-y-2">
         {loading ? (
           <div className="flex justify-center py-24">
             <Clock size={28} className="text-yellow-500 animate-spin" />
@@ -519,9 +532,6 @@ const AdminLog = () => {
         )}
       </AnimatePresence>
 
-      <div className="max-w-5xl mx-auto">
-        <Footer />
-      </div>
     </div>
   );
 };

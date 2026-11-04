@@ -1,28 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { doc, setDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { writeLog } from '../lib/writeLog';
 import { Navigate } from 'react-router-dom';
 import { ROLE_HIERARCHY, ADMIN_LEVEL } from '../constants';
-import { DEFAULT_ABOUT, DEFAULT_CADET_INFO, DEFAULT_PROMOTION_BOARD, DEFAULT_HOME, DEFAULT_PHOTOS } from '../data/defaultPageContent';
+import { DEFAULT_ABOUT, DEFAULT_CADET_INFO, DEFAULT_HOME, DEFAULT_PHOTOS } from '../data/defaultPageContent';
 import { DEFAULT_VISIBILITY } from '../hooks/usePageVisibility';
 import {
-  FileText, Save, ChevronDown, CheckCircle2, Loader2, BookOpen, Info,
-  Eye, EyeOff, LayoutDashboard, Plus, Trash2, Calendar, MapPin, Clock, Edit3, X, UploadCloud, ImageIcon
+  FileText, Save, ChevronDown, CheckCircle2, Loader2, Info,
+  Eye, EyeOff, LayoutDashboard, Plus, Trash2, X, UploadCloud, ImageIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { uploadToCloudinary } from '../utils/cloudinaryUpload';
 import ScrambleText from '../components/ScrambleText';
 import AdminPageHeader from '../components/AdminPageHeader';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const TABS = [
   { id: 'home',           label: 'Home' },
   { id: 'about',          label: 'About' },
   { id: 'cadet-info',     label: 'General Info' },
-  { id: 'promotion-board',label: 'Promotion Board' },
   { id: 'photos',         label: 'Photo Gallery' },
-  { id: 'events',         label: 'Calendar' },
   { id: 'visibility',     label: 'Visibility' },
 ];
 
@@ -31,12 +30,13 @@ const PAGE_VISIBILITY_LABELS = {
   'cadet-info':      'Cadet Info (General)',
   'promotion-board': 'Promotion Board',
   'winning-colors':  'Winning Colors',
+  uniform:           'Uniform Guide',
+  quizzes:           'Quizzes',
   documents:         'Documents & Regs',
   announcements:     'Announcements',
   teams:             'Battalion Teams',
   leadership:        'Leadership',
   photos:            'Photo Gallery',
-  events:            'Events Calendar',
 };
 
 const linesToArray = (text) => (text || '').split('\n').map(s => s.trim()).filter(Boolean);
@@ -44,8 +44,9 @@ const linesToArray = (text) => (text || '').split('\n').map(s => s.trim()).filte
 const inputClass = "w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-3 rounded-xl outline-none focus:border-yellow-500 text-sm font-bold text-slate-900 dark:text-white";
 const labelClass = "text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1 block mb-1";
 
-const AdminContent = () => {
+const AdminContent = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
+  const confirm = useConfirm();
   const isAuthorized = role === 's5_public_affairs' || role === 's6_technology' || (ROLE_HIERARCHY[role] || 0) >= ADMIN_LEVEL;
 
   const [activeTab, setActiveTab] = useState('about');
@@ -57,78 +58,8 @@ const AdminContent = () => {
   const [photosForm, setPhotosForm] = useState(DEFAULT_PHOTOS);
   const [aboutForm, setAboutForm] = useState(DEFAULT_ABOUT);
   const [cadetInfoForm, setCadetInfoForm] = useState(DEFAULT_CADET_INFO);
-  const [promoForm, setPromoForm] = useState(DEFAULT_PROMOTION_BOARD);
   const [visibilityForm, setVisibilityForm] = useState(DEFAULT_VISIBILITY);
-  const [expandedRank, setExpandedRank] = useState(null);
-  const [expandedStaffSection, setExpandedStaffSection] = useState(null);
 
-  // Events CRUD
-  const [events, setEvents] = useState([]);
-  const [editingEvent, setEditingEvent] = useState(null); // null = closed, BLANK_EVENT = new, {id,...} = editing
-  const [eventSaving, setEventSaving] = useState(false);
-  const BLANK_EVENT = { title: '', date: '', type: '', location: '', time: '', description: '' };
-  const EVENT_TYPES = ['Training','Competition','Ceremony','Field Trip','Meeting','Social','Fundraiser','Community Service','Inspection','Other'];
-
-  useEffect(() => {
-    if (!isAuthorized) return;
-    const eventsQuery = query(collection(db, 'events'), orderBy('date', 'asc'));
-    const unsub = onSnapshot(eventsQuery, (snap) => {
-      setEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsub();
-  }, [isAuthorized]);
-
-  const handleSaveEvent = async () => {
-    if (!editingEvent?.title || !editingEvent?.date) return;
-    setEventSaving(true);
-    try {
-      const payload = {
-        title:       editingEvent.title,
-        date:        editingEvent.date,
-        type:        editingEvent.type        || '',
-        location:    editingEvent.location    || '',
-        time:        editingEvent.time        || '',
-        description: editingEvent.description || '',
-        updatedAt:   serverTimestamp(),
-      };
-      if (editingEvent.id) {
-        await updateDoc(doc(db, 'events', editingEvent.id), payload);
-      } else {
-        await addDoc(collection(db, 'events'), { ...payload, createdAt: serverTimestamp() });
-      }
-      setEditingEvent(null);
-      showStatus('Event saved');
-      writeLog({
-        type: 'event', action: editingEvent.id ? 'update' : 'create',
-        description: `${editingEvent.id ? 'Updated' : 'Created'} event: "${payload.title}" on ${payload.date}`,
-        userId: user?.uid || '', userFullName: userData?.fullName || '',
-        userRole: role || '', targetId: editingEvent.id || '', targetName: payload.title,
-      });
-    } catch (err) {
-      console.error('Event save failed:', err);
-      showStatus('Save Failed');
-    } finally {
-      setEventSaving(false);
-    }
-  };
-
-  const handleDeleteEvent = async (id) => {
-    const ev = events.find(e => e.id === id);
-    if (!window.confirm('Delete this event?')) return;
-    try {
-      await deleteDoc(doc(db, 'events', id));
-      showStatus('Event deleted');
-      writeLog({
-        type: 'event', action: 'delete',
-        description: `Deleted event: "${ev?.title || id}"`,
-        userId: user?.uid || '', userFullName: userData?.fullName || '',
-        userRole: role || '', targetId: id, targetName: ev?.title,
-      });
-    } catch (err) {
-      console.error('Delete failed:', err);
-      showStatus('Delete Failed');
-    }
-  };
 
   useEffect(() => {
     if (!isAuthorized) return;
@@ -145,9 +76,6 @@ const AdminContent = () => {
       }),
       onSnapshot(doc(db, "pageContent", "cadet-info"), (snap) => {
         if (snap.exists()) setCadetInfoForm({ ...DEFAULT_CADET_INFO, ...snap.data() });
-      }),
-      onSnapshot(doc(db, "pageContent", "promotion-board"), (snap) => {
-        if (snap.exists()) setPromoForm({ ...DEFAULT_PROMOTION_BOARD, ...snap.data() });
       }),
       onSnapshot(doc(db, "settings", "pageVisibility"), (snap) => {
         if (snap.exists()) setVisibilityForm({ ...DEFAULT_VISIBILITY, ...snap.data() });
@@ -242,21 +170,6 @@ const AdminContent = () => {
     setCadetInfoForm({ ...cadetInfoForm, armyValues });
   };
 
-  // --- PROMOTION BOARD helpers ---
-  const updateRank = (index, field, value) => {
-    const ranks = [...promoForm.ranks];
-    ranks[index] = { ...ranks[index], [field]: value };
-    setPromoForm({ ...promoForm, ranks });
-  };
-  const updateStaffAssistants = (field, value) => {
-    setPromoForm({ ...promoForm, staffAssistants: { ...promoForm.staffAssistants, [field]: value } });
-  };
-  const updateStaffSection = (index, field, value) => {
-    const sections = [...promoForm.staffAssistants.sections];
-    sections[index] = { ...sections[index], [field]: value };
-    setPromoForm({ ...promoForm, staffAssistants: { ...promoForm.staffAssistants, sections } });
-  };
-
   if (authLoading || (dataLoading && isAuthorized)) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center text-yellow-600">
@@ -268,10 +181,10 @@ const AdminContent = () => {
   if (!isAuthorized) return <Navigate to="/admin/dashboard" />;
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
       <div className="max-w-4xl mx-auto">
 
-        <AdminPageHeader icon={FileText} title="Content" />
+        {!hideHeader && <AdminPageHeader icon={FileText} title="Content" />}
 
         {/* Tabs */}
         <div className="flex bg-slate-200/50 dark:bg-white/5 p-1 rounded-2xl w-fit border border-slate-200 dark:border-white/5 mb-8">
@@ -472,91 +385,6 @@ const AdminContent = () => {
           </div>
         )}
 
-        {/* --- PROMOTION BOARD TAB --- */}
-        {activeTab === 'promotion-board' && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-[11px] text-blue-700 dark:text-blue-300">
-              <Info size={16} className="flex-shrink-0 mt-0.5" />
-              Click a rank to expand and edit its knowledge, duties, and leadership requirement. Knowledge and duties are one item per line.
-            </div>
-
-            {promoForm.ranks.map((rank, i) => (
-              <div key={i} className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-2xl overflow-hidden">
-                <button onClick={() => setExpandedRank(expandedRank === i ? null : i)} className="w-full flex items-center justify-between p-5 text-left">
-                  <span className="font-black uppercase italic text-sm flex items-center gap-2"><BookOpen size={14} className="text-yellow-600 dark:text-yellow-500" /> {rank.name}</span>
-                  <ChevronDown size={16} className={`transition-transform ${expandedRank === i ? 'rotate-180' : ''}`} />
-                </button>
-                {expandedRank === i && (
-                  <div className="p-5 pt-0 space-y-4 border-t border-slate-100 dark:border-white/5">
-                    <div>
-                      <label className={labelClass}>Leadership Requirement</label>
-                      <input className={inputClass} value={rank.leadership} onChange={e => updateRank(i, 'leadership', e.target.value)} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Knowledge (one per line)</label>
-                      <textarea className={`${inputClass} h-32 resize-none`} value={rank.knowledge.join('\n')} onChange={e => updateRank(i, 'knowledge', e.target.value.split('\n'))} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Duties & Responsibilities (one per line)</label>
-                      <textarea className={`${inputClass} h-32 resize-none`} value={rank.duties.join('\n')} onChange={e => updateRank(i, 'duties', e.target.value.split('\n'))} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Staff Assistants */}
-            <div className="bg-white dark:bg-slate-900/40 border border-yellow-500/20 rounded-2xl p-5 space-y-4">
-              <h3 className="font-black uppercase italic text-sm flex items-center gap-2"><BookOpen size={14} className="text-yellow-600 dark:text-yellow-500" /> Staff Assistants (Shared)</h3>
-              <div>
-                <label className={labelClass}>Leadership Requirement</label>
-                <input className={inputClass} value={promoForm.staffAssistants.leadership} onChange={e => updateStaffAssistants('leadership', e.target.value)} />
-              </div>
-              <div>
-                <label className={labelClass}>Knowledge (one per line)</label>
-                <textarea className={`${inputClass} h-32 resize-none`} value={promoForm.staffAssistants.knowledge.join('\n')} onChange={e => updateStaffAssistants('knowledge', e.target.value.split('\n'))} />
-              </div>
-
-              <div className="space-y-3 pt-2">
-                {promoForm.staffAssistants.sections.map((section, i) => (
-                  <div key={section.id} className="bg-slate-50 dark:bg-black/30 border border-slate-100 dark:border-white/5 rounded-xl overflow-hidden">
-                    <button onClick={() => setExpandedStaffSection(expandedStaffSection === i ? null : i)} className="w-full flex items-center justify-between p-4 text-left">
-                      <span className="text-xs font-bold uppercase"><span className="text-yellow-600 dark:text-yellow-500">{section.id}</span> &middot; {section.title}</span>
-                      <ChevronDown size={14} className={`transition-transform ${expandedStaffSection === i ? 'rotate-180' : ''}`} />
-                    </button>
-                    {expandedStaffSection === i && (
-                      <div className="p-4 pt-0 space-y-3 border-t border-slate-200 dark:border-white/5">
-                        <div>
-                          <label className={labelClass}>Title</label>
-                          <input className={inputClass} value={section.title} onChange={e => updateStaffSection(i, 'title', e.target.value)} />
-                        </div>
-                        <div>
-                          <label className={labelClass}>Duties (one per line)</label>
-                          <textarea className={`${inputClass} h-24 resize-none`} value={section.asst.join('\n')} onChange={e => updateStaffSection(i, 'asst', e.target.value.split('\n'))} />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <button
-              disabled={saving}
-              onClick={() => saveTab('promotion-board', {
-                ranks: promoForm.ranks.map(r => ({ ...r, knowledge: linesToArray(r.knowledge.join('\n')), duties: linesToArray(r.duties.join('\n')) })),
-                staffAssistants: {
-                  ...promoForm.staffAssistants,
-                  knowledge: linesToArray(promoForm.staffAssistants.knowledge.join('\n')),
-                  sections: promoForm.staffAssistants.sections.map(s => ({ ...s, asst: linesToArray(s.asst.join('\n')) }))
-                }
-              })}
-              className="w-full bg-yellow-500 text-slate-950 font-black uppercase py-5 rounded-2xl hover:bg-yellow-400 transition-all text-sm shadow-lg shadow-yellow-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              <Save size={18} /> Save Promotion Board
-            </button>
-          </div>
-        )}
         {/* --- PHOTOS TAB --- */}
         {activeTab === 'photos' && (
           <div className="space-y-6">
@@ -610,168 +438,6 @@ const AdminContent = () => {
             >
               <Save size={18} /> Save Photo Gallery
             </button>
-          </div>
-        )}
-
-        {/* --- EVENTS (CALENDAR) TAB --- */}
-        {activeTab === 'events' && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-[11px] text-blue-700 dark:text-blue-300">
-              <Info size={16} className="flex-shrink-0 mt-0.5" />
-              Events appear on the public Calendar page ordered by date. Date format: YYYY-MM-DD. Location and time are optional.
-            </div>
-
-            {/* Event list */}
-            <div className="space-y-3">
-              {events.length === 0 && (
-                <div className="text-center py-10 text-slate-400 dark:text-slate-600 text-xs font-black uppercase tracking-widest">
-                  No events yet — add one below
-                </div>
-              )}
-              {events.map(ev => (
-                <div key={ev.id} className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-2xl overflow-hidden">
-                  {editingEvent?.id === ev.id ? (
-                    /* Inline edit form */
-                    <div className="p-5 space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className={labelClass}>Title *</label>
-                          <input className={inputClass} value={editingEvent.title} onChange={e => setEditingEvent({ ...editingEvent, title: e.target.value })} placeholder="e.g. Military Ball 2025-2026" />
-                        </div>
-                        <div>
-                          <label className={labelClass}>Date * (YYYY-MM-DD)</label>
-                          <input className={inputClass} type="date" value={editingEvent.date} onChange={e => setEditingEvent({ ...editingEvent, date: e.target.value })} />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <label className={labelClass}>Category</label>
-                          <select className={inputClass} value={editingEvent.type || ''} onChange={e => setEditingEvent({ ...editingEvent, type: e.target.value })}>
-                            <option value="">— Select —</option>
-                            {EVENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className={labelClass}>Location</label>
-                          <input className={inputClass} value={editingEvent.location} onChange={e => setEditingEvent({ ...editingEvent, location: e.target.value })} placeholder="e.g. Pine Bluff High School Gym" />
-                        </div>
-                        <div>
-                          <label className={labelClass}>Time</label>
-                          <input className={inputClass} value={editingEvent.time} onChange={e => setEditingEvent({ ...editingEvent, time: e.target.value })} placeholder="e.g. 6:00 PM" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className={labelClass}>Description</label>
-                        <textarea className={`${inputClass} resize-none`} rows={3} value={editingEvent.description || ''} onChange={e => setEditingEvent({ ...editingEvent, description: e.target.value })} placeholder="Optional details — dress code, what to bring, special instructions, etc." />
-                      </div>
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          disabled={eventSaving || !editingEvent.title || !editingEvent.date}
-                          onClick={handleSaveEvent}
-                          className="flex items-center gap-2 px-5 py-2.5 bg-yellow-500 text-slate-950 font-black text-xs uppercase rounded-xl hover:bg-yellow-400 disabled:opacity-50 transition-all"
-                        >
-                          {eventSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
-                        </button>
-                        <button onClick={() => setEditingEvent(null)} className="flex items-center gap-2 px-5 py-2.5 bg-slate-200 dark:bg-white/5 text-slate-600 dark:text-slate-400 font-black text-xs uppercase rounded-xl hover:opacity-70 transition-all">
-                          <X size={14} /> Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Read view */
-                    <div className="flex items-center gap-4 p-5">
-                      <div className="flex-shrink-0 w-12 h-12 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex items-center justify-center">
-                        <Calendar size={20} className="text-yellow-600 dark:text-yellow-500" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-black uppercase italic text-sm text-slate-900 dark:text-white truncate">{ev.title}</p>
-                        <div className="flex items-center flex-wrap gap-x-4 gap-y-1 mt-1">
-                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                            {ev.date}
-                          </span>
-                          {ev.location && (
-                            <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                              <MapPin size={10} /> {ev.location}
-                            </span>
-                          )}
-                          {ev.time && (
-                            <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                              <Clock size={10} /> {ev.time}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button
-                          onClick={() => setEditingEvent({ id: ev.id, title: ev.title, date: ev.date, type: ev.type || '', location: ev.location || '', time: ev.time || '', description: ev.description || '' })}
-                          className="p-2 rounded-lg text-slate-400 hover:text-yellow-500 hover:bg-yellow-500/10 transition-all"
-                          title="Edit"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteEvent(ev.id)}
-                          className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-all"
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* New event form */}
-            {editingEvent && !editingEvent.id ? (
-              <div className="bg-white dark:bg-slate-900/40 border border-yellow-500/30 rounded-2xl p-5 space-y-3">
-                <h3 className="text-xs font-black text-yellow-600 dark:text-yellow-500 uppercase tracking-widest">New Event</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelClass}>Title *</label>
-                    <input className={inputClass} value={editingEvent.title} onChange={e => setEditingEvent({ ...editingEvent, title: e.target.value })} placeholder="e.g. Military Ball 2025-2026" autoFocus />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Date * (YYYY-MM-DD)</label>
-                    <input className={inputClass} type="date" value={editingEvent.date} onChange={e => setEditingEvent({ ...editingEvent, date: e.target.value })} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelClass}>Location</label>
-                    <input className={inputClass} value={editingEvent.location} onChange={e => setEditingEvent({ ...editingEvent, location: e.target.value })} placeholder="e.g. Pine Bluff High School Gym" />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Time</label>
-                    <input className={inputClass} value={editingEvent.time} onChange={e => setEditingEvent({ ...editingEvent, time: e.target.value })} placeholder="e.g. 6:00 PM" />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelClass}>Description</label>
-                  <textarea className={`${inputClass} resize-none`} rows={3} value={editingEvent.description || ''} onChange={e => setEditingEvent({ ...editingEvent, description: e.target.value })} placeholder="Optional details — dress code, what to bring, special instructions, etc." />
-                </div>
-                <div className="flex gap-2 pt-1">
-                  <button
-                    disabled={eventSaving || !editingEvent.title || !editingEvent.date}
-                    onClick={handleSaveEvent}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-yellow-500 text-slate-950 font-black text-xs uppercase rounded-xl hover:bg-yellow-400 disabled:opacity-50 transition-all"
-                  >
-                    {eventSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Add Event
-                  </button>
-                  <button onClick={() => setEditingEvent(null)} className="flex items-center gap-2 px-5 py-2.5 bg-slate-200 dark:bg-white/5 text-slate-600 dark:text-slate-400 font-black text-xs uppercase rounded-xl hover:opacity-70 transition-all">
-                    <X size={14} /> Cancel
-                  </button>
-                </div>
-              </div>
-            ) : !editingEvent && (
-              <button
-                onClick={() => setEditingEvent({ ...BLANK_EVENT })}
-                className="w-full py-4 border-2 border-dashed border-slate-300 dark:border-white/10 rounded-2xl text-xs font-black uppercase text-slate-400 hover:border-yellow-500 hover:text-yellow-600 dark:hover:text-yellow-500 transition-colors flex items-center justify-center gap-2"
-              >
-                <Plus size={14} /> New Event
-              </button>
-            )}
           </div>
         )}
 
@@ -829,6 +495,7 @@ const AdminContent = () => {
             </button>
           </div>
         )}
+
       </div>
 
       {/* STATUS TOAST */}

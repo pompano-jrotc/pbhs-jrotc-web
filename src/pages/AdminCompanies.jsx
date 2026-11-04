@@ -25,7 +25,7 @@ import AdminPageHeader from '../components/AdminPageHeader';
 const DEFAULT_COMPANIES = ["Alpha", "Bravo", "Charlie", "Delta"];
 const DEFAULT_CATEGORIES = ["Regulations", "Forms", "Handbooks & Guides", "Uniform", "Other"];
 
-const AdminCompanies = () => {
+const AdminCompanies = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
   // s6_technology is explicitly allowed via the route's allowedRoles; the
   // level check alone (>= 80) would block them since they sit at level 70.
@@ -225,10 +225,10 @@ const AdminCompanies = () => {
   if (!isAuthorized) return <Navigate to="/admin/dashboard" />;
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
       <div className="max-w-2xl mx-auto w-full">
 
-        <AdminPageHeader icon={Building2} title="Companies" />
+        {!hideHeader && <AdminPageHeader icon={Building2} title="Companies" />}
 
         {/* Status toast */}
         <AnimatePresence>

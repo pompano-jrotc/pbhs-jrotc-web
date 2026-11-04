@@ -63,7 +63,7 @@ const OnboardingChecklist = ({ storageKey, title, items }) => {
   };
 
   return (
-    <div className="mb-8 bg-white dark:bg-slate-900 border border-blue-100 dark:border-white/5 rounded-3xl p-8 shadow-sm relative transition-colors">
+    <div className="mb-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-3xl p-8 shadow-sm relative transition-colors">
       <button
         onClick={dismiss}
         type="button"
@@ -93,7 +93,7 @@ const OnboardingChecklist = ({ storageKey, title, items }) => {
             {remaining.map(item => (
               <div
                 key={item.id}
-                className="flex items-center gap-4 p-4 rounded-2xl border bg-blue-50/40 dark:bg-transparent border-blue-100 dark:border-white/5 transition-opacity duration-200"
+                className="flex items-center gap-4 p-4 rounded-2xl border bg-slate-50 dark:bg-transparent border-slate-200 dark:border-white/5 transition-opacity duration-200"
                 style={{ opacity: leaving.includes(item.id) ? 0 : 1 }}
               >
                 <button

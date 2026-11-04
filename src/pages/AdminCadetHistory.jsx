@@ -456,7 +456,7 @@ function EditRecordModal({ record, onClose }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function AdminCadetHistory() {
+export default function AdminCadetHistory({ hideHeader = false }) {
   const { userData, role } = useAuth();
   const user  = userData;
   const level = ROLE_HIERARCHY[role] ?? 0;
@@ -475,9 +475,15 @@ export default function AdminCadetHistory() {
   const [expandedId, setExpandedId]     = useState(null);
 
   // Realtime listener
+  // Admin (80+) loads all records; company command (45–79) scopes to own company
+  // to satisfy Firestore rules (which only allow per-company reads below level 80).
   useEffect(() => {
     if (!canView) { setLoading(false); return; }
-    const q = query(collection(db, 'cadetYearlyHistory'), orderBy('cadetName', 'asc'));
+    const q = level >= ADMIN_LEVEL
+      ? query(collection(db, 'cadetYearlyHistory'), orderBy('cadetName', 'asc'))
+      : query(collection(db, 'cadetYearlyHistory'),
+          where('company', '==', userData?.company || ''),
+          orderBy('cadetName', 'asc'));
     const unsub = onSnapshot(q, snap => {
       const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setRecords(docs);
@@ -540,8 +546,8 @@ export default function AdminCadetHistory() {
 
   if (!canView) {
     return (
-      <div className="flex-1 p-6 md:p-10 w-full">
-        <AdminPageHeader icon={History} title="Cadet History" meta="Year-End Archives" />
+      <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+        {!hideHeader && <AdminPageHeader icon={History} title="Cadet History" meta="Year-End Archives" />}
         <div className="flex flex-col items-center py-24 text-center">
           <History size={40} className="text-slate-300 dark:text-slate-600 mb-4" />
           <p className="text-sm text-slate-500 dark:text-slate-400">Company Leadership access required to view cadet history.</p>
@@ -553,12 +559,14 @@ export default function AdminCadetHistory() {
   const yearRecords = records.filter(r => r.schoolYear === selectedYear);
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
-      <AdminPageHeader
-        icon={History}
-        title="Cadet History"
-        meta={`Year-End Archives · ${ROLE_LABELS[role] || role}`}
-      />
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+      {!hideHeader && (
+        <AdminPageHeader
+          icon={History}
+          title="Cadet History"
+          meta={`Year-End Archives · ${ROLE_LABELS[role] || role}`}
+        />
+      )}
 
       {/* Toolbar */}
       {isAdmin && (

@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { getInitials } from '../utils/getInitials';
+import { normalizeCompany, isHQCompany } from '../utils/normalizeCompany';
 import { db, auth } from '../firebase';
-import { doc, updateDoc, getDocs, query, collection, where, orderBy } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, getDocs, query, collection, where, orderBy, serverTimestamp } from 'firebase/firestore';
 import {
   signOut,
   multiFactor,
@@ -11,13 +12,15 @@ import {
   PhoneMultiFactorGenerator,
   RecaptchaVerifier,
 } from 'firebase/auth';
+import { deleteField } from 'firebase/firestore';
 import { ROLE_LABELS, ROLE_HIERARCHY, STAFF_LEVEL } from '../constants';
 import Footer from '../components/Footer';
-import { ArrowLeft, Mail, Phone, Save, KeyRound, CheckCircle, Trash2, Camera, Loader2, Sun, Moon, Monitor, Smartphone, ShieldCheck, ShieldOff, BookOpen, Calendar, FileText, Activity, DollarSign, Shirt, Bell, BellOff } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Save, KeyRound, CheckCircle, Trash2, Camera, Loader2, Sun, Moon, Monitor, Smartphone, ShieldCheck, ShieldOff, BookOpen, Calendar, FileText, Activity, DollarSign, Shirt, Bell, BellOff, MailCheck, MailX, UploadCloud, X, Award, ClipboardList } from 'lucide-react';
 import { requestAndStoreToken, removeAndClearToken, getCurrentToken } from '../lib/fcm';
 import { uploadToCloudinary } from '../utils/cloudinaryUpload';
 import { useThemeContext } from '../contexts/ThemeContext';
 import ScrambleText from '../components/ScrambleText';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 const formatCooldown = (seconds) => {
   if (seconds < 60) return `${seconds}s`;
@@ -28,6 +31,7 @@ const formatCooldown = (seconds) => {
 
 const MyProfile = () => {
   const { user, userData, role } = useAuth();
+  const confirm = useConfirm();
   const { theme, setTheme } = useThemeContext();
   const navigate = useNavigate();
   const location = useLocation();
@@ -47,6 +51,8 @@ const MyProfile = () => {
   const [deleteAccountStatus, setDeleteAccountStatus] = useState(null);
   const [uploadingPortrait, setUploadingPortrait] = useState(false);
   const [portraitError, setPortraitError] = useState(null);
+  const [removingPortrait, setRemovingPortrait] = useState(false);
+  const [cancellingPending, setCancellingPending] = useState(false);
 
   // Dossier — bio and availability synced from Firestore userData
   const [dossier, setDossier] = useState({ bio: '', practiceDays: '' });
@@ -68,8 +74,8 @@ const MyProfile = () => {
         const rosterDoc = rosterSnap.docs[0];
         const rosterDocId = rosterDoc?.id ?? null;
 
-        // Step 2: fetch all three record types concurrently
-        const [sizesSnap, fitnessSnap, fundraiserSnap] = await Promise.all([
+        // Step 2: fetch all record types concurrently
+        const [sizesSnap, fitnessSnap, fundraiserSnap, boardScoresSnap, ribbonsSnap] = await Promise.all([
           rosterDocId
             ? getDocs(query(collection(db, 'uniformSizes'), where('cadetId', '==', rosterDocId)))
             : Promise.resolve({ docs: [] }),
@@ -77,6 +83,12 @@ const MyProfile = () => {
             ? getDocs(query(collection(db, 'cadetChallengeRecords'), where('cadetId', '==', rosterDocId)))
             : Promise.resolve({ docs: [] }),
           getDocs(query(collection(db, 'fundraiserEntries'), where('linkedUid', '==', user.uid))),
+          rosterDocId
+            ? getDocs(query(collection(db, 'promotionScores'), where('rosterDocId', '==', rosterDocId)))
+            : Promise.resolve({ docs: [] }),
+          rosterDocId
+            ? getDocs(query(collection(db, 'ribbonAwards'), where('rosterDocId', '==', rosterDocId)))
+            : Promise.resolve({ docs: [] }),
         ]);
 
         if (cancelled) return;
@@ -92,16 +104,36 @@ const MyProfile = () => {
           fitnessByCycle[cycle] = r;
         });
 
-        // Fundraiser — sum total and count entries
+        // Fundraiser — sum total and count non-voided entries only
         let fundraiserTotal = 0;
         let fundraiserCount = 0;
         fundraiserSnap.docs.forEach((d) => {
           const r = d.data();
+          if (r.voided) return;
           fundraiserTotal += parseFloat(r.amount) || 0;
           fundraiserCount += 1;
         });
 
-        setMyRecords({ sizeRecord, fitnessByCycle, fundraiserTotal, fundraiserCount });
+        // Promotion board scores — fetch board metadata for titles/dates
+        const boardScores = boardScoresSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const boardIds    = [...new Set(boardScores.map(s => s.boardId).filter(Boolean))];
+        const boardMap    = {};
+        if (boardIds.length > 0) {
+          try {
+            const boardSnaps = await Promise.all(boardIds.map(id => getDoc(doc(db, 'promotionBoards', id))));
+            boardSnaps.forEach(s => { if (s.exists()) boardMap[s.id] = { id: s.id, ...s.data() }; });
+          } catch (_) {}
+        }
+        const sortedBoardScores = boardScores.sort((a, b) => {
+          const ta = boardMap[a.boardId]?.boardDate?.toMillis?.() || 0;
+          const tb = boardMap[b.boardId]?.boardDate?.toMillis?.() || 0;
+          return tb - ta;
+        });
+
+        // Ribbon awards
+        const ribbons = ribbonsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        setMyRecords({ sizeRecord, fitnessByCycle, fundraiserTotal, fundraiserCount, boardScores: sortedBoardScores, boardMap, ribbons });
       } catch (err) {
         console.warn('My Records fetch failed:', err);
         if (!cancelled) setMyRecords({});
@@ -131,6 +163,13 @@ const MyProfile = () => {
   const [notifStatus,  setNotifStatus]  = useState('checking');
   const [notifLoading, setNotifLoading] = useState(false);
   const [activeToken,  setActiveToken]  = useState(null); // current FCM token for this device
+
+  // Email announcement preference — absent field means opted in (true)
+  const [emailAnnouncements, setEmailAnnouncements] = useState(true);
+  const [emailAnnouncementsLoading, setEmailAnnouncementsLoading] = useState(false);
+  useEffect(() => {
+    if (userData) setEmailAnnouncements(userData.emailAnnouncements !== false);
+  }, [userData?.emailAnnouncements]);
 
   const resetCooldownSeconds = Math.max(0, Math.ceil((resetCooldownUntil - now) / 1000));
 
@@ -219,12 +258,49 @@ const MyProfile = () => {
     setPortraitError(null);
     try {
       const data = await uploadToCloudinary(file, 'image');
-      await updateDoc(doc(db, "users", user.uid), { portrait: data.secure_url });
+      if (userData?.portraitAssignedByStaff) {
+        // Staff-assigned photo is authoritative — new uploads go pending for approval
+        await updateDoc(doc(db, 'users', user.uid), {
+          portraitPending: data.secure_url,
+          portraitPendingAt: serverTimestamp(),
+        });
+      } else {
+        await updateDoc(doc(db, "users", user.uid), { portrait: data.secure_url });
+      }
     } catch (err) {
       console.error("Portrait upload failed:", err);
       setPortraitError(err.message || 'Upload failed. Try a JPEG, PNG, WebP, or HEIC image.');
     } finally {
       setUploadingPortrait(false);
+    }
+  };
+
+  const handleCancelPendingPortrait = async () => {
+    if (!user) return;
+    setCancellingPending(true);
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        portraitPending: deleteField(),
+        portraitPendingAt: deleteField(),
+      });
+    } catch (err) {
+      console.error('Cancel pending portrait failed:', err);
+    } finally {
+      setCancellingPending(false);
+    }
+  };
+
+  const handleRemovePortrait = async () => {
+    if (!user) return;
+    const ok = await confirm('Remove your profile photo? Your initials will show instead.', { title: 'Remove Photo', destructive: true });
+    if (!ok) return;
+    setRemovingPortrait(true);
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { portrait: deleteField() });
+    } catch (err) {
+      console.error('Portrait remove failed:', err);
+    } finally {
+      setRemovingPortrait(false);
     }
   };
 
@@ -441,7 +517,7 @@ const MyProfile = () => {
   // Unenroll — removes the enrolled phone factor.
   const handleUnenroll = async () => {
     if (!user || !mfaFactor) return;
-    const confirmed = window.confirm('Remove two-factor authentication? You can re-enroll at any time.');
+    const confirmed = await confirm('Remove two-factor authentication? You can re-enroll at any time from your profile.', { title: 'Remove 2FA', destructive: false });
     if (!confirmed) return;
     setMfaStatus('working');
     try {
@@ -497,8 +573,10 @@ const MyProfile = () => {
         </Link>
 
         <div className="flex items-center gap-5 mb-8">
-          <label className="relative w-16 h-16 shrink-0 rounded-full cursor-pointer group" title="Change portrait">
-            {userData?.portrait ? (
+          <label className="relative w-16 h-16 shrink-0 rounded-full cursor-pointer group" title={userData?.portraitAssignedByStaff ? 'Request photo change' : 'Change portrait'}>
+            {userData?.portraitPending ? (
+              <img src={userData.portraitPending} alt="" className="w-16 h-16 rounded-full object-cover opacity-70 ring-2 ring-yellow-500/50" />
+            ) : userData?.portrait ? (
               <img src={userData.portrait} alt="" className="w-16 h-16 rounded-full object-cover" />
             ) : (
               <div className="w-16 h-16 rounded-full bg-yellow-500 text-slate-950 flex items-center justify-center text-xl font-black uppercase">
@@ -508,7 +586,9 @@ const MyProfile = () => {
             <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
               {uploadingPortrait ? <Loader2 className="animate-spin" size={18} /> : <Camera size={18} />}
             </div>
-            <input type="file" accept="image/*" className="hidden" onChange={handlePortraitUpload} disabled={uploadingPortrait} />
+            {!userData?.portraitPending && (
+              <input type="file" accept="image/*" className="hidden" onChange={handlePortraitUpload} disabled={uploadingPortrait} />
+            )}
           </label>
           <div>
             <h1 className="text-3xl font-black uppercase italic tracking-tighter"><ScrambleText text="My Profile" trigger="mount" /></h1>
@@ -536,19 +616,16 @@ const MyProfile = () => {
             <div>
               <p className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest mb-1">Company</p>
               <p className="text-sm font-bold">
-                {/* Show "Battalion" for both new and legacy Zulu records */}
-                {['Battalion', 'Zulu'].includes(userData?.company)
-                  ? 'Battalion'
-                  : (userData?.company || '—')}
+                {normalizeCompany(userData?.company) || '—'}
               </p>
             </div>
-            {userData?.company && !['Battalion', 'Zulu'].includes(userData.company) && (
+            {userData?.company && !isHQCompany(userData.company) && (
               <div>
                 <p className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest mb-1">Platoon / Squad</p>
                 <p className="text-sm font-bold">{userData?.platoon || '—'} &middot; {userData?.squad || '—'}</p>
               </div>
             )}
-            {['Battalion', 'Zulu'].includes(userData?.company) && userData?.secondaryCompany && (
+            {isHQCompany(userData?.company) && userData?.secondaryCompany && (
               <div>
                 <p className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest mb-1">Class Period Company</p>
                 <p className="text-sm font-bold">{userData.secondaryCompany} Company
@@ -564,6 +641,108 @@ const MyProfile = () => {
           <p className="text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-widest mt-6 pt-6 border-t border-slate-100 dark:border-white/5">
             Rank, role, and unit assignment are managed by battalion staff. Contact S1 to request a change.
           </p>
+        </div>
+
+        {/* PROFILE PICTURE */}
+        <div className="bg-white dark:bg-slate-900 border border-blue-100 dark:border-white/10 rounded-3xl p-8 shadow-sm dark:shadow-none mb-6">
+          <div className="flex items-center gap-3 mb-6">
+            <Camera size={16} className="text-yellow-500" />
+            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Profile Photo</h2>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+            {/* Large portrait preview */}
+            <div className="relative shrink-0">
+              {userData?.portraitPending ? (
+                <div className="relative">
+                  <img src={userData.portraitPending} alt="Pending" className="w-28 h-28 rounded-2xl object-cover border-2 border-yellow-500/40 shadow-md opacity-80" />
+                  <div className="absolute inset-0 rounded-2xl bg-yellow-500/20 flex items-end justify-center pb-2">
+                    <span className="text-[8px] font-black uppercase tracking-widest bg-yellow-500 text-slate-950 px-2 py-0.5 rounded-full">
+                      Pending
+                    </span>
+                  </div>
+                </div>
+              ) : userData?.portrait ? (
+                <img src={userData.portrait} alt={userData?.fullName || ''} className="w-28 h-28 rounded-2xl object-cover border border-slate-200 dark:border-white/10 shadow-md" />
+              ) : (
+                <div className="w-28 h-28 rounded-2xl bg-yellow-500 text-slate-950 flex items-center justify-center text-4xl font-black uppercase shadow-md">
+                  {getInitials(userData?.fullName) || '?'}
+                </div>
+              )}
+            </div>
+
+            {/* Actions + description */}
+            <div className="flex-1 min-w-0 flex flex-col gap-3 w-full">
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Your photo appears on the <strong className="text-slate-700 dark:text-slate-300">public Leadership page</strong> if you hold a command or staff position, and is visible to battalion staff in the Command Portal.
+              </p>
+
+              {userData?.portraitPending ? (
+                <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 px-4 py-3 space-y-2">
+                  <p className="text-[10px] font-black text-yellow-600 dark:text-yellow-400 uppercase tracking-widest">
+                    Photo Pending Staff Approval
+                  </p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    Your submitted photo is waiting for a staff member to review it. Your current photo will continue showing until it's approved.
+                  </p>
+                  <button
+                    onClick={handleCancelPendingPortrait}
+                    disabled={cancellingPending}
+                    className="flex items-center gap-1.5 text-[10px] font-black uppercase text-red-500 hover:text-red-400 transition-colors disabled:opacity-50"
+                  >
+                    {cancellingPending ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
+                    {cancellingPending ? 'Cancelling…' : 'Cancel Submission'}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  <label className={`flex items-center gap-2 px-5 py-3 rounded-xl font-black uppercase text-xs cursor-pointer transition-all shadow-md shadow-yellow-500/20 ${uploadingPortrait ? 'bg-yellow-500/50 text-slate-950 cursor-not-allowed' : 'bg-yellow-500 hover:bg-yellow-400 text-slate-950'}`}>
+                    {uploadingPortrait
+                      ? <Loader2 size={14} className="animate-spin" />
+                      : <UploadCloud size={14} />
+                    }
+                    {uploadingPortrait
+                      ? 'Uploading…'
+                      : userData?.portraitAssignedByStaff
+                        ? 'Request Photo Change'
+                        : userData?.portrait ? 'Replace Photo' : 'Upload Photo'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handlePortraitUpload}
+                      disabled={uploadingPortrait || removingPortrait}
+                    />
+                  </label>
+
+                  {userData?.portrait && !userData?.portraitAssignedByStaff && (
+                    <button
+                      onClick={handleRemovePortrait}
+                      disabled={removingPortrait || uploadingPortrait}
+                      className="flex items-center gap-2 px-5 py-3 rounded-xl font-black uppercase text-xs transition-all bg-slate-100 dark:bg-white/5 text-slate-500 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
+                    >
+                      {removingPortrait ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+                      {removingPortrait ? 'Removing…' : 'Remove'}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {userData?.portraitAssignedByStaff && !userData?.portraitPending && (
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold">
+                  This photo was assigned by staff. A replacement request will go through a quick review.
+                </p>
+              )}
+
+              {portraitError && (
+                <p className="text-[10px] text-red-500 font-bold">{portraitError}</p>
+              )}
+
+              <p className="text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-widest">
+                JPEG, PNG, HEIC, or WebP · Recommended: square crop
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* MY RECORDS */}
@@ -638,6 +817,98 @@ const MyProfile = () => {
                   </div>
                 ) : (
                   <p className="text-xs text-slate-400 dark:text-slate-600 font-bold">No fitness records on file yet.</p>
+                )}
+              </div>
+
+              {/* Promotion Boards */}
+              <div className="pt-4 border-t border-slate-100 dark:border-white/5">
+                <div className="flex items-center gap-2 mb-3">
+                  <ClipboardList size={13} className="text-slate-400 dark:text-slate-500" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Promotion Board History</span>
+                </div>
+                {(myRecords.boardScores ?? []).length > 0 ? (
+                  <div className="space-y-3">
+                    {myRecords.boardScores.map(score => {
+                      const board = myRecords.boardMap?.[score.boardId];
+                      const dateStr = board?.boardDate?.toDate
+                        ? board.boardDate.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                        : null;
+                      const cats = board?.categories || [];
+                      return (
+                        <div key={score.id} className="bg-slate-50 dark:bg-black/30 rounded-2xl p-4">
+                          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                            <div>
+                              <p className="text-xs font-black text-slate-700 dark:text-slate-200">{board?.title || 'Board'}</p>
+                              {dateStr && <p className="text-[9px] text-slate-400">{dateStr}</p>}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-full tabular-nums">
+                                {score.totalScore ?? 0} pts
+                              </span>
+                              {score.extraCredit > 0 && (
+                                <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                                  +{score.extraCredit} XC
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {cats.length > 0 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              {cats.map(cat => {
+                                const val = score.scores?.[cat.id];
+                                return (
+                                  <div key={cat.id} className="flex items-center justify-between bg-white dark:bg-slate-900/60 rounded-xl px-3 py-1.5">
+                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate mr-2">{cat.label}</p>
+                                    <p className={`text-[10px] font-black tabular-nums shrink-0 ${
+                                      val === 100 ? 'text-emerald-600 dark:text-emerald-400'
+                                      : val === 90  ? 'text-blue-600 dark:text-blue-400'
+                                      : val === 80  ? 'text-yellow-600 dark:text-yellow-400'
+                                      : val === 0   ? 'text-red-500'
+                                      : 'text-slate-300 dark:text-slate-600'
+                                    }`}>
+                                      {val != null ? val : '—'}
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 dark:text-slate-600 font-bold">No promotion board scores on file yet.</p>
+                )}
+              </div>
+
+              {/* Ribbon Awards */}
+              <div className="pt-4 border-t border-slate-100 dark:border-white/5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Award size={13} className="text-slate-400 dark:text-slate-500" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Ribbon Awards</span>
+                </div>
+                {(myRecords.ribbons ?? []).length > 0 ? (
+                  <div className="space-y-2">
+                    {myRecords.ribbons.map(r => {
+                      const isAth = r.ribbon === 'athletic';
+                      return (
+                        <div key={r.id} className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${isAth ? 'bg-amber-50 dark:bg-amber-500/5 border-amber-200 dark:border-amber-500/20' : 'bg-slate-50 dark:bg-white/[0.02] border-slate-200 dark:border-white/10'}`}>
+                          <div>
+                            <p className={`text-xs font-black ${isAth ? 'text-amber-700 dark:text-amber-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                              {isAth ? 'JROTC Athletic Ribbon' : r.ribbon === 'physical_fitness' ? 'JROTC Physical Fitness Ribbon' : (r.ribbon || 'Ribbon')}
+                            </p>
+                            {r.cycleNumber && <p className="text-[9px] text-slate-400 mt-0.5">Cycle #{r.cycleNumber}</p>}
+                          </div>
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${r.status === 'issued' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20'}`}>
+                            {r.status === 'issued' ? 'Issued' : 'Pending'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 dark:text-slate-600 font-bold">No ribbon awards on record yet.</p>
                 )}
               </div>
 
@@ -1068,6 +1339,54 @@ const MyProfile = () => {
             </div>
           </div>
         )}
+
+        {/* ── Email Announcements ── */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-8 shadow-sm dark:shadow-none mt-6">
+          <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">Email Announcements</h2>
+          <div className="flex items-start justify-between gap-6 flex-wrap">
+            <div className="flex-1 min-w-0">
+              {emailAnnouncements ? (
+                <>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <MailCheck size={15} className="text-yellow-500 shrink-0" /> Email notifications on
+                  </p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-1">
+                    You will receive an email when a broadcast or company announcement is posted.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <MailX size={15} className="text-slate-400 shrink-0" /> Email notifications off
+                  </p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-1">
+                    You will not receive announcement emails. Push notifications are unaffected.
+                  </p>
+                </>
+              )}
+            </div>
+            <button
+              disabled={emailAnnouncementsLoading}
+              onClick={async () => {
+                setEmailAnnouncementsLoading(true);
+                try {
+                  const next = !emailAnnouncements;
+                  await updateDoc(doc(db, 'users', user.uid), { emailAnnouncements: next });
+                  setEmailAnnouncements(next);
+                } catch (err) { console.error('Email pref update failed:', err); }
+                finally { setEmailAnnouncementsLoading(false); }
+              }}
+              className={`shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 ${
+                emailAnnouncements
+                  ? 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:bg-slate-200 dark:hover:bg-white/10'
+                  : 'bg-yellow-500 text-slate-950 hover:bg-yellow-400 shadow-lg shadow-yellow-500/20'
+              }`}
+            >
+              {emailAnnouncementsLoading ? <Loader2 size={12} className="animate-spin" /> : emailAnnouncements ? <MailX size={13} /> : <MailCheck size={13} />}
+              {emailAnnouncements ? 'Opt Out' : 'Opt In'}
+            </button>
+          </div>
+        </div>
 
         {/* DANGER ZONE */}
         <div className="bg-white dark:bg-slate-900 border border-red-200 dark:border-red-500/20 rounded-3xl p-8 shadow-sm dark:shadow-none mt-6">

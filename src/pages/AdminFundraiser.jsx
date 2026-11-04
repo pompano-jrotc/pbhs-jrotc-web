@@ -247,6 +247,11 @@ const AdminFundraiser = () => {
     return () => unsub();
   }, []);
 
+  // ── Print options state ───────────────────────────────────────────────────────
+  const [showPrintOptions,  setShowPrintOptions]  = useState(false);
+  const [printFundCols,     setPrintFundCols]     = useState(['total', 'flags']);
+  const [printFundIncludeBn, setPrintFundIncludeBn] = useState(false);
+
   // ── Full-view UI state ────────────────────────────────────────────────────────
   const [activeTab,          setActiveTab]          = useState('transactions');
   const [searchQuery,        setSearchQuery]        = useState('');
@@ -554,6 +559,52 @@ const AdminFundraiser = () => {
     setToast(msg);
     setTimeout(() => setToast(null), 3500);
   }, []);
+
+  // ── Fundraiser roster print ────────────────────────────────────────────────────
+  const FUNDRAISER_PRINT_COL_DEFS = [
+    { key: 'total',       label: 'Total Raised',  getValue: c => c.total > 0 ? `$${c.total.toFixed(2)}` : '' },
+    { key: 'flags',       label: 'Flags Earned',  getValue: c => c.flags  > 0 ? String(c.flags)          : '' },
+    { key: 'count',       label: '# Payments',    getValue: c => c.count  > 0 ? String(c.count)          : '' },
+    { key: 'lastPayment', label: 'Last Payment',  getValue: c => c.lastAt?.toDate ? c.lastAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '' },
+    { key: 'blank',       label: '',              getValue: () => '' },
+  ];
+
+  const handlePrintFundRoster = () => {
+    const selectedColDefs = FUNDRAISER_PRINT_COL_DEFS.filter(d => printFundCols.includes(d.key));
+    const cols = selectedColDefs.length > 0 ? selectedColDefs : null;
+
+    let rosterForPrint = [...rosterAggregated];
+
+    // Optionally merge battalion leadership cadets who observe the selected company
+    if (printFundIncludeBn && canViewAll && filterCompany && filterCompany !== '_battalion') {
+      const bnCadetsList = allRoster.filter(r => !r.graduated && BATTALION_COMPANIES.includes(r.company) && r.secondaryCompany === filterCompany);
+      const bnEntriesList = allEntries.filter(e => !e.voided && BATTALION_COMPANIES.includes(e.company));
+      const byId = {};
+      bnEntriesList.forEach(e => {
+        const key = e.cadetId === 'manual' ? `manual_${e.cadetName}` : e.cadetId;
+        if (!byId[key]) byId[key] = { cadetId: e.cadetId, cadetName: e.cadetName, company: e.company, total: 0, flags: 0, count: 0, lastAt: null };
+        byId[key].total += e.amount || 0;
+        byId[key].flags += e.flags  || 0;
+        byId[key].count += 1;
+        if (!byId[key].lastAt || (e.submittedAt?.seconds > byId[key].lastAt?.seconds)) {
+          byId[key].lastAt = e.submittedAt;
+        }
+      });
+      const bnRows = bnCadetsList.map(c => ({
+        uid: c.uid || c.id, fullName: c.fullName, company: c.company, rank: c.rank, letLevel: c.letLevel || '',
+        ...(byId[c.uid || c.id] || { total: 0, flags: 0, count: 0, lastAt: null }),
+      }));
+      const existingUids = new Set(rosterForPrint.map(r => r.uid));
+      bnRows.filter(r => !existingUids.has(r.uid)).forEach(r => rosterForPrint.push(r));
+    }
+
+    const label = canViewAll && !filterCompany ? 'All Companies'
+      : filterCompany === '_battalion' ? 'Battalion HQ'
+      : filterCompany ? `${filterCompany} Company`
+      : `${activeCompany} Company`;
+    printRoster(rosterForPrint, `${label} Fundraiser Roster`, cols ? { columns: cols } : undefined);
+    setShowPrintOptions(false);
+  };
 
   const handleExportFundraiser = () => {
     const rows = entries
@@ -1313,18 +1364,65 @@ const AdminFundraiser = () => {
                 >
                   <GraduationCap size={12} /> Group by LET
                 </button>
-                <button
-                  onClick={() => {
-                    const label = canViewAll && !filterCompany ? 'All Companies'
-                      : filterCompany === '_battalion' ? 'Battalion HQ'
-                      : filterCompany ? `${filterCompany} Company`
-                      : `${activeCompany} Company`;
-                    printRoster(visibleRoster, `${label} Fundraiser Roster`);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-[10px] font-black uppercase tracking-widest transition-all"
-                >
-                  <Printer size={12} /> Print Roster
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowPrintOptions(o => !o)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-[10px] font-black uppercase tracking-widest transition-all"
+                  >
+                    <Printer size={12} /> Print Roster
+                  </button>
+                  {showPrintOptions && (
+                    <div className="absolute left-0 top-full mt-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-xl p-4 min-w-[220px]">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">Columns to Include</p>
+                      <div className="space-y-2 mb-3">
+                        {FUNDRAISER_PRINT_COL_DEFS.map(col => (
+                          <label key={col.key} className="flex items-center gap-2.5 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={printFundCols.includes(col.key)}
+                              onChange={e => setPrintFundCols(prev =>
+                                e.target.checked ? [...prev, col.key] : prev.filter(k => k !== col.key)
+                              )}
+                              className="accent-yellow-500 w-3.5 h-3.5"
+                            />
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                              {col.label || 'Blank Column'}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      {canViewAll && filterCompany && filterCompany !== '_battalion' && (
+                        <div className="border-t border-slate-100 dark:border-white/5 pt-3 mb-3">
+                          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={printFundIncludeBn}
+                              onChange={e => setPrintFundIncludeBn(e.target.checked)}
+                              className="accent-yellow-500 w-3.5 h-3.5"
+                            />
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                              Include Battalion Leadership
+                            </span>
+                          </label>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handlePrintFundRoster}
+                          className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 hover:bg-yellow-400 text-slate-950 px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                        >
+                          <Printer size={11} /> Print PDF
+                        </button>
+                        <button
+                          onClick={() => setShowPrintOptions(false)}
+                          className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-[10px] font-black uppercase transition-all"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="overflow-x-auto rounded-2xl border border-blue-100 dark:border-white/5 shadow-sm">
                 <table className="w-full text-xs">

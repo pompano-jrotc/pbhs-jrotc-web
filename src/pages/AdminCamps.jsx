@@ -13,13 +13,14 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import ScrambleText from '../components/ScrambleText';
 import AdminPageHeader from '../components/AdminPageHeader';
+import DatePicker from '../components/DatePicker';
 
 const initialCampForm = { name: '', date: '', location: '', notes: '', attendeeCount: '', attendeeNotes: '' };
 
 const inputClass = "w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-3 rounded-xl outline-none focus:border-yellow-500 text-sm font-bold text-slate-900 dark:text-white";
 const labelClass = "text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1 block mb-1";
 
-const AdminCamps = () => {
+const AdminCamps = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
   const isAuthorized = (ROLE_HIERARCHY[role] || 0) >= STAFF_LEVEL;
 
@@ -105,10 +106,10 @@ const AdminCamps = () => {
   if (!isAuthorized) return <Navigate to="/admin/dashboard" />;
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
       <div className="max-w-4xl mx-auto">
 
-        <AdminPageHeader icon={Tent} title="Camp Attendance" />
+        {!hideHeader && <AdminPageHeader icon={Tent} title="Camp Attendance" />}
 
         <div className="flex justify-end mb-6">
           <button onClick={openAdd} className="bg-yellow-500 text-slate-950 px-6 py-3 rounded-2xl font-black uppercase text-xs flex items-center gap-2 hover:bg-yellow-400 shadow-lg shadow-yellow-500/20 transition-all">
@@ -166,7 +167,7 @@ const AdminCamps = () => {
                   </div>
                   <div>
                     <label className={labelClass}>Date</label>
-                    <input type="date" required className={inputClass} value={campForm.date} onChange={e => setCampForm({ ...campForm, date: e.target.value })} />
+                    <DatePicker value={campForm.date} onChange={v => setCampForm({ ...campForm, date: v })} placeholder="Pick a date" />
                   </div>
                 </div>
                 <div>

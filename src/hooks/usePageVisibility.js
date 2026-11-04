@@ -13,6 +13,7 @@ export const DEFAULT_VISIBILITY = {
   'cadet-info':      true,
   'promotion-board': true,
   'winning-colors':  true,
+  uniform:           false,
   documents:         true,
   announcements:     true,
   newsletter:        true,
@@ -20,6 +21,8 @@ export const DEFAULT_VISIBILITY = {
   leadership:        true,
   photos:            true,
   events:            true,
+  quizzes:           true,
+  leaderboard:       true,
 };
 
 export function usePageVisibility() {

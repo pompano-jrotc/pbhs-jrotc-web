@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Megaphone, Calendar, User, Clock, AlertCircle, Tag } from 'lucide-react';
+import { Megaphone, Calendar, User, Clock, AlertCircle, Tag, FileText, ExternalLink } from 'lucide-react';
+import PollDisplay from '../components/PollDisplay';
+import FormDisplay from '../components/FormDisplay';
 import { db } from '../firebase';
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
@@ -123,10 +125,47 @@ const Announcements = () => {
                   )}
                 </div>
 
+                {/* TITLE */}
+                {post.title && (
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white mb-3">{post.title}</h2>
+                )}
+
                 {/* CONTENT BODY */}
                 <div className="text-sm leading-relaxed text-slate-600 dark:text-slate-300 prose dark:prose-invert max-w-none whitespace-pre-wrap font-medium">
                   {post.content}
                 </div>
+
+                {/* ATTACHMENT */}
+                {post.pdfUrl && (
+                  <div className="mt-6 pt-5 border-t border-slate-100 dark:border-white/5">
+                    {post.attachmentType === 'image' ? (
+                      <a href={post.pdfUrl} target="_blank" rel="noopener noreferrer" className="block">
+                        <img src={post.pdfUrl} alt={post.pdfFileName || 'Attachment'} className="max-h-64 rounded-2xl object-cover" />
+                      </a>
+                    ) : (
+                      <a
+                        href={post.pdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all"
+                      >
+                        <FileText size={14} />
+                        {post.pdfFileName || 'View Attachment'}
+                        <ExternalLink size={11} className="opacity-60" />
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* POLL */}
+                {post.poll && (
+                  <PollDisplay poll={post.poll} announcementId={post.id} collectionName="announcements" />
+                )}
+
+                {/* FORM */}
+                {post.form && (
+                  <FormDisplay form={post.form} announcementId={post.id} collectionName="announcements" />
+                )}
               </article>
               </Reveal>
             ))}

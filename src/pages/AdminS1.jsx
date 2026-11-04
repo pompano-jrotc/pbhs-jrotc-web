@@ -33,7 +33,7 @@ import { writeLog } from '../lib/writeLog';
 import { db, auth, storage } from '../firebase';
 import {
   collection, query, where, onSnapshot,
-  writeBatch, doc, getDocs, Timestamp, updateDoc,
+  writeBatch, doc, getDocs, Timestamp, updateDoc, deleteDoc, increment,
 } from 'firebase/firestore';
 import { ref as storageRef, deleteObject } from 'firebase/storage';
 import { validateCadetDocument } from '../utils/validateUpload';
@@ -41,12 +41,16 @@ import { uploadFileToPath } from '../utils/storageUploadPhoto';
 import {
   ClipboardList, Plus, ChevronLeft, CheckCircle2, Clock,
   Search, ChevronDown, ChevronUp, BookUser, Upload,
-  Mail, X, FileText, Paperclip, Trophy,
+  Mail, X, FileText, Paperclip, Trophy, GraduationCap,
+  Trash2, RotateCcw, Pencil, Check,
 } from 'lucide-react';
 import AdminPageHeader from '../components/AdminPageHeader';
-import { ROLE_HIERARCHY, ADMIN_LEVEL, COMMAND_LEVEL } from '../constants';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { ROLE_HIERARCHY, ADMIN_LEVEL, STAFF_LEVEL, COMMAND_LEVEL } from '../constants';
 import { useCompanies } from '../hooks/useCompanies';
 import S1PromotionBoard from '../components/S1PromotionBoard';
+import { groupByLet } from '../utils/groupByLet';
+import DatePicker from '../components/DatePicker';
 
 // ── Role constants ─────────────────────────────────────────────────────────────
 // Only S1 adjutant and Company XO can create events / mark submissions.
@@ -64,6 +68,10 @@ const CAN_VIEW_ROLES = [
   'battalion_xo',
   'company_commander', 'company_1sg', 'company_master_sergeant',
 ];
+
+// Companies that are battalion HQ, not line companies.
+// Legacy 'Zulu' is kept for backward compat — old Firestore records still carry it.
+const BATTALION_COMPANIES = ['Battalion', 'Zulu'];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmtDate(ts) {
@@ -249,13 +257,12 @@ function SubmissionRow({ sub, canMark, showCompany, onToggle, onUpdateNotes, onU
 }
 
 // ── EventCard ──────────────────────────────────────────────────────────────────
-function EventCard({ event, archived = false, onClick }) {
+function EventCard({ event, archived = false, onClick, onDelete, onArchive, onUnarchive }) {
   const pastDue = isPast(event.dueDate);
 
   return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all group ${
+    <div
+      className={`w-full bg-white dark:bg-slate-900 border rounded-2xl p-5 shadow-sm hover:shadow-md transition-all group ${
         archived
           ? 'border-blue-100/50 dark:border-white/[0.03] hover:border-slate-300 dark:hover:border-white/10'
           : pastDue
@@ -263,36 +270,70 @@ function EventCard({ event, archived = false, onClick }) {
             : 'border-blue-100 dark:border-white/5 hover:border-yellow-500/40 dark:hover:border-yellow-500/20'
       }`}
     >
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <h3 className={`text-sm font-black leading-tight transition-colors ${
-          archived
-            ? 'text-slate-500 dark:text-slate-400'
-            : 'text-slate-900 dark:text-white group-hover:text-yellow-600 dark:group-hover:text-yellow-500'
-        }`}>
-          {event.title}
-        </h3>
-        {pastDue && (
-          <span className="shrink-0 text-[9px] font-black uppercase bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full">
-            Past Due
-          </span>
-        )}
-      </div>
+      {/* Clickable body */}
+      <button onClick={onClick} className="w-full text-left">
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <h3 className={`text-sm font-black leading-tight transition-colors ${
+            archived
+              ? 'text-slate-500 dark:text-slate-400'
+              : 'text-slate-900 dark:text-white group-hover:text-yellow-600 dark:group-hover:text-yellow-500'
+          }`}>
+            {event.title}
+          </h3>
+          {pastDue && !archived && (
+            <span className="shrink-0 text-[9px] font-black uppercase bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full">
+              Past Due
+            </span>
+          )}
+        </div>
 
-      <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
-        Due {fmtDate(event.dueDate)}
-      </p>
-      <p className="text-[10px] font-bold text-slate-300 dark:text-slate-600 uppercase tracking-wider">
-        {event.scope === 'battalion' ? 'Battalion-Wide' : `${event.company} Co`}
-        {' · '}
-        {event.totalCadets ?? '—'} cadets
-      </p>
-    </button>
+        <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">
+          Due {fmtDate(event.dueDate)}
+        </p>
+        <p className="text-[10px] font-bold text-slate-300 dark:text-slate-600 uppercase tracking-wider">
+          {event.scope === 'battalion' ? 'Battalion-Wide' : `${event.company} Co`}
+          {' · '}
+          {event.totalCadets ?? '—'} cadets
+        </p>
+      </button>
+
+      {/* Action row */}
+      {(onDelete || onArchive || onUnarchive) && (
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
+          {onArchive && !archived && (
+            <button
+              onClick={(ev) => { ev.stopPropagation(); onArchive(event); }}
+              className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+            >
+              <RotateCcw size={11} /> Archive
+            </button>
+          )}
+          {onUnarchive && archived && (
+            <button
+              onClick={(ev) => { ev.stopPropagation(); onUnarchive(event); }}
+              className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-yellow-600 dark:text-yellow-400 hover:text-yellow-500 transition-colors"
+            >
+              <RotateCcw size={11} /> Restore
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={(ev) => { ev.stopPropagation(); onDelete(event); }}
+              className="ml-auto flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-red-500 dark:text-red-400 hover:text-red-400 transition-colors"
+            >
+              <Trash2 size={11} /> Delete
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
 // ── Main page ──────────────────────────────────────────────────────────────────
-const AdminS1 = () => {
+const AdminS1 = ({ hideHeader = false, forceTab = null }) => {
   const { userData, role, loading: authLoading } = useAuth();
+  const confirm = useConfirm();
   const { companies }  = useCompanies();
 
   const userLevel  = ROLE_HIERARCHY[role] || 0;
@@ -302,9 +343,8 @@ const AdminS1 = () => {
   const isAuthorized     = CAN_VIEW_ROLES.includes(role) || userLevel >= ADMIN_LEVEL;
   const canCreate        = CAN_CREATE_ROLES.includes(role) || userLevel >= ADMIN_LEVEL;
   const canMark          = CAN_MARK_ROLES.includes(role) || userLevel >= ADMIN_LEVEL;
-  // Battalion-level users see all companies; company roles see only their own.
-  const isBattalionLevel = role === 's1_adjutant' || role === 's3_operations' || role === 'battalion_xo'
-    || userLevel >= ADMIN_LEVEL;
+  // Battalion-level users (L70+) see all companies; company roles see only their own.
+  const isBattalionLevel = userLevel >= STAFF_LEVEL;
   // Only S1 Adjutant (+ instructors) can create battalion-wide events.
   const isS1 = role === 's1_adjutant' || userLevel >= ADMIN_LEVEL;
   // Promotion Board is restricted — S1/S3 assistants and Master Sergeants see Forms tab only.
@@ -319,13 +359,19 @@ const AdminS1 = () => {
   const [showArchived,    setShowArchived]    = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [searchQuery,     setSearchQuery]     = useState('');
+  const [groupLet,        setGroupLet]        = useState(false);
   const [statusFilter,    setStatusFilter]    = useState('all'); // 'all' | 'pending' | 'turned_in'
   const [companyFilter,   setCompanyFilter]   = useState('all');
   const [uploadingId,     setUploadingId]     = useState(null);
   const [sendingEmail,    setSendingEmail]    = useState(false);
   const [emailFeedback,   setEmailFeedback]   = useState('');  // success/error message
   const [creating,        setCreating]        = useState(false);
-  const [activeTab,       setActiveTab]       = useState('forms'); // 'forms' | 'board'
+  const [activeTab,       setActiveTab]       = useState(forceTab || 'forms'); // 'forms' | 'board'
+
+  const [bnRoster, setBnRoster]       = useState([]); // roster members whose secondaryCompany === active company
+  const [editDueDate,  setEditDueDate]  = useState(false);   // inline due-date editor open
+  const [newDueDate,   setNewDueDate]   = useState('');       // value for the date <input>
+  const [savingDate,   setSavingDate]   = useState(false);
 
   const [createForm, setCreateForm] = useState({
     title:   '',
@@ -382,40 +428,275 @@ const AdminS1 = () => {
   useEffect(() => {
     if (!selectedEvent) { setSubmissions([]); return; }
 
-    // Battalion-level users fetch all submissions for the event.
-    // Company-level users are scoped to their own company at the query level
-    // (client-side filter in visibleSubs is a second layer of defence, but
-    //  the DB-level filter avoids reading other companies' data entirely).
-    const q = isBattalionLevel
-      ? query(collection(db, 'formSubmissions'), where('eventId', '==', selectedEvent.id))
-      : query(
-          collection(db, 'formSubmissions'),
-          where('eventId', '==', selectedEvent.id),
-          where('company', '==', myCompany || ''),
-        );
-
-    const unsub = onSnapshot(q, snap => {
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      // Sort by company then name
-      docs.sort((a, b) => {
+    const merge = (parts) => {
+      const flat = parts.flat();
+      flat.sort((a, b) => {
         const co = (a.company || '').localeCompare(b.company || '');
         return co !== 0 ? co : (a.cadetName || '').localeCompare(b.cadetName || '');
       });
-      setSubmissions(docs);
-    });
-    return () => unsub();
+      setSubmissions(flat);
+    };
+
+    const unsubs = [];
+
+    if (isBattalionLevel) {
+      // Battalion: one listener for all submissions in this event
+      let all = [];
+      unsubs.push(onSnapshot(
+        query(collection(db, 'formSubmissions'), where('eventId', '==', selectedEvent.id)),
+        snap => { all = snap.docs.map(d => ({ id: d.id, ...d.data() })); merge([all]); }
+      ));
+    } else {
+      // Company: own company subs + battalion member subs assigned to this company
+      let compSubs = [], bnSubs = [];
+      const rebuild = () => merge([compSubs, bnSubs]);
+
+      unsubs.push(onSnapshot(
+        query(collection(db, 'formSubmissions'),
+          where('eventId', '==', selectedEvent.id),
+          where('company', '==', myCompany || '')),
+        snap => { compSubs = snap.docs.map(d => ({ id: d.id, ...d.data() })); rebuild(); }
+      ));
+      // Battalion members whose secondaryCompany === myCompany (requires updated Firestore rule).
+      // Error handler is required — without it a query failure (missing index / permission)
+      // throws an unhandled error that can wipe compSubs from the merged submissions state.
+      unsubs.push(onSnapshot(
+        query(collection(db, 'formSubmissions'),
+          where('eventId', '==', selectedEvent.id),
+          where('secondaryCompany', '==', myCompany || '')),
+        snap => { bnSubs = snap.docs.map(d => ({ id: d.id, ...d.data() })); rebuild(); },
+        err => { console.warn('S1 bn-sub listener (non-fatal):', err); }
+      ));
+    }
+
+    return () => unsubs.forEach(u => u());
   }, [selectedEvent?.id, isBattalionLevel, myCompany]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Derived ──────────────────────────────────────────────────────────────────
-  const activeEvents   = events.filter(e => !isPast(e.dueDate));
-  const archivedEvents = events.filter(e => isPast(e.dueDate));
+  // ── Roster-sync safety net ────────────────────────────────────────────────────
+  // When any canMark user opens an event, compare the roster (scoped to their
+  // company) against existing submissions and silently create missing entries.
+  // This covers:
+  //   • Cadets added to the roster after the event was created
+  //   • Cadets who slipped through the AdminRoster auto-sync (failure / company change)
+  // Battalion users see the full event; company users see only their company.
+  // totalCadets is updated only by level-45+ users (company command and above);
+  // below that the count will be corrected the next time a battalion user opens.
+  useEffect(() => {
+    if (!selectedEvent || !canMark) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // 1. Roster slice: battalion users check the event's full scope;
+        //    company users check only their own company.
+        let rq;
+        if (isBattalionLevel) {
+          rq = selectedEvent.scope === 'battalion'
+            ? query(collection(db, 'roster'))
+            : query(collection(db, 'roster'), where('company', '==', selectedEvent.company || ''));
+        } else {
+          rq = query(collection(db, 'roster'), where('company', '==', myCompany || ''));
+        }
+        const rosterSnap = await getDocs(rq);
+        if (cancelled) return;
 
-  // Submissions scoped to this user's company (or all if battalion-level)
-  const visibleSubs  = isBattalionLevel ? submissions : submissions.filter(s => s.company === myCompany);
-  const turnedInCount = visibleSubs.filter(s => s.status === 'turned_in').length;
-  const pendingCount  = visibleSubs.filter(s => s.status === 'pending').length;
+        // 2. Submissions slice: battalion users query the full event;
+        //    company users scope to their company (matches their read permission).
+        const subQ = isBattalionLevel
+          ? query(collection(db, 'formSubmissions'), where('eventId', '==', selectedEvent.id))
+          : query(collection(db, 'formSubmissions'),
+              where('eventId', '==', selectedEvent.id),
+              where('company', '==', myCompany || ''));
+        const subSnap = await getDocs(subQ);
+        if (cancelled) return;
+
+        // Build a map from rosterDocId → { subDocId, current fields } for update checks
+        const existingMap = {};
+        subSnap.docs.forEach(d => {
+          const data = d.data();
+          if (data.rosterDocId) existingMap[data.rosterDocId] = { docId: d.id, ...data };
+        });
+
+        const rosterCadets = rosterSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const rosterIds    = new Set(rosterCadets.map(c => c.id));
+        const missing = rosterCadets.filter(c => !existingMap[c.id]);
+
+        // Stale: existing submission whose cadetName, rank, letLevel, or secondaryCompany no longer matches
+        const stale = rosterCadets.filter(c => {
+          const ex = existingMap[c.id];
+          if (!ex) return false;
+          return (
+            (c.fullName         || '') !== (ex.cadetName        || '') ||
+            (c.rank             || '') !== (ex.rank             || '') ||
+            (c.letLevel         || '') !== (ex.letLevel         || '') ||
+            (c.secondaryCompany || '') !== (ex.secondaryCompany || '')
+          );
+        });
+
+        // Orphaned: submissions whose rosterDocId no longer exists in the roster.
+        // Only staff (70+) can delete formSubmissions per Firestore rules.
+        const orphaned = userLevel >= 70
+          ? subSnap.docs.filter(d => !rosterIds.has(d.data().rosterDocId || ''))
+          : [];
+
+        if (missing.length === 0 && stale.length === 0 && orphaned.length === 0) return;
+
+        const batch = writeBatch(db);
+
+        // Create submissions for new cadets
+        missing.forEach(cadet => {
+          const subRef = doc(collection(db, 'formSubmissions'));
+          batch.set(subRef, {
+            eventId:          selectedEvent.id,
+            rosterDocId:      cadet.id,
+            linkedUid:        cadet.linkedUid       || null,
+            cadetName:        cadet.fullName        || '',
+            rank:             cadet.rank            || '',
+            company:          cadet.company         || '',
+            secondaryCompany: cadet.secondaryCompany || '',
+            letLevel:         cadet.letLevel        || '',
+            status:           'pending',
+            turnedInAt:       null,
+            turnedInBy:       null,
+            turnedInByName:   null,
+            notes:            '',
+            fileUrl:          null,
+            fileStoragePath:  null,
+          });
+        });
+
+        // Patch stale submissions with current name / rank / letLevel / secondaryCompany
+        stale.forEach(cadet => {
+          const subDocRef = doc(db, 'formSubmissions', existingMap[cadet.id].docId);
+          batch.update(subDocRef, {
+            cadetName:        cadet.fullName         || '',
+            rank:             cadet.rank             || '',
+            letLevel:         cadet.letLevel         || '',
+            secondaryCompany: cadet.secondaryCompany || '',
+          });
+        });
+
+        // Delete orphaned submissions (cadets no longer on the roster for this event scope).
+        orphaned.forEach(d => batch.delete(d.ref));
+
+        // Keep totalCadets accurate.
+        const countDelta = missing.length - orphaned.length;
+        if (countDelta !== 0) {
+          batch.update(doc(db, 'formEvents', selectedEvent.id), {
+            totalCadets: increment(countDelta),
+          });
+        }
+
+        await batch.commit();
+        if (missing.length  > 0) console.log(`S1 sync: added ${missing.length} missing cadet(s) to "${selectedEvent.title}"`);
+        if (stale.length    > 0) console.log(`S1 sync: updated ${stale.length} stale submission(s) in "${selectedEvent.title}"`);
+        if (orphaned.length > 0) console.log(`S1 sync: removed ${orphaned.length} orphaned submission(s) from "${selectedEvent.title}"`);
+      } catch (err) {
+        console.warn('S1 event roster sync failed (non-fatal):', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedEvent?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Battalion observer roster ─────────────────────────────────────────────────
+  // Load roster members whose secondaryCompany matches the active company view.
+  // Used to populate the "Battalion Members" section at the bottom of detail view.
+  useEffect(() => {
+    if (!selectedEvent) { setBnRoster([]); return; }
+    const activeCompany = (isBattalionLevel ? companyFilter : myCompany) || '';
+    if (!activeCompany) { setBnRoster([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const rSnap = await getDocs(
+          query(collection(db, 'roster'), where('secondaryCompany', '==', activeCompany))
+        );
+        if (!cancelled) setBnRoster(rSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch { setBnRoster([]); }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedEvent?.id, isBattalionLevel, companyFilter, myCompany]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Battalion member submissions for the active company — derived from `submissions`
+  // (which for company users now also contains secondaryCompany-matched battalion subs).
+  const bnSubs = useMemo(() => {
+    if (!bnRoster.length) return [];
+    const bnIds = new Set(bnRoster.map(c => c.id));
+    return submissions.filter(s =>
+      BATTALION_COMPANIES.includes(s.company) && bnIds.has(s.rosterDocId)
+    );
+  }, [submissions, bnRoster]);
+
+  // ── Event handlers ───────────────────────────────────────────────────────────
+  const handleDeleteEvent = async (event) => {
+    if (userLevel < 70) return; // staff (70+) only
+    const ok = await confirm(`Delete "${event.title}"? All submissions will be permanently removed. This cannot be undone.`, { title: 'Delete Form Event', destructive: true });
+    if (!ok) return;
+    try {
+      await deleteDoc(doc(db, 'formEvents', event.id));
+    } catch (err) {
+      console.error('Failed to delete event:', err);
+    }
+  };
+
+  // S1 can archive any event; Company XO can archive their company-scoped events.
+  const canArchiveEvent = (event) => {
+    if (!canCreate) return false;
+    if (isBattalionLevel) return true;
+    return event.scope === 'company' && event.company === myCompany;
+  };
+
+  const handleArchiveEvent = async (event) => {
+    if (!canArchiveEvent(event)) return;
+    try {
+      await updateDoc(doc(db, 'formEvents', event.id), { archived: true });
+    } catch (err) {
+      console.error('Failed to archive event:', err);
+    }
+  };
+
+  const handleUnarchiveEvent = async (event) => {
+    if (!canArchiveEvent(event)) return;
+    try {
+      await updateDoc(doc(db, 'formEvents', event.id), { archived: false });
+    } catch (err) {
+      console.error('Failed to unarchive event:', err);
+    }
+  };
+
+  // ── Derived ──────────────────────────────────────────────────────────────────
+  // Events stay visible (active) until explicitly archived — past-due events
+  // show a "Past Due" badge but are NOT automatically hidden.
+  const activeEvents   = events.filter(e => !e.archived);
+  const archivedEvents = events.filter(e =>  e.archived);
+
+  // Submissions scoped to this user's company (or all if battalion-level).
+  // Battalion/Zulu company submissions are always excluded from the main table —
+  // they appear in the dedicated "Battalion Members" section below.
+  const visibleSubs  = isBattalionLevel
+    ? submissions.filter(s => !BATTALION_COMPANIES.includes(s.company))
+    : submissions.filter(s => s.company === myCompany);
+
+  // Stats respect the company filter so the cards show per-company numbers when filtered.
+  // 'Battalion' filter shows only battalion-company (Battalion/Zulu) submissions.
+  const statSubs = companyFilter === 'Battalion'
+    ? submissions.filter(s => BATTALION_COMPANIES.includes(s.company))
+    : companyFilter !== 'all'
+      ? visibleSubs.filter(s => s.company === companyFilter)
+      : visibleSubs;
+  const turnedInCount = statSubs.filter(s => s.status === 'turned_in').length;
+  const pendingCount  = statSubs.filter(s => s.status === 'pending').length;
 
   const filteredSubs = useMemo(() => {
+    // 'Battalion' filter — show battalion-company submissions in main table
+    if (companyFilter === 'Battalion') {
+      let list = submissions.filter(s => BATTALION_COMPANIES.includes(s.company));
+      if (statusFilter !== 'all') list = list.filter(s => s.status === statusFilter);
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        list = list.filter(s => (s.cadetName || '').toLowerCase().includes(q));
+      }
+      return list;
+    }
     let list = visibleSubs;
     if (statusFilter  !== 'all') list = list.filter(s => s.status === statusFilter);
     if (companyFilter !== 'all') list = list.filter(s => s.company === companyFilter);
@@ -424,10 +705,12 @@ const AdminS1 = () => {
       list = list.filter(s => (s.cadetName || '').toLowerCase().includes(q));
     }
     return list;
-  }, [visibleSubs, statusFilter, companyFilter, searchQuery]);
+  }, [submissions, visibleSubs, statusFilter, companyFilter, searchQuery]);
 
   const uniqueCompanies = useMemo(
-    () => [...new Set(submissions.map(s => s.company).filter(Boolean))].sort(),
+    () => [...new Set(
+      submissions.map(s => s.company).filter(c => c && !BATTALION_COMPANIES.includes(c))
+    )].sort(),
     [submissions],
   );
 
@@ -474,19 +757,21 @@ const AdminS1 = () => {
       cadets.forEach(cadet => {
         const subRef = doc(collection(db, 'formSubmissions'));
         batch.set(subRef, {
-          eventId:       eventRef.id,
-          rosterDocId:   cadet.id,
-          linkedUid:     cadet.linkedUid || null,
-          cadetName:     cadet.fullName || cadet.name || '',
-          rank:          cadet.rank || '',
-          company:       cadet.company || '',
-          status:        'pending',
-          turnedInAt:    null,
-          turnedInBy:    null,
-          turnedInByName: null,
-          notes:         '',
-          fileUrl:       null,
-          fileStoragePath: null,
+          eventId:          eventRef.id,
+          rosterDocId:      cadet.id,
+          linkedUid:        cadet.linkedUid        || null,
+          cadetName:        cadet.fullName || cadet.name || '',
+          rank:             cadet.rank              || '',
+          company:          cadet.company           || '',
+          secondaryCompany: cadet.secondaryCompany  || '',
+          letLevel:         cadet.letLevel          || '',
+          status:           'pending',
+          turnedInAt:       null,
+          turnedInBy:       null,
+          turnedInByName:   null,
+          notes:            '',
+          fileUrl:          null,
+          fileStoragePath:  null,
         });
       });
 
@@ -560,6 +845,22 @@ const AdminS1 = () => {
     }
   };
 
+  const handleSaveDueDate = async () => {
+    if (!selectedEvent || !newDueDate) return;
+    setSavingDate(true);
+    try {
+      const newTs = Timestamp.fromDate(new Date(newDueDate + 'T23:59:59'));
+      await updateDoc(doc(db, 'formEvents', selectedEvent.id), { dueDate: newTs });
+      setSelectedEvent(ev => ({ ...ev, dueDate: newTs }));
+      setEditDueDate(false);
+    } catch (err) {
+      console.error('Failed to update due date:', err);
+      alert('Failed to update due date. Please try again.');
+    } finally {
+      setSavingDate(false);
+    }
+  };
+
   const handleSendReminder = async () => {
     if (!selectedEvent) return;
     setSendingEmail(true);
@@ -614,6 +915,7 @@ const AdminS1 = () => {
     setView('list');
     setSelectedEvent(null);
     setSubmissions([]);
+    setEditDueDate(false);
   };
 
   // ── Guards ────────────────────────────────────────────────────────────────────
@@ -631,8 +933,16 @@ const AdminS1 = () => {
   if (activeTab === 'forms' && view === 'detail' && selectedEvent) {
     const isPastDue  = isPast(selectedEvent.dueDate);
     const hasOverdue = isPastDue && pendingCount > 0;
-    const pct        = visibleSubs.length > 0
-      ? Math.round((turnedInCount / visibleSubs.length) * 100)
+
+    // Who may change the due date:
+    //   Battalion-wide events → S1 Adjutant, Battalion XO, or admin
+    //   Company-scoped events → S1 Adjutant, Company XO, or Company S1 Assistant (own company only), or admin
+    const canEditDueDateNow = userLevel >= ADMIN_LEVEL || role === 's1_adjutant' ||
+      (selectedEvent.scope === 'battalion' && role === 'battalion_xo') ||
+      (selectedEvent.scope === 'company' && selectedEvent.company === myCompany &&
+        (role === 'company_xo' || role === 'company_s1_assistant'));
+    const pct        = statSubs.length > 0
+      ? Math.round((turnedInCount / statSubs.length) * 100)
       : 0;
 
     return (
@@ -651,13 +961,51 @@ const AdminS1 = () => {
                 {selectedEvent.title}
               </h1>
               <div className="flex items-center flex-wrap gap-2 mt-2">
-                <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
-                  isPastDue
-                    ? 'bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400'
-                    : 'bg-yellow-100 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-500'
-                }`}>
-                  {isPastDue ? 'Past Due' : 'Active'} — {fmtDate(selectedEvent.dueDate)}
-                </span>
+                {/* Due date — static pill or inline editor */}
+                {editDueDate ? (
+                  <div className="flex items-center gap-1.5">
+                    <DatePicker value={newDueDate} onChange={setNewDueDate} placeholder="Pick a date" />
+                    <button
+                      onClick={handleSaveDueDate}
+                      disabled={savingDate || !newDueDate}
+                      className="flex items-center gap-1 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-50 text-slate-950 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg transition-colors"
+                    >
+                      <Check size={11} /> {savingDate ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => setEditDueDate(false)}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg transition-colors"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
+                      isPastDue
+                        ? 'bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400'
+                        : 'bg-yellow-100 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-500'
+                    }`}>
+                      {isPastDue ? 'Past Due' : 'Active'} — {fmtDate(selectedEvent.dueDate)}
+                    </span>
+                    {canEditDueDateNow && (
+                      <button
+                        onClick={() => {
+                          // Seed the input with the current due date in YYYY-MM-DD format
+                          const d = selectedEvent.dueDate?.toDate
+                            ? selectedEvent.dueDate.toDate()
+                            : new Date(selectedEvent.dueDate);
+                          setNewDueDate(d.toISOString().slice(0, 10));
+                          setEditDueDate(true);
+                        }}
+                        className="text-slate-400 hover:text-yellow-500 transition-colors"
+                        title="Edit due date"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                    )}
+                  </div>
+                )}
                 <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                   {selectedEvent.scope === 'battalion' ? 'Battalion-Wide' : `${selectedEvent.company} Company`}
                 </span>
@@ -668,7 +1016,7 @@ const AdminS1 = () => {
             </div>
 
             {/* Overdue reminder button (S1 / admin only, when past due and there are pending cadets) */}
-            {hasOverdue && isS1 && (
+            {hasOverdue && isBattalionLevel && (
               <div className="flex flex-col items-end gap-1">
                 <button
                   onClick={handleSendReminder}
@@ -688,7 +1036,7 @@ const AdminS1 = () => {
           {/* ── Stats ──────────────────────────────────────────────────────────── */}
           <div className="grid grid-cols-3 gap-4 mb-6">
             {[
-              { label: 'Total Cadets', value: visibleSubs.length, color: 'text-slate-900 dark:text-white'  },
+              { label: 'Total Cadets', value: statSubs.length,    color: 'text-slate-900 dark:text-white'  },
               { label: 'Turned In',    value: turnedInCount,       color: 'text-green-600 dark:text-green-400' },
               { label: 'Pending',      value: pendingCount,        color: pendingCount > 0 ? 'text-orange-500' : 'text-slate-400 dark:text-slate-500' },
             ].map(({ label, value, color }) => (
@@ -700,11 +1048,11 @@ const AdminS1 = () => {
           </div>
 
           {/* ── Progress bar ────────────────────────────────────────────────────── */}
-          {visibleSubs.length > 0 && (
+          {statSubs.length > 0 && (
             <div className="bg-white dark:bg-slate-900 border border-blue-100 dark:border-white/5 rounded-2xl p-5 mb-6">
               <div className="flex justify-between text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">
                 <span>Progress</span>
-                <span>{turnedInCount} / {visibleSubs.length} — {pct}%</span>
+                <span>{turnedInCount} / {statSubs.length} — {pct}%</span>
               </div>
               <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div
@@ -740,7 +1088,7 @@ const AdminS1 = () => {
               <option value="turned_in">Turned In</option>
             </select>
 
-            {isBattalionLevel && uniqueCompanies.length > 1 && (
+            {isBattalionLevel && (
               <select
                 value={companyFilter}
                 onChange={e => setCompanyFilter(e.target.value)}
@@ -748,8 +1096,19 @@ const AdminS1 = () => {
               >
                 <option value="all">All Companies</option>
                 {uniqueCompanies.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="Battalion">Battalion</option>
               </select>
             )}
+            <button
+              onClick={() => setGroupLet(g => !g)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all border ${
+                groupLet
+                  ? 'bg-yellow-500 text-slate-950 border-yellow-500'
+                  : 'bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              <GraduationCap size={13} /> Group by LET
+            </button>
           </div>
 
           {/* ── Cadet table ─────────────────────────────────────────────────────── */}
@@ -778,23 +1137,88 @@ const AdminS1 = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredSubs.map(sub => (
-                      <SubmissionRow
-                        key={sub.id}
-                        sub={sub}
-                        canMark={canMark}
-                        showCompany={isBattalionLevel}
-                        onToggle={handleToggleStatus}
-                        onUpdateNotes={handleUpdateNotes}
-                        onUpload={handleUploadFile}
-                        uploadingId={uploadingId}
-                      />
-                    ))}
+                    {(() => {
+                      const renderSub = sub => (
+                        <SubmissionRow
+                          key={sub.id}
+                          sub={sub}
+                          canMark={canMark}
+                          showCompany={isBattalionLevel}
+                          onToggle={handleToggleStatus}
+                          onUpdateNotes={handleUpdateNotes}
+                          onUpload={handleUploadFile}
+                          uploadingId={uploadingId}
+                        />
+                      );
+                      if (groupLet) {
+                        return groupByLet(filteredSubs, s => s.letLevel, s => s.cadetName).map(({ level, entries: group }) => (
+                          <React.Fragment key={level}>
+                            <tr>
+                              <td colSpan={999} className="px-4 py-1.5 text-[9px] font-black uppercase tracking-widest text-yellow-700 dark:text-yellow-500 bg-yellow-50 dark:bg-yellow-500/10 border-y border-yellow-200 dark:border-yellow-500/20">
+                                {level}
+                              </td>
+                            </tr>
+                            {group.map(renderSub)}
+                          </React.Fragment>
+                        ));
+                      }
+                      return filteredSubs.map(renderSub);
+                    })()}
                   </tbody>
                 </table>
               </div>
             )}
           </div>
+
+          {/* ── Battalion Members section ────────────────────────────────────────
+              Shows when there are battalion-staff cadets whose secondaryCompany
+              matches the company being viewed. Always at the bottom, separate
+              from the company roster so stats and LET grouping are unaffected.  */}
+          {bnSubs.length > 0 && (
+            <div className="mt-8">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                  Battalion Members
+                </span>
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                  {bnSubs.filter(s => s.status === 'turned_in').length} / {bnSubs.length} turned in
+                </span>
+              </div>
+              <div className="bg-white dark:bg-slate-900 border border-blue-100 dark:border-white/5 rounded-3xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-blue-100 dark:border-white/5">
+                        <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Cadet</th>
+                        <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Status</th>
+                        <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Date</th>
+                        <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Notes</th>
+                        <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Proof</th>
+                        {canMark && <th className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Action</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bnSubs
+                        .slice()
+                        .sort((a, b) => (a.cadetName || '').localeCompare(b.cadetName || ''))
+                        .map(sub => (
+                          <SubmissionRow
+                            key={sub.id}
+                            sub={sub}
+                            canMark={canMark}
+                            showCompany={false}
+                            onToggle={handleToggleStatus}
+                            onUpdateNotes={handleUpdateNotes}
+                            onUpload={handleUploadFile}
+                            uploadingId={uploadingId}
+                          />
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
       </div>
     );
   }
@@ -803,8 +1227,8 @@ const AdminS1 = () => {
   // LIST VIEW
   // ════════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
-        <AdminPageHeader icon={ClipboardList} title="S1 Tracker" meta="Personnel &amp; Form Tracking" />
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+        {!hideHeader && <AdminPageHeader icon={ClipboardList} title="S1 Tracker" meta="Personnel &amp; Form Tracking" />}
 
         {/* ── Action bar ──────────────────────────────────────────────────────────── */}
         <div className="flex items-center gap-2 justify-end -mt-4 mb-8">
@@ -824,28 +1248,30 @@ const AdminS1 = () => {
             )}
         </div>
 
-        {/* ── Tab bar ─────────────────────────────────────────────────────────────── */}
-        <div className="flex gap-1 mb-8 bg-blue-50/70 dark:bg-slate-800/50 rounded-2xl p-1 max-w-xs">
-          {[
-            { key: 'forms', label: 'Form Tracker',    Icon: ClipboardList },
-            ...(canViewBoard ? [{ key: 'board', label: 'Promotion Board', Icon: Trophy }] : []),
-          ].map(({ key, label, Icon }) => (
-            <button
-              key={key}
-              onClick={() => {
-                setActiveTab(key);
-                if (key === 'board' && view === 'detail') closeDetail();
-              }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
-                activeTab === key
-                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
-              }`}
-            >
-              <Icon size={11} /> {label}
-            </button>
-          ))}
-        </div>
+        {/* ── Tab bar (hidden when forceTab is set by parent) ──────────────────────── */}
+        {!forceTab && (
+          <div className="flex gap-1 mb-8 bg-blue-50/70 dark:bg-slate-800/50 rounded-2xl p-1 max-w-xs">
+            {[
+              { key: 'forms', label: 'Form Tracker',    Icon: ClipboardList },
+              ...(canViewBoard ? [{ key: 'board', label: 'Promotion Board', Icon: Trophy }] : []),
+            ].map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                onClick={() => {
+                  setActiveTab(key);
+                  if (key === 'board' && view === 'detail') closeDetail();
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                  activeTab === key
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                }`}
+              >
+                <Icon size={11} /> {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* ══════════════════════════════════════════════════════════════════════════
             FORM TRACKER (list view)
@@ -874,7 +1300,13 @@ const AdminS1 = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {activeEvents.map(e => (
-                <EventCard key={e.id} event={e} onClick={() => openDetail(e)} />
+                <EventCard
+                  key={e.id}
+                  event={e}
+                  onClick={() => openDetail(e)}
+                  onDelete={userLevel >= 70 ? handleDeleteEvent : undefined}
+                  onArchive={canArchiveEvent(e) ? handleArchiveEvent : undefined}
+                />
               ))}
             </div>
           )}
@@ -893,7 +1325,14 @@ const AdminS1 = () => {
             {showArchived && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 opacity-70">
                 {archivedEvents.map(e => (
-                  <EventCard key={e.id} event={e} archived onClick={() => openDetail(e)} />
+                  <EventCard
+                    key={e.id}
+                    event={e}
+                    archived
+                    onClick={() => openDetail(e)}
+                    onDelete={userLevel >= 70 ? handleDeleteEvent : undefined}
+                    onUnarchive={canArchiveEvent(e) ? handleUnarchiveEvent : undefined}
+                  />
                 ))}
               </div>
             )}
@@ -915,6 +1354,7 @@ const AdminS1 = () => {
             isS1={isS1}
           />
         )}
+
 
       {/* ════════════════════════════════════════════════════════════════════════════
           CREATE MODAL  (form tracker only)
@@ -953,12 +1393,9 @@ const AdminS1 = () => {
                 <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 block mb-1.5">
                   Due Date
                 </label>
-                <input
-                  type="date"
+                <DatePicker
                   value={createForm.dueDate}
-                  onChange={e => setCreateForm(f => ({ ...f, dueDate: e.target.value }))}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="w-full bg-blue-50/50 dark:bg-slate-800 border border-blue-100 dark:border-white/5 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-yellow-500/40 transition-colors"
+                  onChange={v => setCreateForm(f => ({ ...f, dueDate: v }))}
                 />
               </div>
 

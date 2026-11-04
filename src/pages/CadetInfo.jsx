@@ -117,8 +117,13 @@ const CadetInfo = () => {
         const meta = docSnap.data();
         if (!meta.role || !meta.name) return;
         const cleanRole = meta.role.toLowerCase().replace(/[\s-_]/g, '');
+        // Only battalion-level entries (no company) for all three top positions.
+        // Company XOs share role "Executive Officer" with the battalion XO, so
+        // without this check the last company XO (sorted by doc ID) overwrites
+        // the battalion XO and the wrong name is displayed.
+        const isBattalionEntry = !meta.company || meta.company.trim() === '' || meta.company.trim().toLowerCase() === 'none';
         if (cleanRole === 'battalioncommander') tempStaff.bc = meta.name;
-        if (cleanRole === 'executiveofficer' || cleanRole === 'battalionxo') tempStaff.xo = meta.name;
+        if ((cleanRole === 'executiveofficer' || cleanRole === 'battalionxo') && isBattalionEntry) tempStaff.xo = meta.name;
         if (cleanRole === 'commandsergeantmajor') tempStaff.csm = meta.name;
       });
       setCommandStaff(tempStaff);
@@ -319,8 +324,51 @@ const CadetInfo = () => {
           </div>
         </div>
 
+        {/* ── Promotion Board Knowledge Quiz CTA ─────────────────────────── */}
+        <Reveal delay={0.12} className="mt-8">
+          <div className="relative overflow-hidden bg-slate-800 dark:bg-slate-900/80 border border-white/5 rounded-3xl p-8 md:p-12 flex flex-col md:flex-row md:items-center gap-8">
+            {/* Decorative */}
+            <div className="absolute -top-8 -left-8 w-40 h-40 bg-yellow-500/5 rotate-45 rounded-xl pointer-events-none" />
+            <div className="absolute -bottom-10 left-24 w-24 h-24 bg-yellow-500/5 rotate-45 rounded-lg pointer-events-none" />
+
+            {/* Text */}
+            <div className="flex-1 min-w-0 relative z-10">
+              <p className="text-[0.65rem] font-black tracking-[0.25em] uppercase text-yellow-500 mb-3">
+                Promotion Board Prep · Knowledge Quiz
+              </p>
+              <h2 className="text-3xl md:text-4xl font-black uppercase italic tracking-tighter text-white leading-none mb-4">
+                Board<br />
+                <span className="text-yellow-500">Knowledge</span>
+              </h2>
+              <p className="text-sm text-slate-400 leading-relaxed max-w-md">
+                Army Values, the 11 Principles of Leadership, the Cadet Creed, and JROTC fundamentals —
+                all in one quiz with instant feedback on every answer.
+              </p>
+            </div>
+
+            {/* Stats + button */}
+            <div className="flex flex-col gap-6 relative z-10 shrink-0">
+              <div className="flex gap-8">
+                {[['50+', 'Questions'], ['5', 'Categories'], ['~15', 'Minutes']].map(([val, lbl]) => (
+                  <div key={lbl}>
+                    <div className="font-black text-2xl text-yellow-500 leading-none tabular-nums">{val}</div>
+                    <div className="text-[0.6rem] font-bold tracking-[0.14em] uppercase text-slate-500 mt-1">{lbl}</div>
+                  </div>
+                ))}
+              </div>
+              <Link
+                to="/knowledge-quiz"
+                className="inline-flex items-center gap-2.5 bg-yellow-500 hover:bg-yellow-400 active:bg-yellow-600 text-slate-900 text-sm font-bold tracking-[0.06em] uppercase px-7 py-3.5 rounded-xl transition-colors self-start"
+              >
+                Start Quiz
+                <ChevronRight size={15} />
+              </Link>
+            </div>
+          </div>
+        </Reveal>
+
         {/* ── Mindset Assessment CTA ──────────────────────────────────────── */}
-        <Reveal delay={0.15} className="mt-8">
+        <Reveal delay={0.15} className="mt-4">
           <div className="relative overflow-hidden bg-slate-900 dark:bg-black/40 border border-white/5 rounded-3xl p-8 md:p-12 flex flex-col md:flex-row md:items-center gap-8">
             {/* Decorative diamond */}
             <div className="absolute -top-8 -right-8 w-40 h-40 bg-yellow-500/5 rotate-45 rounded-xl pointer-events-none" />

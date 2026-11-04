@@ -3,13 +3,16 @@ import { db } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { useCompanies } from '../hooks/useCompanies';
-import { Navigate } from 'react-router-dom';
+import { isHQCompany } from '../utils/normalizeCompany';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { ROLE_HIERARCHY, STAFF_LEVEL } from '../constants';
 import {
   BarChart3, Loader2, Users, ClipboardCheck, Shirt, Shield, Tent,
-  TrendingUp, CheckCircle2, Clock, DollarSign, Flag,
+  TrendingUp, CheckCircle2, Clock, DollarSign, Flag, SlidersHorizontal,
 } from 'lucide-react';
 import AdminPageHeader from '../components/AdminPageHeader';
+
+const DEFAULT_FLAG_REQUIREMENT = 30;
 
 const RANK_ORDER = ["C/PVT", "C/PFC", "C/CPL", "C/SGT", "C/SSG", "C/SFC", "C/MSG", "C/1SG", "C/SGM", "C/CSM", "C/2LT", "C/1LT", "C/CPT", "C/MAJ", "C/LTC", "C/COL"];
 const LET_ORDER = ["LET 1", "LET 2", "LET 3", "LET 4"];
@@ -46,44 +49,59 @@ const StatTile = ({ icon: Icon, label, value, sub }) => (
   </div>
 );
 
-const SectionCard = ({ icon: Icon, title, children }) => (
+const SectionCard = ({ icon: Icon, title, children, action }) => (
   <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 rounded-[2rem] p-6 md:p-8">
-    <h3 className="text-xs font-black text-yellow-600 dark:text-yellow-500 uppercase tracking-widest mb-6 flex items-center gap-2">
-      <Icon size={16} /> {title}
-    </h3>
+    <div className="flex items-center gap-2 mb-6">
+      <h3 className="text-xs font-black text-yellow-600 dark:text-yellow-500 uppercase tracking-widest flex items-center gap-2 flex-1">
+        <Icon size={16} /> {title}
+      </h3>
+      {action}
+    </div>
     {children}
   </div>
 );
 
-const AdminStats = () => {
+const AdminStats = ({ hideHeader = false }) => {
   const { role, loading: authLoading } = useAuth();
   const { companies: FUNDRAISER_COMPANIES } = useCompanies();
+  const navigate = useNavigate();
   const isAuthorized = (ROLE_HIERARCHY[role] || 0) >= STAFF_LEVEL;
 
+  // roster = full battalion roster (source of truth for headcounts)
+  // users  = portal accounts (subset — used for growth-over-time only)
+  const [roster, setRoster] = useState([]);
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [orders, setOrders] = useState([]);
   const [events, setEvents] = useState([]);
   const [uniformRequests, setUniformRequests] = useState([]);
-  const [teams, setTeams] = useState([]);
   const [camps, setCamps] = useState([]);
   const [fundraiserEntries, setFundraiserEntries] = useState([]);
-  const [weeklyGoal, setWeeklyGoal] = useState(500);
+  const [positionReqs, setPositionReqs] = useState({});
+  const [defaultReq, setDefaultReq] = useState(DEFAULT_FLAG_REQUIREMENT);
+  const [fundraiserStart, setFundraiserStart] = useState('');
+  const [fundraiserEnd, setFundraiserEnd] = useState('');
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
     if (!isAuthorized) return;
     const unsubs = [
-      onSnapshot(collection(db, "users"), snap => { setUsers(snap.docs.map(d => d.data())); setDataLoading(false); }),
-      onSnapshot(collection(db, "tasks"), snap => setTasks(snap.docs.map(d => d.data()))),
+      onSnapshot(collection(db, "roster"), snap => { setRoster(snap.docs.map(d => d.data())); setDataLoading(false); }),
+      onSnapshot(collection(db, "users"),  snap => setUsers(snap.docs.map(d => d.data()))),
+      onSnapshot(collection(db, "tasks"),  snap => setTasks(snap.docs.map(d => d.data()))),
       onSnapshot(collection(db, "orders"), snap => setOrders(snap.docs.map(d => d.data()))),
       onSnapshot(collection(db, "events"), snap => setEvents(snap.docs.map(d => d.data()))),
       onSnapshot(collection(db, "uniform_requests"), snap => setUniformRequests(snap.docs.map(d => d.data()))),
-      onSnapshot(collection(db, "specialTeams"), snap => setTeams(snap.docs.map(d => d.data()))),
-      onSnapshot(collection(db, "camps"), snap => setCamps(snap.docs.map(d => d.data()))),
+      onSnapshot(collection(db, "camps"),             snap => setCamps(snap.docs.map(d => d.data()))),
       onSnapshot(collection(db, "fundraiserEntries"), snap => setFundraiserEntries(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(doc(db, "settings", "fundraiserGoal"), snap => {
-        if (snap.exists()) setWeeklyGoal(snap.data().weeklyGoal || 500);
+        if (snap.exists()) {
+          const d = snap.data();
+          setPositionReqs(d.positionRequirements || {});
+          setDefaultReq(d.defaultRequirement ?? DEFAULT_FLAG_REQUIREMENT);
+          setFundraiserStart(d.startDate || '');
+          setFundraiserEnd(d.endDate || '');
+        }
       }),
     ];
     return () => unsubs.forEach(u => u());
@@ -99,17 +117,33 @@ const AdminStats = () => {
 
   if (!isAuthorized) return <Navigate to="/admin/dashboard" />;
 
-  // --- ROSTER BREAKDOWN ---
-  const byCompany = groupCount(users, u => u.company);
-  const byRank = groupCount(users, u => u.rank);
-  const byLet = groupCount(users, u => u.letLevel);
-  const rankKeys = [...RANK_ORDER.filter(r => byRank[r]), ...Object.keys(byRank).filter(r => !RANK_ORDER.includes(r))];
-  const letKeys = [...LET_ORDER.filter(l => byLet[l]), ...Object.keys(byLet).filter(l => !LET_ORDER.includes(l))];
-  const maxCompany = Math.max(1, ...Object.values(byCompany));
-  const maxRank = Math.max(1, ...Object.values(byRank));
-  const maxLet = Math.max(1, ...Object.values(byLet));
+  // --- ROSTER BREAKDOWN (uses full `roster` collection, not portal accounts) ---
+  // "Zulu" is the legacy company name — it maps to "Battalion" site-wide.
+  const normalizeCompany = (co) => (co === 'Zulu' ? 'Battalion' : (co || 'Unassigned'));
 
-  // --- GROWTH OVER TIME (cumulative, by month of account creation) ---
+  // Defined company order: Alpha → Delta, then Battalion, then any extras.
+  const COMPANY_ORDER = [...(FUNDRAISER_COMPANIES || []), 'Battalion'];
+
+  const byCompanyRaw = groupCount(roster, u => normalizeCompany(u.company));
+  // Build ordered company list: known order first, then any unlisted extras alphabetically.
+  const companyKeys = [
+    ...COMPANY_ORDER.filter(c => byCompanyRaw[c]),
+    ...Object.keys(byCompanyRaw).filter(c => !COMPANY_ORDER.includes(c)).sort(),
+  ];
+
+  const byRank = groupCount(roster, u => u.rank);
+  const byLet  = groupCount(roster, u => u.letLevel);
+  const rankKeys = [...RANK_ORDER.filter(r => byRank[r]), ...Object.keys(byRank).filter(r => !RANK_ORDER.includes(r))];
+  const letKeys  = [...LET_ORDER.filter(l => byLet[l]),  ...Object.keys(byLet).filter(l => !LET_ORDER.includes(l))];
+  const maxCompany = Math.max(1, ...Object.values(byCompanyRaw));
+  const maxRank    = Math.max(1, ...Object.values(byRank));
+  const maxLet     = Math.max(1, ...Object.values(byLet));
+
+  // Portal accounts (not full roster) — used for growth chart because
+  // roster entries don't carry a createdAt timestamp the same way.
+  const portalCount = users.length;
+
+  // --- GROWTH OVER TIME (cumulative, by month of portal account creation) ---
   const monthBuckets = {};
   users.forEach(u => {
     const d = u.createdAt?.toDate ? u.createdAt.toDate() : null;
@@ -140,7 +174,7 @@ const AdminStats = () => {
   const mostRecentCamp = [...camps].sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
 
   // --- FUNDRAISER ---
-  const activeEntries = fundraiserEntries.filter(e => e.status !== 'voided');
+  const activeEntries = fundraiserEntries.filter(e => !e.voided);
   const fundraiserTotal = activeEntries.reduce((s, e) => s + (Number(e.amount) || 0), 0);
   const fundraiserFlags = activeEntries.reduce((s, e) => s + Math.floor((Number(e.amount) || 0) / 2), 0);
   const fundraiserByCompany = Object.fromEntries(
@@ -149,17 +183,39 @@ const AdminStats = () => {
       activeEntries.filter(e => e.company === co).reduce((s, e) => s + (Number(e.amount) || 0), 0),
     ])
   );
-  const fundraiserMaxVal = Math.max(weeklyGoal, ...Object.values(fundraiserByCompany), 1);
+
+  // Weeks from configured date range
+  const numWeeks = (fundraiserStart && fundraiserEnd)
+    ? Math.max(1, Math.ceil((new Date(fundraiserEnd) - new Date(fundraiserStart)) / (7 * 24 * 60 * 60 * 1000)))
+    : 0;
+
+  // Position-based company goals (same logic as AdminFundraiser.jsx)
+  const companyTotalFlags = (co) => {
+    const cadetsInCo = roster.filter(c => !c.graduated && (c.company === co || (co === 'Battalion' && isHQCompany(c.company))));
+    return cadetsInCo.reduce((sum, c) => sum + (positionReqs[c.position] ?? defaultReq), 0);
+  };
+  const companyWeeklyGoal = (co) => {
+    const total = companyTotalFlags(co);
+    return numWeeks > 0 && total > 0 ? Math.ceil(total / numWeeks) : 0;
+  };
+  // Dollar equivalents ($2 = 1 flag)
+  const companyWeeklyDollarGoal = (co) => companyWeeklyGoal(co) * 2;
+
+  const fundraiserMaxVal = Math.max(
+    ...FUNDRAISER_COMPANIES.map(co => Math.max(fundraiserByCompany[co] || 0, companyWeeklyDollarGoal(co))),
+    1
+  );
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
+    <>
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
       <div className="max-w-6xl mx-auto">
 
-        <AdminPageHeader icon={BarChart3} title="Battalion Stats" />
+        {!hideHeader && <AdminPageHeader icon={BarChart3} title="Battalion Stats" />}
 
         {/* HEADLINE TILES */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <StatTile icon={Users} label="Total Roster" value={users.length} />
+          <StatTile icon={Users} label="Total Roster" value={roster.length} sub={`${portalCount} portal accounts`} />
           <StatTile icon={ClipboardCheck} label="Tasks Completed" value={`${tasksCompleted}/${tasks.length}`} />
           <StatTile icon={Shirt} label="Uniform Pending" value={uniformPending} />
           <StatTile icon={Tent} label="Camps Logged" value={camps.length} sub={`${totalAttendanceRecords} attendance records`} />
@@ -170,8 +226,8 @@ const AdminStats = () => {
           {/* ROSTER BY COMPANY */}
           <SectionCard icon={Users} title="Roster by Company">
             <div className="space-y-3">
-              {Object.keys(byCompany).sort().map(key => (
-                <BarRow key={key} label={key} count={byCompany[key]} max={maxCompany} />
+              {companyKeys.map(key => (
+                <BarRow key={key} label={key} count={byCompanyRaw[key]} max={maxCompany} />
               ))}
             </div>
           </SectionCard>
@@ -224,7 +280,7 @@ const AdminStats = () => {
                   <span>{growthPoints[growthPoints.length - 1].label} &middot; {growthPoints[growthPoints.length - 1].total} total</span>
                 </div>
                 <p className="text-[9px] text-slate-400 dark:text-slate-600 italic mt-3">
-                  Reflects when accounts were added to the digital roster, not the battalion's founding.
+                  Reflects when portal accounts were created — not the full battalion roster or the battalion's founding.
                 </p>
               </>
             ) : (
@@ -283,24 +339,6 @@ const AdminStats = () => {
             )}
           </SectionCard>
 
-          {/* TEAM PARTICIPATION */}
-          <SectionCard icon={Shield} title="Team Participation">
-            <div className="space-y-3">
-              {teams.map((team, i) => (
-                <div key={i} className="flex items-center justify-between bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-3">
-                  <div>
-                    <p className="text-xs font-black uppercase italic text-slate-900 dark:text-white">{team.name}</p>
-                    <p className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500">{team.status}</p>
-                  </div>
-                  <span className="text-[10px] font-black text-yellow-600 dark:text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded uppercase">
-                    {team.leadership?.length || 0} Leaders
-                  </span>
-                </div>
-              ))}
-              {teams.length === 0 && <p className="text-slate-400 dark:text-slate-600 text-xs italic">No teams logged yet.</p>}
-            </div>
-          </SectionCard>
-
           {/* CAMP ATTENDANCE */}
           <SectionCard icon={Tent} title="Camp Attendance">
             <div className="grid grid-cols-2 gap-3 mb-5">
@@ -325,7 +363,18 @@ const AdminStats = () => {
           </SectionCard>
 
           {/* FUNDRAISER PERFORMANCE */}
-          <SectionCard icon={DollarSign} title="Fallen Heroes Fundraiser">
+          <SectionCard
+            icon={DollarSign}
+            title="Fallen Heroes Fundraiser"
+            action={
+              <button
+                onClick={() => navigate('/admin/fundraiser')}
+                className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 hover:text-yellow-600 dark:hover:text-yellow-500 transition-colors ml-auto"
+              >
+                <SlidersHorizontal size={11} /> Manage
+              </button>
+            }
+          >
             {/* Summary tiles */}
             <div className="grid grid-cols-2 gap-3 mb-5">
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
@@ -343,40 +392,78 @@ const AdminStats = () => {
               </div>
             </div>
 
+            {/* Timeline info */}
+            {fundraiserStart && fundraiserEnd ? (
+              <div className="flex items-center gap-3 bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl px-4 py-3 mb-4">
+                <div className="flex-1">
+                  <p className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500">Fundraiser Period</p>
+                  <p className="text-[10px] font-bold text-slate-900 dark:text-white mt-0.5">
+                    {new Date(fundraiserStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {' → '}
+                    {new Date(fundraiserEnd).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xl font-black text-yellow-600 dark:text-yellow-500 leading-none">{numWeeks}</p>
+                  <p className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500">Weeks</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 bg-yellow-500/8 border border-yellow-500/20 rounded-xl px-4 py-3 mb-4">
+                <SlidersHorizontal size={12} className="text-yellow-600 dark:text-yellow-500 flex-shrink-0" />
+                <p className="text-[9px] font-black uppercase text-yellow-600 dark:text-yellow-500">
+                  Set dates &amp; per-cadet goal to enable weekly targets
+                </p>
+              </div>
+            )}
+
             {/* Legend */}
             <div className="flex items-center gap-4 mb-4">
               <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-slate-500">
                 <div className="w-3 h-3 rounded-sm bg-emerald-500" /> Raised
               </div>
-              <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-slate-500">
-                <div className="w-3 h-3 rounded-sm border-2 border-yellow-500" /> Goal (${weeklyGoal.toLocaleString()})
-              </div>
+              {numWeeks > 0 && (
+                <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-slate-500">
+                  <div className="w-3 h-3 rounded-sm border-2 border-yellow-500" /> Weekly Target
+                </div>
+              )}
             </div>
 
             {/* Per-company bars */}
             <div className="space-y-4">
               {FUNDRAISER_COMPANIES.map(co => {
-                const actual = fundraiserByCompany[co] || 0;
-                const pct  = (actual / fundraiserMaxVal) * 100;
-                const gPct = (weeklyGoal / fundraiserMaxVal) * 100;
-                const ahead = actual >= weeklyGoal;
+                const actual  = fundraiserByCompany[co] || 0;
+                const wDollar = companyWeeklyDollarGoal(co);
+                const wFlags  = companyWeeklyGoal(co);
+                const pct     = (actual / fundraiserMaxVal) * 100;
+                const gPct    = wDollar > 0 ? (wDollar / fundraiserMaxVal) * 100 : 0;
+                const ahead   = wDollar > 0 ? actual >= wDollar : false;
                 return (
                   <div key={co}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] font-black uppercase text-slate-600 dark:text-slate-400">{co}</span>
-                      <span className={`text-[10px] font-black ${ahead ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                        ${actual.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{ahead && ' ✓'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {wFlags > 0 && (
+                          <span className="text-[9px] font-black text-slate-400 dark:text-slate-600">
+                            {wFlags} flags/wk · ${wDollar.toLocaleString()}
+                          </span>
+                        )}
+                        <span className={`text-[10px] font-black ${ahead ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                          ${actual.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{ahead && ' ✓'}
+                        </span>
+                      </div>
                     </div>
                     <div className="relative h-4 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
                       <div
                         className="absolute inset-y-0 left-0 bg-emerald-500 rounded-full transition-all duration-500"
                         style={{ width: `${Math.min(pct, 100)}%` }}
                       />
-                      <div
-                        className="absolute inset-y-0 border-r-2 border-yellow-500"
-                        style={{ left: `${Math.min(gPct, 100)}%` }}
-                      />
+                      {gPct > 0 && (
+                        <div
+                          className="absolute inset-y-0 border-r-2 border-yellow-500"
+                          style={{ left: `${Math.min(gPct, 100)}%` }}
+                        />
+                      )}
                     </div>
                   </div>
                 );
@@ -386,6 +473,8 @@ const AdminStats = () => {
         </div>
       </div>
     </div>
+
+    </>
   );
 };
 

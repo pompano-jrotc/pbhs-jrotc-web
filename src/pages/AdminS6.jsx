@@ -67,7 +67,7 @@ const statusColor = (s) =>
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-const AdminS6 = () => {
+const AdminS6 = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
   const userLevel   = ROLE_HIERARCHY[role] || 0;
   const isS6        = role === S6_ROLE;
@@ -102,8 +102,8 @@ const AdminS6 = () => {
   ].filter(t => !t.hidden);
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
-      <AdminPageHeader icon={Laptop} title="S6 Checklist" meta={`Technology · ${ROLE_LABELS[role] || role}`} />
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+      {!hideHeader && <AdminPageHeader icon={Laptop} title="S6 Checklist" meta={`Technology · ${ROLE_LABELS[role] || role}`} />}
 
         {/* S6 Assistant: show today's checklist */}
         {isAssistant && !canManage && (

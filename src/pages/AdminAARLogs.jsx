@@ -48,8 +48,10 @@ import {
   Eye, Loader2, Users,
 } from 'lucide-react';
 import AdminPageHeader from '../components/AdminPageHeader';
+import { useConfirm } from '../contexts/ConfirmContext';
 import BulletListEditor, { normalizeBullets } from '../components/BulletListEditor';
 import { ROLE_HIERARCHY, STAFF_LEVEL, COMMAND_LEVEL } from '../constants';
+import DatePicker from '../components/DatePicker';
 
 // ── Role constants ─────────────────────────────────────────────────────────────
 // Who can edit ANYONE's AAR and delete:
@@ -139,8 +141,9 @@ const mkEmpty = (defaultCompany = '') => ({
 });
 
 // ── Main page ──────────────────────────────────────────────────────────────────
-const AdminAARLogs = () => {
+const AdminAARLogs = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
+  const confirm = useConfirm();
   const userLevel  = ROLE_HIERARCHY[role] || 0;
   const myCompany  = userData?.company || '';
 
@@ -157,6 +160,7 @@ const AdminAARLogs = () => {
   // ── Data state ─────────────────────────────────────────────────────────────────
   const [aars,        setAars]       = useState([]);
   const [loadingAars, setLoadingAars] = useState(true);
+  const [aarsError,   setAarsError]  = useState(false);
 
   // ── Modal state ────────────────────────────────────────────────────────────────
   const [modalMode, setModalMode] = useState(null); // null | 'create' | 'edit' | 'view'
@@ -168,13 +172,19 @@ const AdminAARLogs = () => {
   // ── Firestore subscription ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthorized) return;
-    const q = isCompanyViewer
-      ? query(collection(db, 'aarLogs'), where('company', '==', myCompany), orderBy('createdAt', 'desc'))
+    // Company names may have been stored in different cases historically (e.g. 'Bravo' vs 'BRAVO').
+    // Query with all common casings so legacy records are included; security rules use .lower() to match.
+    const companyCasings = myCompany
+      ? [...new Set([myCompany, myCompany.toUpperCase(), myCompany.charAt(0).toUpperCase() + myCompany.slice(1).toLowerCase()])]
+      : [];
+    const q = isCompanyViewer && companyCasings.length > 0
+      ? query(collection(db, 'aarLogs'), where('company', 'in', companyCasings), orderBy('createdAt', 'desc'))
       : query(collection(db, 'aarLogs'), orderBy('createdAt', 'desc'));
     return onSnapshot(q, snap => {
       setAars(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoadingAars(false);
-    }, () => setLoadingAars(false));
+      setAarsError(false);
+    }, () => { setLoadingAars(false); setAarsError(true); });
   }, [isAuthorized, isCompanyViewer, myCompany]);
 
   // ── Handlers ───────────────────────────────────────────────────────────────────
@@ -256,7 +266,7 @@ const AdminAARLogs = () => {
   };
 
   const handleDelete = async (aar) => {
-    const ok = window.confirm(`Delete AAR for "${aar.eventName}"? This cannot be undone.`);
+    const ok = await confirm(`Delete the AAR for "${aar.eventName}"? This cannot be undone.`, { title: 'Delete AAR', destructive: true });
     if (!ok) return;
     setDeleting(aar.id);
     try {
@@ -288,8 +298,8 @@ const AdminAARLogs = () => {
   // RENDER
   // ════════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
-      <AdminPageHeader icon={ClipboardCheck} title="AAR Logs" />
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+      {!hideHeader && <AdminPageHeader icon={ClipboardCheck} title="AAR Logs" />}
 
       {/* ── Header actions ────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between mb-10">
@@ -318,6 +328,11 @@ const AdminAARLogs = () => {
         <div className="text-center py-24">
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-yellow-500 mx-auto" />
           <p className="text-slate-400 text-xs font-bold mt-4 uppercase tracking-widest">Loading AARs…</p>
+        </div>
+      ) : aarsError ? (
+        <div className="text-center py-16 border-2 border-dashed border-red-200 dark:border-red-500/20 rounded-3xl">
+          <p className="text-red-500 dark:text-red-400 font-black uppercase tracking-widest text-sm">Unable to load AARs</p>
+          <p className="text-slate-400 text-xs mt-2">A database index may still be building. Try again in a few minutes.</p>
         </div>
       ) : aars.length === 0 ? (
         <div className="text-center py-24 border-2 border-dashed border-slate-200 dark:border-white/5 rounded-3xl">
@@ -474,11 +489,9 @@ const AdminAARLogs = () => {
                   {modalMode === 'view' ? (
                     <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{fmtDate(activeAAR?.eventDate)}</p>
                   ) : (
-                    <input
-                      type="date"
+                    <DatePicker
                       value={form.eventDate}
-                      onChange={e => setForm(f => ({ ...f, eventDate: e.target.value }))}
-                      className="w-full bg-blue-50/50 dark:bg-slate-800 border border-blue-100 dark:border-white/5 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-yellow-500/40 transition-colors"
+                      onChange={v => setForm(f => ({ ...f, eventDate: v }))}
                     />
                   )}
                 </div>

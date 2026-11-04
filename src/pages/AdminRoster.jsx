@@ -100,14 +100,18 @@ const LEADERSHIP_SYNC_CONFIG = {
   'Company XO':                 { docIdPrefix: 'xo_',            role: 'Executive Officer',      companyLevel: true  },
   'First Sergeant':             { docIdPrefix: '1sg_',           role: 'First Sergeant',         companyLevel: true  },
   'Master Sergeant':            { docIdPrefix: 'msgt_',          role: 'Master Sergeant',        companyLevel: true  },
+  'Platoon Leader':             { docIdPrefix: 'pl_',            role: 'Platoon Leader',         companyLevel: true,  platoonLevel: true },
+  'Squad Leader':               { docIdPrefix: 'sl_',            role: 'Squad Leader',           companyLevel: true,  squadLevel:   true },
 };
 
-function leadershipDocId(position, company) {
+const _slug = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+
+function leadershipDocId(position, company, platoon, squad) {
   const cfg = LEADERSHIP_SYNC_CONFIG[position];
   if (!cfg) return null;
-  if (cfg.companyLevel) {
-    return `${cfg.docIdPrefix}${(company || '').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-  }
+  if (cfg.squadLevel)   return `${cfg.docIdPrefix}${_slug(company)}_${_slug(platoon)}_${_slug(squad)}`;
+  if (cfg.platoonLevel) return `${cfg.docIdPrefix}${_slug(company)}_${_slug(platoon)}`;
+  if (cfg.companyLevel) return `${cfg.docIdPrefix}${_slug(company)}`;
   return cfg.docId;
 }
 
@@ -224,7 +228,8 @@ const AdminRoster = ({ hideHeader = false }) => {
   const accountLocked     = !!editingId && !!form.linkedUid;
   const platoonAutoLocked = COMPANY_HQ_LOCKED_POSITIONS.includes(form.position);
   const [saving,       setSaving]       = useState(false);
-  const [backfilling,  setBackfilling]  = useState(false);
+  const [backfilling,        setBackfilling]        = useState(false);
+  const [syncingLeadership,  setSyncingLeadership]  = useState(false);
   const [deleteConf,   setDeleteConf]   = useState(null);
   const [toast,        setToast]        = useState(null);
 
@@ -515,6 +520,43 @@ const AdminRoster = ({ hideHeader = false }) => {
     }
   };
 
+  const handleSyncLeadership = async () => {
+    if (!window.confirm('Re-sync all Platoon Leader and Squad Leader entries to the leadership collection? This fixes missing PL/SL slots in the Cadet Portal chain of command.')) return;
+    setSyncingLeadership(true);
+    try {
+      const snap = await getDocs(query(
+        collection(db, 'roster'),
+        where('position', 'in', ['Platoon Leader', 'Squad Leader']),
+      ));
+      const batch = writeBatch(db);
+      let count = 0;
+      snap.docs.forEach(d => {
+        const { fullName, position, company, platoon, squad } = d.data();
+        if (!company) return;
+        const docId = leadershipDocId(position, company, platoon, squad);
+        if (!docId) return;
+        const cfg = LEADERSHIP_SYNC_CONFIG[position];
+        batch.set(doc(db, 'leadership', docId), {
+          name:        fullName || '',
+          role:        cfg?.role || position,
+          company:     company  || '',
+          platoon:     platoon  || '',
+          squad:       position === 'Squad Leader' ? (squad || '') : '',
+          syncMaster:  'roster',
+          syncedAt:    serverTimestamp(),
+        }, { merge: true });
+        count++;
+      });
+      await batch.commit();
+      showToast(`Synced ${count} leadership doc${count !== 1 ? 's' : ''}`);
+    } catch (err) {
+      console.error('Leadership sync failed:', err);
+      showToast('Sync failed — see console', true);
+    } finally {
+      setSyncingLeadership(false);
+    }
+  };
+
   const handleExportRoster = () => {
     const rows = visibleEntries.map(e => ({
       fullName: e.fullName || '',
@@ -764,8 +806,8 @@ const AdminRoster = ({ hideHeader = false }) => {
       // so the public Leadership page stays in sync without manual Publishing Hub entries.
       try {
         const oldEntry   = editingId ? rosterEntries.find(e => e.id === editingId) : null;
-        const oldDocId   = oldEntry?.position ? leadershipDocId(oldEntry.position, oldEntry.company) : null;
-        const newDocId   = payload.position   ? leadershipDocId(payload.position,  payload.company)  : null;
+        const oldDocId   = oldEntry?.position ? leadershipDocId(oldEntry.position, oldEntry.company, oldEntry.platoon, oldEntry.squad) : null;
+        const newDocId   = payload.position   ? leadershipDocId(payload.position,  payload.company,  payload.platoon,  payload.squad)  : null;
 
         // If position or company changed, remove the stale leadership entry
         if (oldDocId && oldDocId !== newDocId) {
@@ -780,6 +822,8 @@ const AdminRoster = ({ hideHeader = false }) => {
             rank:        payload.rank || 'N/A',
             role:        cfg.role,
             company:     cfg.companyLevel ? `${payload.company} Company` : '',
+            platoon:     cfg.platoonLevel || cfg.squadLevel ? (payload.platoon || '') : '',
+            squad:       cfg.squadLevel ? (payload.squad || '') : '',
             _rosterSync: true,
           };
           // Only write portrait if we actually have one — preserves a manually-uploaded photo
@@ -1437,6 +1481,17 @@ const AdminRoster = ({ hideHeader = false }) => {
             >
               {backfilling ? <Loader2 size={13} className="animate-spin" /> : <Hash size={13} />}
               {backfilling ? 'Assigning…' : 'Assign IDs'}
+            </button>
+          )}
+          {userLevel >= STAFF_LEVEL && (
+            <button
+              onClick={handleSyncLeadership}
+              disabled={syncingLeadership}
+              title="Sync all Platoon Leader and Squad Leader entries to the leadership collection"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all border bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 text-slate-500 dark:text-slate-400 hover:border-yellow-500 hover:text-yellow-600 disabled:opacity-50"
+            >
+              {syncingLeadership ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              {syncingLeadership ? 'Syncing…' : 'Sync Leadership'}
             </button>
           )}
         </div>

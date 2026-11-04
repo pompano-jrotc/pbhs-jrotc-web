@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ROLE_HIERARCHY, ADMIN_LEVEL, STAFF_LEVEL } from '../constants';
 import { writeLog } from '../lib/writeLog';
 import { useCompanies } from '../hooks/useCompanies';
+import { normalizeCompany } from '../utils/normalizeCompany';
 import Footer from '../components/Footer';
 import ScrambleText from '../components/ScrambleText';
 
@@ -664,7 +665,7 @@ const UniformRequests = () => {
               <p className="text-sm font-bold text-slate-200">{req.item}</p>
               <div className="flex justify-between mt-3 pt-3 border-t border-white/5">
                 <span className="text-[10px] text-slate-400 font-bold uppercase">{req.detail || 'Standard Issue'}</span>
-                <span className="text-[10px] text-slate-400 font-bold uppercase">{req.company}</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase">{normalizeCompany(req.company)}</span>
               </div>
             </div>
 
@@ -801,7 +802,7 @@ const UniformRequests = () => {
                                 className="w-full text-left px-4 py-2.5 text-sm hover:bg-white/10 transition-colors"
                               >
                                 <p className="font-bold text-white">{c.fullName}</p>
-                                <p className="text-[10px] text-slate-400">{c.company} · {c.rank || 'Cadet'}</p>
+                                <p className="text-[10px] text-slate-400">{normalizeCompany(c.company)} · {c.rank || 'Cadet'}</p>
                               </button>
                             ))}
                             {rosterResults.length === 0 && (

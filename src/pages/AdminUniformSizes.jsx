@@ -42,14 +42,17 @@ import { ROLE_HIERARCHY, ROLE_LABELS } from '../constants';
 import {
   Shirt, Plus, Trash2, Edit3, X, Loader2, CheckCircle2,
   Filter, Send, Lock, Unlock, AlertTriangle, ChevronDown,
-  Settings2, Check,
+  Settings2, Check, GraduationCap, Download,
 } from 'lucide-react';
+import { groupByLet } from '../utils/groupByLet';
+import { exportCSV } from '../utils/exportCSV';
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminPageHeader from '../components/AdminPageHeader';
+import CadetSearch from '../components/CadetSearch';
 
 // ── Sizing constants ───────────────────────────────────────────────────────────
 
-const SHIRT_SIZES_MALE = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL']
+const SHIRT_SIZES_MALE = [13, 13.5, 14, 14.5, 15, 15.5, 16, 16.5, 17, 17.5, 18, 18.5, 19, 19.5, 20]
   .flatMap(s => ['S', 'R', 'L'].map(l => `${s}-${l}`));
 
 const SHIRT_SIZES_FEMALE = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
@@ -153,7 +156,7 @@ function isCompanyLeadershipPosition(position) {
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
-const AdminUniformSizes = () => {
+const AdminUniformSizes = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
   const { companies } = useCompanies();
 
@@ -167,6 +170,7 @@ const AdminUniformSizes = () => {
 
   // ── UI state ─────────────────────────────────────────────────────────────────
   const [filterCompany,  setFilterCompany]  = useState('');
+  const [groupLet,       setGroupLet]       = useState(false);
   const [showModal,      setShowModal]      = useState(false);
   const [editingRecord,  setEditingRecord]  = useState(null);
   const [form,           setForm]           = useState(EMPTY_FORM);
@@ -358,7 +362,9 @@ const AdminUniformSizes = () => {
   const isPending      = currentStatus === 'pending';
   // Which size columns are required for this company (set by S4 logistics;
   // defaults to all columns if not yet configured).
-  const requiredCols   = statusDoc.requiredColumns || ALL_COLUMN_KEYS;
+  // Only show "missing" indicators when S4 has explicitly configured required columns.
+  // Default to empty so cadets don't see false warnings before S4 sets requirements.
+  const requiredCols   = statusDoc.requiredColumns || [];
   // canViewAll users must have a specific company selected (filterCompany) before
   // adding/editing — "All Companies" mode is a read-only overview. Without a
   // selected company, activeCompany falls back to myCompany ('Battalion'), which
@@ -448,6 +454,39 @@ const AdminUniformSizes = () => {
       } catch { /* non-blocking */ }
       setDetectingLeader(false);
     }
+  };
+
+  const handleExportSizes = () => {
+    const rows = displaySizes.map(s => {
+      const cadet = s.cadetId ? cadets.find(c => c.uid === s.cadetId) : null;
+      return {
+        cadetName: cadet?.fullName || s.cadetName || '',
+        rank: cadet?.rank || '',
+        company: s.company || activeCompany || '',
+        classBShirt: s.classBShirtSize || '',
+        classBPants: s.classBPantsSize || '',
+        classBShoes: s.classBShoeSize || '',
+        ptShirt: s.ptShirtSize || '',
+        ptShorts: s.ptShortsSize || '',
+        coShirt: s.coShirtSize || '',
+        classAJacket: s.classAJacketSize || '',
+        classAPants: s.classAPantsSize || '',
+      };
+    });
+    const company = (activeCompany || 'all').toLowerCase().replace(/\s+/g, '_');
+    exportCSV(rows, `uniform_sizes_${company}_${new Date().toISOString().slice(0,10)}.csv`, [
+      { key: 'cadetName',   label: 'Cadet Name' },
+      { key: 'rank',        label: 'Rank' },
+      { key: 'company',     label: 'Company' },
+      { key: 'classBShirt', label: 'Class B Shirt' },
+      { key: 'classBPants', label: 'Class B Pants' },
+      { key: 'classBShoes', label: 'Class B Shoes' },
+      { key: 'ptShirt',     label: 'PT Shirt' },
+      { key: 'ptShorts',    label: 'PT Shorts' },
+      { key: 'coShirt',     label: 'Co. Shirt' },
+      { key: 'classAJacket', label: 'Class A Jacket' },
+      { key: 'classAPants', label: 'Class A Pants' },
+    ]);
   };
 
   // ── Save record ───────────────────────────────────────────────────────────────
@@ -704,8 +743,8 @@ const AdminUniformSizes = () => {
     ) : null;
 
     return (
-      <div className="flex-1 p-6 md:p-10 w-full">
-        <AdminPageHeader icon={Shirt} title="Uniform Sizes" meta={`My Sizes · ${ROLE_LABELS[role] || 'Cadet'}`} />
+      <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+        {!hideHeader && <AdminPageHeader icon={Shirt} title="Uniform Sizes" meta={`My Sizes · ${ROLE_LABELS[role] || 'Cadet'}`} />}
 
           {myPersonalLoading ? (
             <div className="flex items-center justify-center py-24">
@@ -752,8 +791,8 @@ const AdminUniformSizes = () => {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
-        <AdminPageHeader icon={Shirt} title="Uniform Sizes" meta={`Size Tracking · ${ROLE_LABELS[role] || role}`} />
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+        {!hideHeader && <AdminPageHeader icon={Shirt} title="Uniform Sizes" meta={`Size Tracking · ${ROLE_LABELS[role] || role}`} />}
         {canEdit && (
           <div className="flex justify-end -mt-4 mb-8">
             <button
@@ -765,9 +804,9 @@ const AdminUniformSizes = () => {
           </div>
         )}
 
-        {/* Company filter */}
-        {canViewAll && (
-          <div className="flex items-center gap-3 mb-4 flex-wrap">
+        {/* Company filter + LET group toggle */}
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          {canViewAll && (
             <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-blue-100 dark:border-white/5 rounded-xl px-4 py-2 shadow-sm">
               <Filter size={13} className="text-slate-400" />
               <select
@@ -780,8 +819,27 @@ const AdminUniformSizes = () => {
                 {companies.map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
-          </div>
-        )}
+          )}
+          <button
+            onClick={() => setGroupLet(g => !g)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all border ${
+              groupLet
+                ? 'bg-yellow-500 text-slate-950 border-yellow-500'
+                : 'bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            <GraduationCap size={13} /> Group by LET
+          </button>
+          {displaySizes.length > 0 && (
+            <button
+              onClick={handleExportSizes}
+              title="Export to CSV"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all border bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 text-slate-500 dark:text-slate-400 hover:border-yellow-500 hover:text-yellow-600"
+            >
+              <Download size={13} /> Export CSV
+            </button>
+          )}
+        </div>
 
         {/* ── S4 Logistics: Required-column configuration panel ── */}
         {canAcknowledge && filterCompany && (
@@ -975,7 +1033,8 @@ const AdminUniformSizes = () => {
                 </tr>
               </thead>
               <tbody>
-                {cadets.map((cadet, idx) => {
+                {(() => {
+                  const renderRow = (cadet, idx) => {
                   const rec = sizeMap[cadet.uid];
                   const hasData = !!rec;
                   return (
@@ -1031,7 +1090,22 @@ const AdminUniformSizes = () => {
                       </td>
                     </tr>
                   );
-                })}
+                  }; // end renderRow
+
+                  if (groupLet) {
+                    return groupByLet(cadets, c => c.letLevel, c => c.fullName).map(({ level, entries: group }) => (
+                      <React.Fragment key={level}>
+                        <tr>
+                          <td colSpan={999} className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-yellow-700 dark:text-yellow-500 bg-yellow-50 dark:bg-yellow-500/10 border-y border-yellow-200 dark:border-yellow-500/20">
+                            {level}
+                          </td>
+                        </tr>
+                        {group.map((cadet, idx) => renderRow(cadet, idx))}
+                      </React.Fragment>
+                    ));
+                  }
+                  return cadets.map((cadet, idx) => renderRow(cadet, idx));
+                })()}
               </tbody>
             </table>
           </div>
@@ -1064,16 +1138,15 @@ const AdminUniformSizes = () => {
                 {/* Cadet selection */}
                 <div>
                   <label className={lc}>Cadet *</label>
-                  <select
-                    required
+                  <CadetSearch
+                    cadets={cadets}
                     value={form.cadetId}
-                    onChange={e => handleCadetSelect(e.target.value)}
-                    className={ic}
+                    onChange={(uid) => handleCadetSelect(uid)}
+                    required
                     disabled={!!editingRecord}
-                  >
-                    <option value="">— Select Cadet —</option>
-                    {cadets.map(c => <option key={c.uid} value={c.uid}>{c.fullName}</option>)}
-                  </select>
+                    inputClass={ic}
+                    placeholder="Type 2+ letters to search…"
+                  />
                   {detectingLeader && (
                     <p className="text-[10px] text-slate-400 ml-1 mt-1 flex items-center gap-1">
                       <Loader2 size={10} className="animate-spin" /> Checking leadership status…
@@ -1125,11 +1198,11 @@ const AdminUniformSizes = () => {
                 {/* Class B Shoes */}
                 <div>
                   <label className={lc}>Class B Shoe Size</label>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-[1fr_160px] gap-2">
                     <select
                       value={form.classBShoeUS}
                       onChange={e => setForm(f => ({ ...f, classBShoeUS: e.target.value }))}
-                      className={`${ic} flex-1`}
+                      className={ic}
                     >
                       <option value="">US Size</option>
                       {(form.gender === 'F' ? SHOE_US_FEMALE : SHOE_US_MALE).map(s => (
@@ -1139,7 +1212,7 @@ const AdminUniformSizes = () => {
                     <select
                       value={form.classBShoeWidth}
                       onChange={e => setForm(f => ({ ...f, classBShoeWidth: e.target.value }))}
-                      className={`${ic} w-24`}
+                      className={ic}
                     >
                       {SHOE_WIDTHS.map(w => <option key={w} value={w}>{w === 'N' ? 'N (Narrow)' : w === 'W' ? 'W (Wide)' : 'R (Regular)'}</option>)}
                     </select>

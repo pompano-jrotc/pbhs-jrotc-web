@@ -183,7 +183,8 @@ export const DEFAULT_PROMOTION_BOARD = {
         "Maintain and ensure the proper operation of all automation equipment used within the company"
       ] }
     ]
-  }
+  },
+  positionRequirements: {},
 };
 
 // Photo Gallery albums — each album links out to an external Google Photos URL.

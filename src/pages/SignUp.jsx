@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import SmoothInput from '../components/SmoothInput';
 import { useCompanies } from '../hooks/useCompanies';
+import { normalizeCompany } from '../utils/normalizeCompany';
 import { auth, db } from '../firebase';
 import { createUserWithEmailAndPassword, deleteUser } from 'firebase/auth';
 import {
   getDocs,
+  getDoc,
+  doc,
   collection,
   query,
   where
@@ -25,7 +28,11 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { JROTC_POSITIONS } from '../constants';
+import {
+  JROTC_RANKS, JROTC_POSITIONS, BATTALION_POSITIONS, POSITION_RANKS,
+  COMPANY_HQ_LOCKED_POSITIONS, COMPANY_HQ_DEFAULT_POSITIONS, NO_SQUAD_POSITIONS,
+  rankExceedsMax,
+} from '../constants';
 import { usePageMeta } from '../hooks/usePageMeta';
 
 // Requires the military roster convention: "LASTNAME, FIRSTNAME" (each side
@@ -41,8 +48,24 @@ const isStrongPassword = (pw) => pw.length >= 8 && /[A-Za-z]/.test(pw) && /[0-9]
 // runs invisibly in the background and returns a 0–1 human likelihood score.
 const RECAPTCHA_SITE_KEY = '6Ld3tXwtAAAAAP7tu9bJa3fpwpju6LLDe9T2ujWO';
 
+// Fallback hash used when Firestore is unreachable or no custom code is set.
+// Change the code via the admin portal (Content → Access Code tab) — it writes
+// the SHA-256 hash to settings/signupCode so this value is only a last resort.
+const FALLBACK_SECRET_HASH = "587059e56cc6592a6054a0606758a821cc9eb7657635eb13f4b7c88a17e7ad7a";
+
 const SignUp = () => {
   usePageMeta({ title: 'Create Cadet Account' });
+
+  // Active secret-code hash — loaded from Firestore on mount; falls back to the
+  // compile-time constant if the doc is missing or the read fails.
+  const [activeSecretHash, setActiveSecretHash] = useState(FALLBACK_SECRET_HASH);
+  useEffect(() => {
+    getDoc(doc(db, 'settings', 'signupCode'))
+      .then(snap => {
+        if (snap.exists() && snap.data().hash) setActiveSecretHash(snap.data().hash);
+      })
+      .catch(() => { /* network error — stay on fallback */ });
+  }, []);
 
   // Load the reCAPTCHA Enterprise script lazily so it's only present while the
   // signup page is mounted. Loading it globally in index.html conflicts with
@@ -69,6 +92,7 @@ const SignUp = () => {
     confirmPassword: '',
     rank: '',
     position: '',
+    letLevel: 'LET 1',
     company: '',
     platoon: '1st Platoon', // Added default
     squad: '1st Squad',     // Added default
@@ -109,13 +133,6 @@ const SignUp = () => {
       });
     });
 
-  // SHA-256 of the real code - kept as a hash so the plaintext code isn't
-  // sitting in the shipped JS bundle. This raises the bar (no longer a
-  // trivial devtools/view-source read) but is still a client-side check,
-  // not a real security boundary - a determined attacker could still brute
-  // force it offline since there's no rate limiting or server-side gate.
-  const BATTALION_SECRET_HASH = "587059e56cc6592a6054a0606758a821cc9eb7657635eb13f4b7c88a17e7ad7a";
-
   const sha256Hex = async (text) => {
     const data = new TextEncoder().encode(text);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -123,10 +140,9 @@ const SignUp = () => {
   };
 
 
-  // positions imported from constants.js (single source of truth shared with AdminUsers.jsx)
-  const ranks = ["C/PVT", "C/PFC", "C/CPL", "C/SGT", "C/SSG", "C/SFC", "C/MSG", "C/1SG", "C/SGM", "C/CSM", "C/2LT", "C/1LT", "C/CPT", "C/MAJ", "C/LTC", "C/COL"];
+  // JROTC_RANKS and JROTC_POSITIONS imported from constants.js (single source of truth).
   const { companies } = useCompanies();
-  const platoons = ["1st Platoon", "2nd Platoon", "3rd Platoon", "HQ Platoon"];
+  const platoons = ["1st Platoon", "2nd Platoon", "3rd Platoon", "Company HQ"];
   const squads = ["1st Squad", "2nd Squad", "3rd Squad", "4th Squad", "Staff"];
 
   const handleSignUpAttempt = async (e) => {
@@ -139,7 +155,7 @@ const SignUp = () => {
     }
 
     const enteredHash = await sha256Hex(formData.secretCode.trim());
-    if (enteredHash !== BATTALION_SECRET_HASH) {
+    if (enteredHash !== activeSecretHash) {
       setError("INVALID SECRET CODE: ACCESS DENIED.");
       return;
     }
@@ -151,6 +167,22 @@ const SignUp = () => {
 
     if (formData.password !== formData.confirmPassword) {
       setError("PASSWORDS DO NOT MATCH.");
+      return;
+    }
+
+    // LET 1 → Squad Member only; LET 2+ → cannot be Squad Member.
+    if (formData.letLevel === 'LET 1' && formData.position !== 'Squad Member') {
+      setError("LET 1 CADETS MAY ONLY SELECT SQUAD MEMBER AS THEIR POSITION.");
+      return;
+    }
+    if (formData.letLevel !== 'LET 1' && formData.position === 'Squad Member') {
+      setError("SQUAD MEMBER IS ONLY AVAILABLE FOR LET 1 CADETS. LET 2–4 CADETS MUST SELECT A DIFFERENT POSITION.");
+      return;
+    }
+
+    // Rank ceiling: selected rank cannot exceed the authorized max for position
+    if (rankExceedsMax(formData.rank, formData.position)) {
+      setError(`${formData.rank} EXCEEDS THE AUTHORIZED MAX RANK (${POSITION_RANKS[formData.position]}) FOR ${formData.position}. PLEASE SELECT A LOWER RANK.`);
       return;
     }
 
@@ -229,6 +261,7 @@ const SignUp = () => {
             phone: formData.phone,
             rank: formData.rank,
             position: formData.position,
+            letLevel: formData.letLevel,
             company: formData.company,
             platoon: formData.platoon,
             squad: formData.squad,
@@ -315,28 +348,81 @@ const SignUp = () => {
               <Medal className="absolute left-3 top-3 text-slate-600" size={18} />
               <select required value={formData.rank} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 pl-10 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white" onChange={(e) => setFormData({...formData, rank: e.target.value})}>
                 <option value="" disabled>SELECT RANK</option>
-                {ranks.map(r => <option key={r} value={r} className="bg-slate-900">{r}</option>)}
+                {JROTC_RANKS.map(r => <option key={r} value={r} className="bg-slate-900">{r}</option>)}
+              </select>
+              <p className="text-amber-400 text-[9px] font-black uppercase tracking-widest mt-1.5 ml-1">
+                ⚠ Enter your current issued rank — not your max rank or position-associated rank. If unsure, select C/PVT.
+              </p>
+            </div>
+
+            <div className="relative">
+              <select required value={formData.letLevel} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white" onChange={(e) => setFormData(f => ({...f, letLevel: e.target.value}))}>
+                <option value="" disabled>SELECT LET LEVEL</option>
+                {["LET 1", "LET 2", "LET 3", "LET 4"].map(l => <option key={l} value={l} className="bg-slate-900">{l}</option>)}
               </select>
             </div>
 
             <div className="relative">
               <Briefcase className="absolute left-3 top-3 text-slate-600" size={18} />
-              <select required value={formData.position} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 pl-10 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white" onChange={(e) => setFormData({...formData, position: e.target.value})}>
+              <select
+                required
+                value={formData.position}
+                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 pl-10 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white"
+                onChange={(e) => {
+                  const newPos = e.target.value;
+                  const isHqPos    = COMPANY_HQ_LOCKED_POSITIONS.includes(newPos) || COMPANY_HQ_DEFAULT_POSITIONS.includes(newPos);
+                  const isNoSquad  = NO_SQUAD_POSITIONS.includes(newPos);
+                  setFormData(f => ({
+                    ...f,
+                    position: newPos,
+                    // Auto-set Company HQ platoon for staff/leadership positions
+                    ...(isHqPos && !BATTALION_COMPANIES.includes(f.company)
+                      ? { platoon: 'Company HQ', squad: '' }
+                      : {}),
+                    // Platoon Leaders / Platoon Sergeants belong to a platoon but not a squad
+                    ...(!isHqPos && isNoSquad ? { squad: '' } : {}),
+                  }));
+                }}
+              >
                 <option value="" disabled>SELECT POSITION</option>
-                {JROTC_POSITIONS.map(p => <option key={p} value={p} className="bg-slate-900">{p}</option>)}
+                {/* Battalion-level positions require staff assignment — not self-selectable at signup */}
+                {JROTC_POSITIONS
+                  .filter(p => !BATTALION_POSITIONS.includes(p))
+                  .map(p => <option key={p} value={p} className="bg-slate-900">{p}</option>)}
               </select>
+              {(() => {
+                const authRank = POSITION_RANKS[formData.position] || '';
+                if (!authRank) return null;
+                const isOver = formData.rank && rankExceedsMax(formData.rank, formData.position);
+                return (
+                  <p className={`text-[9px] font-black uppercase tracking-widest mt-1.5 ml-1 ${isOver ? 'text-rose-400' : 'text-slate-500'}`}>
+                    {isOver
+                      ? `⛔ ${formData.rank} exceeds max rank for this position (${authRank})`
+                      : `Max authorized rank for this position: ${authRank}`
+                    }
+                  </p>
+                );
+              })()}
             </div>
 
             {/* Platoon / Squad — hidden for Battalion members */}
             {!BATTALION_COMPANIES.includes(formData.company) && (
               <div className="relative">
-                <select required value={formData.platoon} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white" onChange={(e) => setFormData({...formData, platoon: e.target.value})}>
+                <select required value={formData.platoon} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white" onChange={(e) => {
+                  const newPlatoon = e.target.value;
+                  setFormData(f => ({
+                    ...f,
+                    platoon: newPlatoon,
+                    // Clear squad when platoon is Company HQ — no squad for HQ
+                    ...(newPlatoon === 'Company HQ' ? { squad: '' } : {})
+                  }));
+                }}>
                   {platoons.map(p => <option key={p} value={p} className="bg-slate-900">{p}</option>)}
                 </select>
               </div>
             )}
 
-            {!BATTALION_COMPANIES.includes(formData.company) && (
+            {!BATTALION_COMPANIES.includes(formData.company) && formData.platoon !== 'Company HQ' && !NO_SQUAD_POSITIONS.includes(formData.position) && (
               <div className="relative">
                 <select required value={formData.squad} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white" onChange={(e) => setFormData({...formData, squad: e.target.value})}>
                   {squads.map(s => <option key={s} value={s} className="bg-slate-900">{s}</option>)}
@@ -375,7 +461,7 @@ const SignUp = () => {
                   company: nextCompany,
                   secondaryCompany: isNextBattalion ? formData.secondaryCompany : '',
                   ...(isNextBattalion
-                    ? { platoon: 'HQ Platoon', squad: 'Staff' }
+                    ? { platoon: 'Company HQ', squad: 'Staff' }
                     : (isPrevBattalion ? { platoon: '1st Platoon', squad: '1st Squad' } : {}))
                 });
               }}>
@@ -412,7 +498,7 @@ const SignUp = () => {
                 <h4 className="text-white font-black uppercase italic text-lg">{linkData.fullName}</h4>
                 <div className="flex flex-wrap gap-2 mt-1">
                   <span className="text-yellow-500 font-black text-[10px] uppercase">{linkData.rank}</span>
-                  <span className="text-slate-400 font-black text-[10px] uppercase">{linkData.company} Co.</span>
+                  <span className="text-slate-400 font-black text-[10px] uppercase">{normalizeCompany(linkData.company)} Co.</span>
                   <span className="text-slate-500 font-black text-[10px] uppercase">{linkData.platoon} / {linkData.squad}</span>
                 </div>
               </div>

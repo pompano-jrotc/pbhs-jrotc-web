@@ -569,6 +569,58 @@ export default async function handler(req, res) {
         throw new Error(data.error?.message || 'Failed to finish creating your account');
       }
 
+      // Best-effort — if staff pre-created a shadow user doc (isManual: true) AND
+      // also created a roster entry linked to it (linkedUid == shadow.id), that
+      // roster entry is now orphaned because the shadow doc was just deleted.
+      // Re-link it to the real auth UID so it isn't orphaned.
+      if (shadow?.id) {
+        try {
+          const signupFsBase = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
+          const rosterRelinkRes = await fetch(`${signupFsBase}:runQuery`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              structuredQuery: {
+                from: [{ collectionId: 'roster' }],
+                where: {
+                  fieldFilter: {
+                    field: { fieldPath: 'linkedUid' },
+                    op: 'EQUAL',
+                    value: { stringValue: shadow.id },
+                  },
+                },
+                limit: 1,
+              },
+            }),
+          });
+          if (rosterRelinkRes.ok) {
+            const rosterRows = await rosterRelinkRes.json();
+            const rosterHit = Array.isArray(rosterRows) ? rosterRows.find(r => r.document) : null;
+            if (rosterHit) {
+              const rosterDocName = rosterHit.document.name;
+              // Update linkedUid and syncMaster — all other fields stay unchanged.
+              await fetch(
+                `${rosterDocName}?updateMask.fieldPaths=linkedUid&updateMask.fieldPaths=syncMaster&updateMask.fieldPaths=updatedAt`, // eslint-disable-line max-len
+                {
+                  method: 'PATCH',
+                  headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    fields: {
+                      linkedUid: { stringValue: targetUid },
+                      syncMaster: { stringValue: 'portal' },
+                      updatedAt:  { timestampValue: new Date().toISOString() },
+                    },
+                  }),
+                }
+              );
+            }
+          }
+        } catch (relinkErr) {
+          // Non-fatal — the account was created; roster re-link is best-effort.
+          console.error('Roster re-link after shadow merge failed:', relinkErr);
+        }
+      }
+
       // Best-effort - a failed confirmation email shouldn't turn an
       // otherwise-successful signup into an error for the user.
       try {
@@ -872,6 +924,28 @@ export default async function handler(req, res) {
       if (!patchRes.ok) {
         const errData = await patchRes.json().catch(() => ({}));
         throw new Error(errData.error?.message || 'Failed to update account');
+      }
+
+      return res.status(200).json({ success: true });
+    }
+
+    if (type === 'reset-mfa') {
+      // Strip all enrolled phone MFA factors from the account.
+      // Uses the Identity Toolkit admin endpoint (service-account token),
+      // so no Firebase Admin SDK package is needed. An empty mfaInfo array
+      // signals "remove all enrolled factors".
+      const identityRes = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:update`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ localId: targetUid, mfaInfo: [] }),
+        }
+      );
+
+      if (!identityRes.ok) {
+        const data = await identityRes.json();
+        throw new Error(data.error?.message || 'Failed to remove MFA enrollment');
       }
 
       return res.status(200).json({ success: true });

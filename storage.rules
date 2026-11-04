@@ -10,7 +10,8 @@ service firebase.storage {
       allow read:  if true;
       allow write: if request.auth != null
                    && request.resource.size < 20 * 1024 * 1024   // 20 MB cap
-                   && request.resource.contentType == 'application/pdf';
+                   && (request.resource.contentType == 'application/pdf'
+                       || request.resource.contentType.matches('image/(jpeg|png|webp)'));
     }
 
     // S2 inspection photos — authenticated read (only portal users should see
@@ -39,7 +40,9 @@ service firebase.storage {
     // Read:   any signed-in portal member (commanders review their company).
     // Create/Update: any signed-in user with type/size gate; UI enforces who gets
     //                the upload button (CAN_MARK_ROLES in AdminS1.jsx).
-    // Delete: any signed-in user — old file replaced automatically on re-upload.
+    // Delete: any signed-in user — Storage rules cannot read Firestore roles, so
+    //         the app-layer gate (CAN_MARK_ROLES in AdminS1.jsx) is the primary
+    //         defense. Any authenticated user can overwrite a file on re-upload.
     match /form-submissions/{allPaths=**} {
       allow read:           if request.auth != null;
       allow create, update: if request.auth != null
@@ -52,13 +55,33 @@ service firebase.storage {
     // Per-cadet yearly documents keyed by Firebase Auth UID — reserved for
     // future direct-upload flows outside the S1 tracker.
     // Path: cadet-documents/{uid}/{timestamp}_{filename}
+    //
+    // Delete: scoped to the owning cadet's UID — the path embeds the owner's
+    //         uid, so this prevents any cadet from deleting another cadet's
+    //         documents. Staff management of these files should go through an
+    //         API route that uses the Admin SDK (bypasses storage rules).
     match /cadet-documents/{uid}/{filename} {
       allow read:           if request.auth != null;
       allow create, update: if request.auth != null
                             && request.resource.size < 5 * 1024 * 1024
                             && (request.resource.contentType.matches('image/(jpeg|webp|png)')
                                 || request.resource.contentType == 'application/pdf');
-      allow delete:         if request.auth != null;
+      allow delete:         if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Meeting Log attachments — PDF, PPTX, or PPT files attached to battalion
+    // meeting records. Readable by any signed-in portal member (staff + company
+    // command who have access to the log itself). Write gate mirrors the 10 MB
+    // cap enforced by validateMeetingAttachment() in AdminMeetingLogs.jsx.
+    // Path: meeting-attachments/{timestamp}_{filename}
+    match /meeting-attachments/{filename} {
+      allow read:   if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.resource.size < 10 * 1024 * 1024
+                            && (request.resource.contentType == 'application/pdf'
+                                || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+                                || request.resource.contentType == 'application/vnd.ms-powerpoint');
+      allow delete: if request.auth != null;
     }
 
   }

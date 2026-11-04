@@ -30,10 +30,10 @@ const NotFound = () => {
             <Home size={16} /> Back to Home
           </Link>
           <Link
-            to="/teams"
+            to="/events"
             className="inline-flex items-center gap-2 bg-white/10 border border-white/20 text-white px-8 py-4 rounded-xl font-black uppercase tracking-widest hover:bg-white/20 transition-all backdrop-blur-md"
           >
-            <ArrowLeft size={16} /> Battalion Teams
+            <ArrowLeft size={16} /> View Events
           </Link>
         </div>
       </div>

@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "companyAnnouncements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "company",   "order": "ASCENDING"  },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "newsletters",
       "queryScope": "COLLECTION",
       "fields": [
@@ -55,6 +63,71 @@
       "fields": [
         { "fieldPath": "status",    "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "cadetYearlyHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "company",   "order": "ASCENDING" },
+        { "fieldPath": "cadetName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "uniformSizes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "company",   "order": "ASCENDING" },
+        { "fieldPath": "cadetName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "cadetChallengeRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "cycleNumber", "order": "ASCENDING" },
+        { "fieldPath": "company",     "order": "ASCENDING" },
+        { "fieldPath": "cadetName",   "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "cadetChallengeRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "cycleNumber", "order": "ASCENDING" },
+        { "fieldPath": "cadetName",   "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "roster",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "secondaryCompany", "order": "ASCENDING" },
+        { "fieldPath": "fullName",         "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "aarLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "company",   "order": "ASCENDING"  },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "meetingLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyAccess", "order": "ASCENDING" },
+        { "fieldPath": "meetingNumber", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "leadershipTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isAssigned", "order": "ASCENDING" },
+        { "fieldPath": "dueDate",    "order": "ASCENDING" }
       ]
     }
   ],

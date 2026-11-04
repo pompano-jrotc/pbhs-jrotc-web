@@ -22,6 +22,7 @@ import {
   CheckCircle2, Clock, Loader2, ChevronDown, ChevronUp, Filter,
 } from 'lucide-react';
 import AdminPageHeader from '../components/AdminPageHeader';
+import { useConfirm } from '../contexts/ConfirmContext';
 
 // ── Access ────────────────────────────────────────────────────────────────────
 const VIEW_ROLES = [
@@ -62,8 +63,9 @@ const Badge = ({ meta, label }) => meta ? (
 ) : null;
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-const AdminFeedback = () => {
+const AdminFeedback = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
+  const confirm = useConfirm();
   const userLevel = ROLE_HIERARCHY[role] || 0;
 
   const canView   = VIEW_ROLES.includes(role) || userLevel >= ADMIN_LEVEL;
@@ -116,7 +118,8 @@ const AdminFeedback = () => {
   };
 
   const handleDelete = async (item) => {
-    if (!window.confirm(`Delete "${item.title}"? This cannot be undone.`)) return;
+    const ok = await confirm(`Delete "${item.title}"? This cannot be undone.`, { title: 'Delete Feedback', destructive: true });
+    if (!ok) return;
     setDeleting(item.id);
     try {
       await deleteDoc(doc(db, 'feedback', item.id));
@@ -142,8 +145,8 @@ const AdminFeedback = () => {
   items.forEach(it => { if (counts[it.status] !== undefined) counts[it.status]++; });
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
-      <AdminPageHeader icon={MessageSquare} title="Feedback Hub" />
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+      {!hideHeader && <AdminPageHeader icon={MessageSquare} title="Feedback Hub" />}
 
         {/* Status summary */}
         <div className="flex items-center gap-3 flex-shrink-0 mb-10">

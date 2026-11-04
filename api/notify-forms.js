@@ -197,7 +197,7 @@ export default async function handler(req, res) {
 
   // Only S1 Adjutant and higher (admin level) can send reminders.
   // The component already guards this, but we verify server-side too.
-  const ALLOWED_ROLES = ['s1_adjutant', 'senior_army_instructor', 'army_instructor'];
+  const ALLOWED_ROLES = ['s1_adjutant', 'senior_army_instructor', 'army_instructor', 's3_operations'];
   const ADMIN_ROLES   = ['battalion_commander', 'battalion_xo', 'battalion_csm', 'sergeant_major'];
   if (!ALLOWED_ROLES.includes(caller.role) && !ADMIN_ROLES.includes(caller.role)) {
     return res.status(403).json({ error: 'Not authorized to send reminders' });
@@ -226,8 +226,28 @@ export default async function handler(req, res) {
   // Deduplicate by email (S1 Adjutant might also be an XO in edge cases)
   const allRecipients = [...new Map([...s1s, ...xosToNotify].map(u => [u.email, u])).values()];
 
-  // ── Build email body ──────────────────────────────────────────────────────────
-  // Group pending cadets by company for the email table
+  // ── Email body builder — count only, no cadet names ─────────────────────────
+  // Emails intentionally omit individual cadet names for privacy.
+  // Recipients log in to the Command Portal to see who specifically is pending.
+
+  function buildMessage(count, scopeLabel) {
+    return `
+    <div style="background:#fef2f2;border-left:4px solid #ef4444;padding:12px 16px;border-radius:4px;margin:0 0 24px;">
+      <p style="margin:0;font-size:13px;color:#991b1b;font-weight:700;">Form Past Due</p>
+      <p style="margin:6px 0 0;font-size:14px;color:#7f1d1d;">
+        <strong>${count} cadet${count !== 1 ? 's have' : ' has'} not yet turned in</strong>
+        the <strong>${eventTitle}</strong> form (${scopeLabel}).
+        The due date was <strong>${dueDate}</strong>.
+      </p>
+    </div>
+
+    <p style="margin:0 0 24px;font-size:14px;color:#475569;line-height:1.6;">
+      Log in to the Command Portal → <strong>S1 Tracker</strong> to view the full list of
+      pending cadets, mark submissions as turned in, or attach proof of submission.
+    </p>`;
+  }
+
+  // Group pending cadets by company so XOs get their company's count only
   const byCompany = {};
   pendingCadets.forEach(c => {
     const co = c.company || 'Unknown';
@@ -235,54 +255,30 @@ export default async function handler(req, res) {
     byCompany[co].push(c);
   });
 
-  const tableRows = Object.entries(byCompany)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([company, cadets]) => {
-      const rows = cadets.map(c =>
-        `<tr>
-          <td style="padding:6px 12px;font-size:13px;color:#475569;border-bottom:1px solid #f1f5f9;">${c.rank || ''} ${c.name}</td>
-          <td style="padding:6px 12px;font-size:13px;color:#64748b;border-bottom:1px solid #f1f5f9;">${company}</td>
-        </tr>`
-      ).join('');
-      return rows;
-    }).join('');
-
   const scopeLabel = eventScope === 'battalion' ? 'Battalion-Wide' : `${eventCompany} Company`;
-  const subject    = `Overdue Form Reminder — ${eventTitle} (${pendingCadets.length} cadet${pendingCadets.length !== 1 ? 's' : ''} pending)`;
-
-  const message = `
-    <div style="background:#fef2f2;border-left:4px solid #ef4444;padding:12px 16px;border-radius:4px;margin:0 0 24px;">
-      <p style="margin:0;font-size:13px;color:#991b1b;font-weight:700;">Form Past Due</p>
-      <p style="margin:6px 0 0;font-size:14px;color:#7f1d1d;">
-        <strong>${pendingCadets.length} cadet${pendingCadets.length !== 1 ? 's have' : ' has'} not yet turned in</strong>
-        the <strong>${eventTitle}</strong> form (${scopeLabel}).
-        The due date was <strong>${dueDate}</strong>.
-      </p>
-    </div>
-
-    <p style="margin:0 0 16px;font-size:14px;color:#475569;line-height:1.6;">
-      Please follow up with the cadets below and ensure their forms are collected as soon as possible.
-    </p>
-
-    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 24px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
-      <thead>
-        <tr style="background:#f8fafc;">
-          <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#64748b;border-bottom:1px solid #e2e8f0;">Cadet</th>
-          <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#64748b;border-bottom:1px solid #e2e8f0;">Company</th>
-        </tr>
-      </thead>
-      <tbody>${tableRows}</tbody>
-    </table>
-
-    <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#475569;">
-      Log in to the Command Portal → <strong>S1 Tracker</strong> to view full details,
-      mark cadets as turned in, or attach proof of submission.
-    </p>`;
 
   // ── Send emails ───────────────────────────────────────────────────────────────
-  const results = await Promise.allSettled(
-    allRecipients.map(u => resendSend(u.email, subject, buildEmail({ heading: subject, message })))
-  );
+  // S1 adjutants get the total battalion count.
+  // Company XOs get a count scoped to their own company only — no cadet names in either.
+  const emailTasks = [];
+
+  for (const u of s1s) {
+    const count   = pendingCadets.length;
+    const subject = `Overdue Form Reminder — ${eventTitle} (${count} cadet${count !== 1 ? 's' : ''} pending)`;
+    emailTasks.push(resendSend(u.email, subject, buildEmail({ heading: subject, message: buildMessage(count, scopeLabel) })));
+  }
+
+  for (const xo of xosToNotify) {
+    // Skip if this XO is already getting the S1 email at the same address
+    if (s1s.some(s => s.email === xo.email)) continue;
+    const companyCadets = byCompany[xo.company] || [];
+    if (companyCadets.length === 0) continue;
+    const count   = companyCadets.length;
+    const subject = `Overdue Form Reminder — ${eventTitle} (${count} cadet${count !== 1 ? 's' : ''} pending in ${xo.company} Co.)`;
+    emailTasks.push(resendSend(xo.email, subject, buildEmail({ heading: subject, message: buildMessage(count, `${xo.company} Company`) })));
+  }
+
+  const results = await Promise.allSettled(emailTasks);
 
   const sent   = results.filter(r => r.status === 'fulfilled').length;
   const failed = results.filter(r => r.status === 'rejected').length;

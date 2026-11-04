@@ -52,14 +52,92 @@ import {
   Paperclip, FileText, Download,
 } from 'lucide-react';
 import AdminPageHeader from '../components/AdminPageHeader';
+import { useConfirm } from '../contexts/ConfirmContext';
 import BulletListEditor, { normalizeBullets, flattenBullets } from '../components/BulletListEditor';
 import { ROLE_HIERARCHY, ADMIN_LEVEL, STAFF_LEVEL } from '../constants';
+import DatePicker from '../components/DatePicker';
 
 // ── Role constants ─────────────────────────────────────────────────────────────
 // Who can edit ANYONE's log and delete:
 const ELEVATED_EDIT_ROLES = ['battalion_xo', 'battalion_csm', 'sergeant_major', 'battalion_commander', 's1_adjutant'];
-// Company Top 3 + MSgt can view logs flagged companyAccess:true:
+// Legacy company-view roles (kept for backward compat):
 const COMPANY_VIEW_ROLES = ['company_commander', 'company_xo', 'company_1sg', 'company_master_sergeant'];
+// Company top-3 roles (for company_top_3 access group):
+const COMPANY_TOP_3_ROLES = ['company_commander', 'company_xo', 'company_1sg'];
+
+// ── Battalion access group definitions ───────────────────────────────────────
+// Shown to battalion-level creators (L70+).
+const ACCESS_GROUPS = [
+  { key: 'battalion_staff',     label: 'Battalion Staff',      desc: 'All S1–S7 staff',        roles: null, minLevel: 70 },
+  { key: 'top_3',               label: 'Top 3 Only',           desc: 'BC, CSM & XO',            roles: ['battalion_commander', 'battalion_csm', 'battalion_xo'] },
+  { key: 'company_leadership',  label: 'Company Leadership',   desc: 'Commanders, XOs, 1SGs',   roles: ['company_commander', 'company_xo', 'company_1sg', 'company_master_sergeant'] },
+  { key: 's1_adjutant',         label: 'S1 Adjutant',          desc: 'S1 – Personnel',          roles: ['s1_adjutant'] },
+  { key: 's2_intelligence',     label: 'S2 Intelligence',      desc: 'S2 – Intelligence',        roles: ['s2_intelligence'] },
+  { key: 's3_operations',       label: 'S3 Operations',        desc: 'S3 – Operations',          roles: ['s3_operations'] },
+  { key: 's4_logistics',        label: 'S4 Logistics',         desc: 'S4 – Logistics',           roles: ['s4_logistics'] },
+  { key: 's5_public_affairs',   label: 'S5 Public Affairs',    desc: 'S5 – Public Affairs',      roles: ['s5_public_affairs'] },
+  { key: 's6_technology',       label: 'S6 Technology',        desc: 'S6 – Technology',          roles: ['s6_technology'] },
+  { key: 's7_special_projects', label: 'S7 Special Projects',  desc: 'S7 – Special Projects',    roles: ['s7_special_projects'] },
+];
+
+// ── Company access group definitions ─────────────────────────────────────────
+// Shown to company-level creators (L45–69). Logs created with these groups are
+// always company-scoped (only visible to members of the creator's company).
+const COMPANY_ACCESS_GROUPS = [
+  { key: 'whole_company',  label: 'Whole Company',  desc: 'All company members',        minLevel: 5,  maxLevel: 69 },
+  { key: 'plt_ldr_sgt',   label: 'PLT LDR + SGT',  desc: 'Platoon leaders & sergeants', minLevel: 20, maxLevel: 29 },
+  { key: 'company_staff', label: 'Company Staff',   desc: 'Company S-staff assistants', minLevel: 35, maxLevel: 44 },
+  { key: 'company_top_3', label: 'Top 3 Only',      desc: 'Commander, XO, 1st SGT',    roles: COMPANY_TOP_3_ROLES },
+];
+
+const COMPANY_GROUP_KEYS = COMPANY_ACCESS_GROUPS.map(g => g.key);
+
+// All groups combined (for display in view mode):
+const ALL_ACCESS_GROUPS = [...ACCESS_GROUPS, ...COMPANY_ACCESS_GROUPS];
+
+// Returns the access group key(s) a given role belongs to (for battalion groups).
+function roleToGroupKeys(role, level) {
+  const keys = [];
+  ACCESS_GROUPS.forEach(g => {
+    if (g.minLevel && level >= g.minLevel) keys.push(g.key);
+    else if (g.roles && g.roles.includes(role)) keys.push(g.key);
+  });
+  return keys;
+}
+
+// Can this user see a given log? Admins (80+) always can.
+// accessGroups: [] means visible to all battalion staff 70+ (default/unrestricted).
+// accessGroups with battalion group keys: restrict to those groups.
+// accessGroups with company group keys: restrict to company members matching the group.
+function isLogAccessible(log, role, level, uid, userCompany) {
+  if (level >= ADMIN_LEVEL) return true;
+  if (log.createdBy === uid) return true;
+
+  const groups = log.accessGroups;
+  if (!groups || groups.length === 0) {
+    if (log.companyAccess && COMPANY_VIEW_ROLES.includes(role)) return true;
+    return level >= STAFF_LEVEL;
+  }
+
+  // Company-scoped log (contains company group keys)?
+  const hasCompanyGroups = groups.some(k => COMPANY_GROUP_KEYS.includes(k));
+  if (hasCompanyGroups) {
+    // Must be in the same company as the log creator
+    if (log.logCompany && userCompany !== log.logCompany) return false;
+    // Check group membership
+    for (const key of groups) {
+      if (key === 'whole_company' && level >= 5 && level < STAFF_LEVEL) return true;
+      if (key === 'plt_ldr_sgt'   && (level === 20 || level === 25)) return true;
+      if (key === 'company_staff' && level === 35) return true;
+      if (key === 'company_top_3' && COMPANY_TOP_3_ROLES.includes(role)) return true;
+    }
+    return false;
+  }
+
+  // Battalion-level groups
+  const userKeys = roleToGroupKeys(role, level);
+  return userKeys.some(k => groups.includes(k));
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmtDate(ts) {
@@ -125,24 +203,27 @@ const EMPTY_FORM = {
   attendance:     '',
   agendaItems:    [],
   noteItems:      [],
-  companyAccess:  false, // when true, company commanders/XOs/1SGs can view this log
+  accessGroups:   [], // which groups can view; [] = battalion staff only (default)
 };
 
 // ── Main page ──────────────────────────────────────────────────────────────────
-const AdminMeetingLogs = () => {
+const AdminMeetingLogs = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
+  const confirm = useConfirm();
   const userLevel = ROLE_HIERARCHY[role] || 0;
 
   // ── Access flags ─────────────────────────────────────────────────────────────
-  // All battalion staff (70+) + company command (45+) may access this page.
-  const isAuthorized     = userLevel >= STAFF_LEVEL || COMPANY_VIEW_ROLES.includes(role);
-  // Any staff member (70+) may create logs.
-  const canCreate        = userLevel >= STAFF_LEVEL;
+  // All users L5+ may access the meeting logs tab (per new permissions).
+  const isAuthorized     = userLevel >= 5;
+  // Company command (L45+) and battalion staff (L70+) may create logs.
+  const canCreate        = userLevel >= 45;
+  // Company creators (L45–69) produce company-scoped logs.
+  const isCompanyCreator = userLevel >= 45 && userLevel < STAFF_LEVEL;
   // XO/CSM/BC/S1 may edit anyone's log and delete.
   const canElevatedEdit  = ELEVATED_EDIT_ROLES.includes(role) || userLevel >= 85;
   const canDelete        = canElevatedEdit;
-  // Company command (45–59) only see logs flagged companyAccess:true.
-  const isCompanyViewer  = COMPANY_VIEW_ROLES.includes(role) && userLevel < STAFF_LEVEL;
+  // Anyone below battalion staff (L70) only sees company-scoped logs.
+  const isCompanyViewer  = userLevel < STAFF_LEVEL;
   // uid reference for per-log ownership check.
   const uid              = auth.currentUser?.uid;
 
@@ -171,18 +252,20 @@ const AdminMeetingLogs = () => {
   // ── Firestore subscription ────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthorized) return;
-    // Company viewers only receive logs the XO has explicitly shared with company
-    // leadership (companyAccess: true). Full-access viewers receive everything.
-    const q = isCompanyViewer
-      ? query(collection(db, 'meetingLogs'), where('companyAccess', '==', true))
-      : query(collection(db, 'meetingLogs'));
+    const uid         = auth.currentUser?.uid;
+    const userCompany = userData?.company;
+    const q = userLevel >= 70
+      ? query(collection(db, 'meetingLogs'))
+      : query(collection(db, 'meetingLogs'), where('companyAccess', '==', true));
     return onSnapshot(q, snap => {
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const docs = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(log => isLogAccessible(log, role, userLevel, uid, userCompany));
       docs.sort((a, b) => (b.meetingNumber || 0) - (a.meetingNumber || 0));
       setLogs(docs);
       setLoadingLogs(false);
     });
-  }, [isAuthorized, isCompanyViewer]);
+  }, [isAuthorized, role, userLevel, userData?.company]);
 
   // ── Derived ───────────────────────────────────────────────────────────────────
   const nextMeetingNumber = useMemo(() => {
@@ -247,7 +330,7 @@ const AdminMeetingLogs = () => {
       attendance:     log.attendance   || '',
       agendaItems:    normalizeBullets(log.agendaItems),
       noteItems:      normalizeBullets(log.noteItems),
-      companyAccess:  log.companyAccess || false,
+      accessGroups:   log.accessGroups || (log.companyAccess ? ['company_leadership'] : []),
     });
     setActiveLog(log);
     setModalMode('edit');
@@ -302,7 +385,13 @@ const AdminMeetingLogs = () => {
         attendance:           form.attendance.trim(),
         agendaItems:          form.agendaItems,
         noteItems:            form.noteItems,
-        companyAccess:        form.companyAccess || false,
+        accessGroups:         form.accessGroups || [],
+        companyAccess:        (form.accessGroups || []).includes('company_leadership'),
+        // logCompany scopes company-level logs to the creator's company.
+        // Only set on create; on edit preserve whatever the log had.
+        logCompany:           modalMode === 'create'
+          ? (isCompanyCreator ? (userData?.company || null) : null)
+          : (activeLog?.logCompany ?? null),
         attachmentUrl,
         attachmentName,
         attachmentStoragePath,
@@ -358,7 +447,7 @@ const AdminMeetingLogs = () => {
   };
 
   const handleDelete = async (log) => {
-    const ok = window.confirm(`Delete Meeting #${log.meetingNumber} — "${log.meetingName}"? This cannot be undone.`);
+    const ok = await confirm(`Delete Meeting #${log.meetingNumber} — "${log.meetingName}"? This cannot be undone.`, { title: 'Delete Meeting Log', destructive: true });
     if (!ok) return;
     setDeleting(log.id);
     try {
@@ -395,8 +484,8 @@ const AdminMeetingLogs = () => {
   // RENDER
   // ════════════════════════════════════════════════════════════════════════════════
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
-      <AdminPageHeader icon={NotepadText} title="Meeting Logs" />
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+      {!hideHeader && <AdminPageHeader icon={NotepadText} title="Meeting Logs" />}
 
         {/* ── Header actions ─────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-end gap-3 mb-10">
@@ -425,12 +514,12 @@ const AdminMeetingLogs = () => {
           </div>
         </div>
 
-        {/* ── Access notice for company-leadership viewers ────────────────────────── */}
+        {/* ── Access notice for company-level viewers ──────────────────────────── */}
         {isCompanyViewer && (
           <div className="mb-6 p-4 bg-blue-50/60 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-500/10 rounded-2xl flex items-center gap-3">
             <Eye className="text-blue-400 shrink-0" size={15} />
             <p className="text-xs font-bold text-blue-600 dark:text-blue-400">
-              You can view meeting logs shared with company leadership.
+              You can view meeting logs shared with{userData?.company ? ` ${userData.company} company` : ' your company'}.
             </p>
           </div>
         )}
@@ -541,7 +630,11 @@ const AdminMeetingLogs = () => {
                       </td>
                       {!isCompanyViewer && (
                         <td className="px-4 py-3 hidden lg:table-cell">
-                          {log.companyAccess ? (
+                          {log.accessGroups && log.accessGroups.length > 0 ? (
+                            <span className="inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+                              {log.accessGroups.length} Group{log.accessGroups.length > 1 ? 's' : ''}
+                            </span>
+                          ) : log.companyAccess ? (
                             <span className="inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
                               Shared
                             </span>
@@ -642,11 +735,9 @@ const AdminMeetingLogs = () => {
                   {modalMode === 'view' ? (
                     <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{fmtDate(activeLog?.meetingDate)}</p>
                   ) : (
-                    <input
-                      type="date"
+                    <DatePicker
                       value={form.meetingDate}
-                      onChange={e => setForm(f => ({ ...f, meetingDate: e.target.value }))}
-                      className="w-full bg-blue-50/50 dark:bg-slate-800 border border-blue-100 dark:border-white/5 rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-white outline-none focus:border-yellow-500/40 transition-colors"
+                      onChange={v => setForm(f => ({ ...f, meetingDate: v }))}
                     />
                   )}
                 </div>
@@ -793,46 +884,120 @@ const AdminMeetingLogs = () => {
                 </div>
               )}
 
-              {/* Company Access toggle */}
+              {/* Access Groups */}
               {modalMode === 'view' ? (
-                <div className="flex items-center justify-between py-3 border-t border-slate-100 dark:border-white/5">
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Company Leadership Access</p>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-                      {activeLog?.companyAccess
-                        ? 'Visible to Company Commanders, XOs, and 1SGs'
-                        : 'Restricted to battalion staff only'}
-                    </p>
-                  </div>
-                  <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${
-                    activeLog?.companyAccess
-                      ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-white/5'
-                  }`}>
-                    {activeLog?.companyAccess ? 'Shared' : 'Staff Only'}
-                  </span>
+                <div className="py-3 border-t border-slate-100 dark:border-white/5">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2">Visible To</p>
+                  {(() => {
+                    const groups = activeLog?.accessGroups;
+                    if (!groups || groups.length === 0) {
+                      return <p className="text-[10px] text-slate-400 dark:text-slate-500">All battalion staff (default)</p>;
+                    }
+                    const labels = ALL_ACCESS_GROUPS.filter(g => groups.includes(g.key)).map(g => g.label);
+                    const scopeNote = activeLog?.logCompany ? ` · ${activeLog.logCompany} company only` : '';
+                    return (
+                      <div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {labels.map(l => (
+                            <span key={l} className="text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">{l}</span>
+                          ))}
+                        </div>
+                        {scopeNote && (
+                          <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-1.5 font-medium">{scopeNote}</p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : canCreate ? (
-                <div className="flex items-center justify-between py-3 border-t border-slate-100 dark:border-white/5">
-                  <div>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Share with Company Leadership</p>
-                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-                      When on, Company Commanders, XOs, and 1SGs can view this log
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setForm(f => ({ ...f, companyAccess: !f.companyAccess }))}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                      form.companyAccess ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                    }`}
-                    role="switch"
-                    aria-checked={form.companyAccess}
-                  >
-                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                      form.companyAccess ? 'translate-x-4' : 'translate-x-0.5'
-                    }`} />
-                  </button>
+                <div className="py-3 border-t border-slate-100 dark:border-white/5">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Who Can View This Log</p>
+                  {isCompanyCreator ? (
+                    <>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-3">
+                        This log will be visible only to members of <span className="font-bold text-slate-600 dark:text-slate-300">{userData?.company || 'your company'}</span>.
+                        {form.accessGroups.length === 0
+                          ? ' Select a group below to restrict further.'
+                          : ` Restricted to ${form.accessGroups.length} selected group${form.accessGroups.length > 1 ? 's' : ''}.`}
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {COMPANY_ACCESS_GROUPS.map(group => {
+                          const checked = form.accessGroups.includes(group.key);
+                          return (
+                            <button
+                              key={group.key}
+                              type="button"
+                              onClick={() => setForm(f => ({
+                                ...f,
+                                accessGroups: checked
+                                  ? f.accessGroups.filter(k => k !== group.key)
+                                  : [...f.accessGroups, group.key],
+                              }))}
+                              className={`flex items-start gap-2 p-2.5 rounded-xl border text-left transition-all ${
+                                checked
+                                  ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30'
+                                  : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/10'
+                              }`}
+                            >
+                              <div className={`mt-0.5 w-3.5 h-3.5 rounded flex-shrink-0 border-2 flex items-center justify-center transition-all ${
+                                checked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600'
+                              }`}>
+                                {checked && <span className="text-white text-[8px] font-black leading-none">✓</span>}
+                              </div>
+                              <div>
+                                <p className={`text-[9px] font-black uppercase tracking-wider leading-tight ${
+                                  checked ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'
+                                }`}>{group.label}</p>
+                                <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5 leading-tight">{group.desc}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-3">
+                        {form.accessGroups.length === 0
+                          ? 'Currently visible to all battalion staff (70+). Select groups below to restrict access.'
+                          : `Restricted to ${form.accessGroups.length} selected group${form.accessGroups.length > 1 ? 's' : ''}.`}
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {ACCESS_GROUPS.map(group => {
+                          const checked = form.accessGroups.includes(group.key);
+                          return (
+                            <button
+                              key={group.key}
+                              type="button"
+                              onClick={() => setForm(f => ({
+                                ...f,
+                                accessGroups: checked
+                                  ? f.accessGroups.filter(k => k !== group.key)
+                                  : [...f.accessGroups, group.key],
+                              }))}
+                              className={`flex items-start gap-2 p-2.5 rounded-xl border text-left transition-all ${
+                                checked
+                                  ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30'
+                                  : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/10'
+                              }`}
+                            >
+                              <div className={`mt-0.5 w-3.5 h-3.5 rounded flex-shrink-0 border-2 flex items-center justify-center transition-all ${
+                                checked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300 dark:border-slate-600'
+                              }`}>
+                                {checked && <span className="text-white text-[8px] font-black leading-none">✓</span>}
+                              </div>
+                              <div>
+                                <p className={`text-[9px] font-black uppercase tracking-wider leading-tight ${
+                                  checked ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'
+                                }`}>{group.label}</p>
+                                <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-0.5 leading-tight">{group.desc}</p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : null}
 

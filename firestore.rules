@@ -13,7 +13,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return userDoc().role in [
-        'senior_army_instructor', 'army_instructor',
+        'district_army_instructor', 'senior_army_instructor', 'army_instructor',
         'battalion_commander', 'battalion_xo', 'battalion_csm', 'sergeant_major'
       ];
     }
@@ -30,20 +30,20 @@ service cloud.firestore {
     // These accounts may edit their own roster entry freely.
     function isSelfEditExempt() {
       return userDoc().role in [
-        'battalion_commander', 'battalion_xo', 'battalion_csm',
+        'district_army_instructor', 'battalion_commander', 'battalion_xo', 'battalion_csm',
         'senior_army_instructor', 'army_instructor', 's1_adjutant'
       ];
     }
 
-    // Returns true when a roster position string is a battalion-level slot
-    // (S-1 through S-7 staff, Sergeant Major, XO, CSM, or BC).
+    // Returns true when a roster position string is a battalion-level slot.
     // Keep in sync with BATTALION_POSITIONS in src/constants.js.
     function isBattalionPosition(pos) {
       return pos in [
         'Battalion Staff (S-1)', 'Battalion Staff (S-2)', 'Battalion Staff (S-3)',
         'Battalion Staff (S-4)', 'Battalion Staff (S-5)', 'Battalion Staff (S-6)',
         'Battalion Staff (S-7)', 'Sergeant Major',
-        'Battalion XO', 'Battalion CSM', 'Battalion Commander'
+        'Battalion XO', 'Battalion Deputy Commander',
+        'Battalion CSM', 'Battalion Commander'
       ];
     }
 
@@ -51,6 +51,7 @@ service cloud.firestore {
     // table changes.
     function roleLevel(roleName) {
       let levels = {
+        'district_army_instructor': 105,
         'senior_army_instructor': 100, 'army_instructor': 95,
         'battalion_commander': 90, 'battalion_xo': 85, 'battalion_csm': 85, 'sergeant_major': 80,
         's1_adjutant': 70, 's2_intelligence': 70, 's3_operations': 70, 's4_logistics': 70,
@@ -136,6 +137,13 @@ service cloud.firestore {
          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
            'role', 'company', 'platoon', 'squad', 'rank',
            'position', 'letLevel', 'email', 'suspended', 'approved'
+         ])) ||
+        // Battalion staff (level 70) may assign portrait photos for any cadet
+        // (S5 Public Affairs, S3 Operations, etc. can set portrait fields from
+        // AdminCadetProfile). Only the four portrait-related fields are allowed.
+        (myLevel() >= 70 &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+           'portrait', 'portraitAssignedByStaff', 'portraitPending', 'portraitPendingAt'
          ]))
       );
     }
@@ -161,11 +169,37 @@ service cloud.firestore {
       allow delete: if isSignedIn() && myLevel() >= resource.data.issuerLevel;
     }
 
-    // Public calendar — readable without auth. Staff tier (70+) can write;
-    // this matches the /admin/events ProtectedRoute minLevel gate.
+    // Company-scoped announcements posted by company command team (45+).
+    // Readers: the post's own company cadets + battalion staff (70+).
+    // Writers: company command (45+) posting to their own company.
+    // Delete: post author OR battalion staff (70+).
+    // Company-scoped announcements.
+    // List rule is permissive (any signed-in cadet) because client-side
+    // filters by company; a per-document rule on an unfiltered query is
+    // rejected by Firestore before it reaches the client.
+    match /companyAnnouncements/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (
+        // Battalion staff (70+) may post to any company
+        myLevel() >= 70 ||
+        // Company command (45–69) may only post to their own company
+        (myLevel() >= 45 && userDoc().company == request.resource.data.company)
+      );
+      allow delete: if isSignedIn() && (
+        myLevel() >= 70 ||
+        request.auth.uid == resource.data.issuerUid
+      );
+    }
+
+    // Public calendar — readable without auth. Staff tier (70+) can create;
+    // creators at any level can edit/delete their own events.
     match /events/{id} {
       allow read: if true;
-      allow write: if isSignedIn() && myLevel() >= 70;
+      allow create: if isSignedIn() && myLevel() >= 70;
+      allow update, delete: if isSignedIn() && (
+        myLevel() >= 70 ||
+        resource.data.createdByUid == request.auth.uid
+      );
     }
 
     // Internal orders feed — not public.
@@ -195,22 +229,42 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
         canApproveUniform() ||
         isStaffObserver() ||
+        // Admin-level roles (80+) not covered by canApproveUniform —
+        // specifically sergeant_major and instructors — can read all requests.
+        isAdmin() ||
         ((isS4AssistantTier() || isCompanyLeadershipTier()) &&
           resource.data.company == userDoc().company) ||
         resource.data.cadetName == userDoc().fullName
       );
-      allow create: if isSignedIn() && canRequestUniform();
-      allow update, delete: if isSignedIn() && canApproveUniform();
+      // Staff (70+) can create, to allow auto-submission of ribbon requests on cycle lock.
+      allow create: if isSignedIn() && (canRequestUniform() || myLevel() >= 70);
+      allow update: if isSignedIn() && (
+        canApproveUniform() ||
+        // Staff (70+) can re-write auto-submitted ribbon requests on re-lock.
+        (myLevel() >= 70 && resource.data.autoSubmitted == true) ||
+        // The original requester can flip Approved → Issued (mark as received).
+        // Only the status field may change, and only in that one direction.
+        (resource.data.requestedByUid == request.auth.uid &&
+         resource.data.status == 'Approved' &&
+         request.resource.data.status == 'Issued' &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+      );
+      allow delete: if isSignedIn() && canApproveUniform();
     }
 
     match /leadership/{id} {
       allow read: if true;
-      allow write: if isSignedIn() && isAdmin();
+      // Commanders (55+) can write: roster auto-sync fires from their save.
+      // S5 Public Affairs and S6 Technology retain direct access for portrait
+      // uploads and desc/quote overrides in the Publishing Hub.
+      allow write: if isSignedIn() && myLevel() >= 55;
     }
 
     match /instructors/{id} {
       allow read: if true;
-      allow write: if isSignedIn() && isAdmin();
+      allow write: if isSignedIn() && (
+        userDoc().role in ['s5_public_affairs', 's6_technology'] || isAdmin()
+      );
     }
 
     // pageContent covers all public pages: home, about, cadet-info,
@@ -288,6 +342,9 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
         myLevel() >= 70 ||
         (myLevel() >= 45 && resource.data.company == userDoc().company) ||
+        // Battalion members whose secondaryCompany attaches them to a company's
+        // class period — allows company XOs and 1SGs to see their attached cadets.
+        (myLevel() >= 45 && resource.data.secondaryCompany == userDoc().company) ||
         (myLevel() >= 35 && resource.data.company == userDoc().company &&
           userDoc().role in ['company_s1_assistant', 'company_s3_assistant', 'company_s4_assistant'])
       );
@@ -336,15 +393,11 @@ service cloud.firestore {
       !(resource.data.linkedUid == request.auth.uid &&
         !isSelfEditExempt() &&
         request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['position', 'rank', 'letLevel', 'company', 'linkedUid'])) &&
-      // ── Rank/position lock ─────────────────────────────────────────────────
-      // Only staff (70+) — S1 Adjutant and above — may change a cadet's rank or
-      // position. Company commanders (45–69) cannot promote or demote subordinates
-      // through the portal. S1 adjutant (70) changes are flagged in rosterChangelog
-      // for BC/CSM review (enforced client-side in AdminRoster.jsx handleSave).
-      !(myLevel() < 70 &&
-        request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['rank', 'position']));
+          .hasAny(['position', 'rank', 'letLevel', 'company', 'linkedUid']));
+      // ── Rank/position lock (TEMPORARILY REMOVED — v1.6.61) ─────────────────
+      // Company leadership (45–69) may now change rank and position on roster
+      // entries during the initial roster-setup period. Reinstate once all
+      // initial ranks and positions have been correctly assigned.
       // Delete: staff (70+) only. Below that, use rosterPendingActions.
       allow delete: if isSignedIn() && myLevel() >= 70;
     }
@@ -376,10 +429,12 @@ service cloud.firestore {
     // S1/S3 assistants + company command (45+) can read/write own company.
     // Staff (70+) can read/write all. Battalion S1 (s1_adjutant) unlocks/sends back.
     match /cadetChallengeCycles/{docId} {
-      allow read: if isSignedIn() && (
-        myLevel() >= 70 ||
-        (myLevel() >= 35 && resource.data.company == userDoc().company)
-      );
+      // Read open to all authenticated users at the assistant tier (35+).
+      // Status docs contain only workflow state (open/closed/submitted/locked)
+      // — not cadet PII. Previously used resource.data.company == userDoc().company,
+      // which denied reads on non-existent docs (null resource) and caused an
+      // uncaught permission-denied snapshot error when a cycle had never been opened.
+      allow read: if isSignedIn() && myLevel() >= 35;
       allow create: if isSignedIn() && (
         myLevel() >= 70 ||
         (myLevel() >= 35 && request.resource.data.company == userDoc().company)
@@ -400,16 +455,9 @@ service cloud.firestore {
     // Their records are stored under company='Zulu' but must also be readable
     // and writable by Alpha's S1 assistant (via secondaryCompany match).
     match /cadetChallengeRecords/{docId} {
-      // Staff (70+) sees all; company assistants (35+) see own company;
-      // battalion members readable via secondaryCompany match;
-      // cadets can read their own record via linkedUid (personal profile view).
-      // linkedUid is written to new records by AdminCadetChallenge at create time.
-      allow read: if isSignedIn() && (
-        myLevel() >= 70 ||
-        (myLevel() >= 35 && resource.data.company == userDoc().company) ||
-        (myLevel() >= 35 && resource.data.secondaryCompany == userDoc().company) ||
-        resource.data.linkedUid == request.auth.uid
-      );
+      // Any signed-in portal member can read records — powers the public
+      // Battalion Leaderboard page visible to all cadets.
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && (
         myLevel() >= 70 ||
         (myLevel() >= 35 && request.resource.data.company == userDoc().company) ||
@@ -420,7 +468,12 @@ service cloud.firestore {
         (myLevel() >= 35 && resource.data.company == userDoc().company) ||
         (myLevel() >= 35 && resource.data.secondaryCompany == userDoc().company)
       );
-      allow delete: if isSignedIn() && myLevel() >= 70;
+      // Company-level users (35+) may delete records from their own company;
+      // staff (70+) may delete any record.
+      allow delete: if isSignedIn() && (
+        myLevel() >= 70 ||
+        (myLevel() >= 35 && resource.data.company == userDoc().company)
+      );
     }
 
     // ── S2 Inspection Items ───────────────────────────────────────────────────
@@ -590,7 +643,7 @@ service cloud.firestore {
       allow read:   if isSignedIn() && myLevel() >= 70;
       allow create: if isSignedIn() && myLevel() >= 70;
       allow update: if isSignedIn() && myLevel() >= 70;
-      allow delete: if isSignedIn() && myLevel() >= 80;
+      allow delete: if isSignedIn() && myLevel() >= 70;
     }
 
     // ── Supply Requests ───────────────────────────────────────────────────────
@@ -610,12 +663,14 @@ service cloud.firestore {
     // ── Promotion Boards ──────────────────────────────────────────────────────
     // S1 adjutant creates, opens, closes, and unlocks boards.
     // Company XO (50+) can update companyStatus (submit/un-submit their company).
-    // Staff (70+) and company command (45+) can read boards.
+    // Company command (45+) and S1/S3 company assistants (35) can read boards
+    // so the Promotion Board tab in the S1 Tracker is visible to all S1 page users.
+    // Staff (70+) can read and write all.
     match /promotionBoards/{id} {
       allow create: if isSignedIn() && (
         userDoc().role == 's1_adjutant' || myLevel() >= 85
       );
-      allow read: if isSignedIn() && myLevel() >= 45;
+      allow read: if isSignedIn();
       allow update: if isSignedIn() && (
         userDoc().role == 's1_adjutant' || myLevel() >= 85 ||
         // Company XO (50+) may only toggle companyStatus (submit/unlock their company).
@@ -630,8 +685,9 @@ service cloud.firestore {
     // ── Promotion Scores ──────────────────────────────────────────────────────
     // Created by S1 in bulk when a board is opened.
     // Company XO (50+) updates scores for their own company; staff (70+) for all.
-    // Read: staff (70+) sees all; company command (45+) sees own company only
-    //       so commanders cannot compare scores against other companies.
+    // Read: staff (70+) sees all; company command (45+) and S1/S3 assistants (35)
+    //       see own company only. The subscription in AdminS1 also scopes the query
+    //       by company for non-battalion users to match this rule.
     // Delete: S1 adjutant or admin (85+).
     match /promotionScores/{id} {
       allow create: if isSignedIn() && (
@@ -639,7 +695,8 @@ service cloud.firestore {
       );
       allow read: if isSignedIn() && (
         myLevel() >= 70 ||
-        (myLevel() >= 45 && resource.data.company == userDoc().company)
+        (myLevel() >= 35 && resource.data.company == userDoc().company) ||
+        resource.data.linkedUid == request.auth.uid
       );
       allow update: if isSignedIn() && (
         myLevel() >= 70 ||
@@ -648,6 +705,13 @@ service cloud.firestore {
       allow delete: if isSignedIn() && (
         userDoc().role == 's1_adjutant' || myLevel() >= 85
       );
+    }
+
+    // ── Fallen Heroes ─────────────────────────────────────────────────────────
+    // Honor roll of fallen alumni. All signed-in users can read; staff (70+) can write.
+    match /fallenHeroes/{id} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && myLevel() >= 70;
     }
 
     // ── Cadet Yearly History ──────────────────────────────────────────────────
@@ -692,7 +756,9 @@ service cloud.firestore {
     match /aarLogs/{id} {
       allow read: if isSignedIn() && (
         myLevel() >= 70 ||
-        (myLevel() >= 45 && myLevel() < 70 && resource.data.company == userDoc().company)
+        (myLevel() >= 45 && myLevel() < 70 &&
+          resource.data.company != null &&
+          resource.data.company.lower() == userDoc().company.lower())
       );
       allow create: if isSignedIn() && myLevel() >= 45 &&
         request.resource.data.createdBy == request.auth.uid;
@@ -711,14 +777,23 @@ service cloud.firestore {
     // formSubmissions: company roles r/w own company; staff (70+) see all.
     // Instructor-only (95+) path kept for Cloud Function promotion-board import.
     match /formEvents/{id} {
-      allow read: if isSignedIn() && myLevel() >= 35;
-      allow create, update: if isSignedIn() && myLevel() >= 45;
+      allow read:   if isSignedIn() && myLevel() >= 35;
+      allow create: if isSignedIn() && myLevel() >= 45;
+      // S1/S3 assistants (35) may update so the roster-sync can keep
+      // totalCadets accurate when they open an event. Creating events
+      // still requires command level (45+).
+      allow update: if isSignedIn() && (
+        myLevel() >= 45 ||
+        userDoc().role in ['company_s1_assistant', 'company_s3_assistant']
+      );
       allow delete: if isSignedIn() && myLevel() >= 70;
     }
     match /formSubmissions/{id} {
       allow read: if isSignedIn() && (
         myLevel() >= 70 ||
-        (myLevel() >= 35 && resource.data.company == userDoc().company)
+        (myLevel() >= 35 && resource.data.company == userDoc().company) ||
+        // Battalion members assigned to this user's company via secondaryCompany
+        (myLevel() >= 35 && resource.data.secondaryCompany == userDoc().company)
       );
       allow create: if isSignedIn() && (
         myLevel() >= 45 ||
@@ -726,7 +801,9 @@ service cloud.firestore {
       );
       allow update: if isSignedIn() && (
         myLevel() >= 70 ||
-        (myLevel() >= 35 && resource.data.company == userDoc().company)
+        (myLevel() >= 35 && resource.data.company == userDoc().company) ||
+        // Battalion members assigned to this user's company via secondaryCompany
+        (myLevel() >= 35 && resource.data.secondaryCompany == userDoc().company)
       );
       allow delete: if isSignedIn() && myLevel() >= 70;
     }
@@ -761,6 +838,261 @@ service cloud.firestore {
       allow create: if isSignedIn() && myLevel() >= 35 &&
         request.resource.data.userId == request.auth.uid;
       allow update, delete: if false;
+    }
+
+    match /s5Shop/{itemId} {
+      // S5 PA can read/write everything.
+      // Company S5 Assistants (level 35) can read published items and update
+      // their own completion entries (dot-notation updates to completions,
+      // taskCompletions, subtaskCompletions maps).
+      // Staff (70+) can read all items.
+      allow read: if isSignedIn() && (
+        myLevel() >= 70 ||
+        userDoc().role == 's5_public_affairs' ||
+        (userDoc().role == 'company_s5_assistant' && resource.data.published == true)
+      );
+      allow create: if isSignedIn() && (
+        userDoc().role == 's5_public_affairs' || myLevel() >= 80
+      );
+      allow update: if isSignedIn() && (
+        userDoc().role == 's5_public_affairs' ||
+        myLevel() >= 80 ||
+        userDoc().role == 'company_s5_assistant'
+      );
+      allow delete: if isSignedIn() && (
+        userDoc().role == 's5_public_affairs' || myLevel() >= 80
+      );
+    }
+
+    // ── Participation Events ──────────────────────────────────────────────────
+    // Named events (swim meets, community service, etc.).
+    // Read: company command (45+) can view. Write: staff (70+) only.
+    match /participationEvents/{id} {
+      allow read: if isSignedIn() && myLevel() >= 45;
+      allow create, update, delete: if isSignedIn() && myLevel() >= 70;
+    }
+
+    // ── Participation Entries ─────────────────────────────────────────────────
+    // Per-cadet attendance records for each event.
+    // Read: company command (45+). Write: staff (70+). Entries are immutable.
+    match /participationEntries/{id} {
+      allow read: if isSignedIn() && myLevel() >= 45;
+      allow create: if isSignedIn() && myLevel() >= 70;
+      allow delete: if isSignedIn() && myLevel() >= 70;
+      allow update: if false;
+    }
+
+    // ── Leadership Calendar ───────────────────────────────────────────────────
+    // Private calendar for battalion/company leadership.
+    // Read: company command tier (L45+) and above.
+    // Write: battalion staff (L70+) only.
+    match /leadershipCalendar/{id} {
+      allow read: if isSignedIn() && myLevel() >= 45;
+      allow create, update, delete: if isSignedIn() && myLevel() >= 70;
+    }
+
+    // Leadership tasks.
+    // Personal tasks (isAssigned == false): visible only to creator.
+    // Assigned tasks: visible to assignees based on scope, and to battalion (L70+).
+    // Create: personal allowed for L45+; assigned allowed for L70+ only.
+    // Update (mark complete): creator, assignees in scope, or battalion staff.
+    // Delete: battalion staff (L70+) only.
+    match /leadershipTasks/{id} {
+      allow read: if isSignedIn() && (
+        myLevel() >= 70 ||
+        (myLevel() >= 45 && resource.data.createdByUid == request.auth.uid) ||
+        (myLevel() >= 45 && resource.data.isAssigned == true && (
+          // New schema: assignedCompanies + assignedPositions (empty = all)
+          (resource.data.keys().hasAll(['assignedCompanies']) && (
+            (resource.data.assignedCompanies.size() == 0 || resource.data.assignedCompanies.hasAny([userDoc().company])) &&
+            (resource.data.assignedPositions.size() == 0 || resource.data.assignedPositions.hasAny([userDoc().position]))
+          )) ||
+          // Old schema backward compat
+          resource.data.assignedScope == 'all' ||
+          (resource.data.assignedScope == 'company' && resource.data.assignedCompany == userDoc().company) ||
+          (resource.data.assignedScope == 'position' && resource.data.assignedPositions.hasAny([userDoc().position]))
+        ))
+      );
+      allow create: if isSignedIn() && (
+        (request.resource.data.isAssigned == false && myLevel() >= 45) ||
+        (request.resource.data.isAssigned == true  && myLevel() >= 70)
+      );
+      allow update: if isSignedIn() && (
+        myLevel() >= 70 ||
+        resource.data.createdByUid == request.auth.uid ||
+        (resource.data.isAssigned == true && (
+          // New schema
+          (resource.data.keys().hasAll(['assignedCompanies']) && (
+            (resource.data.assignedCompanies.size() == 0 || resource.data.assignedCompanies.hasAny([userDoc().company])) &&
+            (resource.data.assignedPositions.size() == 0 || resource.data.assignedPositions.hasAny([userDoc().position]))
+          )) ||
+          // Old schema
+          resource.data.assignedScope == 'all' ||
+          (resource.data.assignedScope == 'company' && resource.data.assignedCompany == userDoc().company) ||
+          (resource.data.assignedScope == 'position' && resource.data.assignedPositions.hasAny([userDoc().position]))
+        ))
+      );
+      allow delete: if isSignedIn() && myLevel() >= 70;
+    }
+
+    // Form responses — one document per (announcementId, user) pair.
+    // Doc ID format: {announcementId}_{userId}
+    // create fires only for new documents; update/delete denied → responses are immutable.
+    match /formResponses/{responseId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Poll votes — one document per (announcementId, user) pair.
+    // Doc ID format: {announcementId}_{userId}
+    // create fires only for new documents; update fires on existing ones → prevents vote changes.
+    match /pollVotes/{voteId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Ribbon type catalog — staff (70+) can create/update/delete types;
+    // all authenticated users can read (needed for award modals).
+    match /ribbonTypes/{id} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn() && myLevel() >= 70;
+      allow update: if isSignedIn() && myLevel() >= 70;
+      allow delete: if isSignedIn() && myLevel() >= 80;
+    }
+
+    // Ribbon awards — staff (70+) can create/update/delete awards;
+    // anyone can read their own (cadet portal), staff can read all.
+    match /ribbonAwards/{id} {
+      allow read:   if isSignedIn() && (myLevel() >= 45 || resource.data.rosterDocId == request.auth.uid);
+      allow create: if isSignedIn() && myLevel() >= 45;
+      allow update: if isSignedIn() && myLevel() >= 70;
+      allow delete: if isSignedIn() && myLevel() >= 70;
+    }
+
+    // Arc, Medal, Cord types — same gates as ribbonTypes.
+    match /arcTypes/{id} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn() && myLevel() >= 70;
+      allow update: if isSignedIn() && myLevel() >= 70;
+      allow delete: if isSignedIn() && myLevel() >= 80;
+    }
+    match /medalTypes/{id} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn() && myLevel() >= 70;
+      allow update: if isSignedIn() && myLevel() >= 70;
+      allow delete: if isSignedIn() && myLevel() >= 80;
+    }
+    match /cordTypes/{id} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn() && myLevel() >= 70;
+      allow update: if isSignedIn() && myLevel() >= 70;
+      allow delete: if isSignedIn() && myLevel() >= 80;
+    }
+
+    // Arc, Medal, Cord awards — same gates as ribbonAwards.
+    match /arcAwards/{id} {
+      allow read:   if isSignedIn() && (myLevel() >= 45 || resource.data.rosterDocId == request.auth.uid);
+      allow create: if isSignedIn() && myLevel() >= 45;
+      allow update: if isSignedIn() && myLevel() >= 70;
+      allow delete: if isSignedIn() && myLevel() >= 70;
+    }
+    match /medalAwards/{id} {
+      allow read:   if isSignedIn() && (myLevel() >= 45 || resource.data.rosterDocId == request.auth.uid);
+      allow create: if isSignedIn() && myLevel() >= 45;
+      allow update: if isSignedIn() && myLevel() >= 70;
+      allow delete: if isSignedIn() && myLevel() >= 70;
+    }
+    match /cordAwards/{id} {
+      allow read:   if isSignedIn() && (myLevel() >= 45 || resource.data.rosterDocId == request.auth.uid);
+      allow create: if isSignedIn() && myLevel() >= 45;
+      allow update: if isSignedIn() && myLevel() >= 70;
+      allow delete: if isSignedIn() && myLevel() >= 70;
+    }
+
+    // Ribbon recommendations — anyone signed in or public can create;
+    // staff (70+) can read/update/delete.
+    match /ribbonRecommendations/{id} {
+      allow read:   if isSignedIn() && myLevel() >= 45;
+      allow create: if true;
+      allow update: if isSignedIn() && myLevel() >= 45;
+      allow delete: if isSignedIn() && myLevel() >= 70;
+    }
+
+    // ── Service Hours ─────────────────────────────────────────────────────────
+    // Create: any signed-in user (cadets submit their own hours).
+    // Read:   staff (70+) can see all entries; a cadet can only see their own.
+    // Update: staff (70+) — to approve/reject/reset status.
+    // Delete: staff (70+) only.
+    match /serviceHours/{id} {
+      allow create: if isSignedIn();
+      allow read:   if isSignedIn() && (
+        myLevel() >= 70 ||
+        resource.data.linkedUid == request.auth.uid
+      );
+      allow update: if isSignedIn() && myLevel() >= 70;
+      allow delete: if isSignedIn() && myLevel() >= 70;
+    }
+
+    // ── Attendance ────────────────────────────────────────────────────────────
+    // Read:   command tier (45+) and above.
+    // Create: staff (70+) — creates attendance session.
+    // Update: command tier (45+) — for recording cadet marks on a session.
+    // Delete: staff (70+) only.
+    match /attendance/{id} {
+      allow read:   if isSignedIn() && myLevel() >= 45;
+      allow create: if isSignedIn() && myLevel() >= 70;
+      allow update: if isSignedIn() && myLevel() >= 45;
+      allow delete: if isSignedIn() && myLevel() >= 70;
+    }
+
+    // ── Scholarship Board ─────────────────────────────────────────────────────
+    // Read:   any signed-in portal member.
+    // Create: staff (70+).
+    // Update: any signed-in user may touch bookmarkedBy only;
+    //         staff (70+) may update any field.
+    // Delete: staff (70+).
+    match /scholarshipBoard/{id} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn() && myLevel() >= 70;
+      allow update: if isSignedIn() && (
+        myLevel() >= 70 ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bookmarkedBy'])
+      );
+      allow delete: if isSignedIn() && myLevel() >= 70;
+    }
+
+    // ── Achievement Wall ──────────────────────────────────────────────────────
+    // Read:   any signed-in portal member (visible-flag filtering is client-side).
+    // Write:  staff (70+) only.
+    match /achievementWall/{id} {
+      allow read:                   if isSignedIn();
+      allow create, update, delete: if isSignedIn() && myLevel() >= 70;
+    }
+
+    // ── AFI Prep Sessions ─────────────────────────────────────────────────────
+    // Read:   any signed-in portal member.
+    // Create: staff (70+) — creates the session.
+    // Update: command tier (45+) — for entering cadet ratings and finalizing.
+    // Delete: staff (70+) only.
+    match /afiSessions/{id} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn() && myLevel() >= 70;
+      allow update: if isSignedIn() && myLevel() >= 45;
+      allow delete: if isSignedIn() && myLevel() >= 70;
+    }
+
+    // ── Special Teams — competition results subcollection ─────────────────────
+    // The parent /specialTeams/{teamId} document rule is at line 151.
+    // Read:          any signed-in portal member.
+    // Create/Delete: command tier (45+) — matches the canEdit gate in
+    //                AdminTeamsPrivate.jsx (COMMAND_L = 45).
+    match /specialTeams/{teamId}/results/{resultId} {
+      allow read:          if isSignedIn();
+      allow create, delete: if isSignedIn() && myLevel() >= 45;
     }
 
     // Fallback — deny everything not covered by an explicit rule above.

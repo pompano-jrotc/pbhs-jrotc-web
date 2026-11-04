@@ -126,20 +126,36 @@ async function resendSend(toEmail, subject, html) {
   }
 }
 
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function buildAlertEmail({ event, actorName, actorRole, targetName, targetId, notes, timestamp }) {
+  const n  = escapeHtml(actorName);
+  const r  = escapeHtml(actorRole).replace(/_/g, ' ');
+  const tn = escapeHtml(targetName);
+  const ti = escapeHtml(targetId);
+  const no = escapeHtml(notes);
+  const ts = escapeHtml(timestamp);
+
   const eventLabels = {
     self_edit_attempt: '🚨 Self-Edit Attempt Blocked',
     duplicate_role:    '⚠️ Duplicate High-Rank Role Assigned',
     mass_changes:      '⚠️ Mass Roster Changes Detected',
   };
   const eventDescriptions = {
-    self_edit_attempt: `<strong>${actorName}</strong> (${actorRole.replace(/_/g, ' ')}) attempted to edit their own roster entry (<em>${targetName}</em>). The action was blocked by the portal's self-edit protection.`,
-    duplicate_role:    `<strong>${actorName}</strong> was assigned a role that already has an existing holder: <em>${targetName}</em>. Review the accounts page immediately.`,
-    mass_changes:      `<strong>${actorName}</strong> made a large number of roster changes in a short period. Review the activity log for details.`,
+    self_edit_attempt: `<strong>${n}</strong> (${r}) attempted to edit their own roster entry (<em>${tn}</em>). The action was blocked by the portal's self-edit protection.`,
+    duplicate_role:    `<strong>${n}</strong> was assigned a role that already has an existing holder: <em>${tn}</em>. Review the accounts page immediately.`,
+    mass_changes:      `<strong>${n}</strong> made a large number of roster changes in a short period. Review the activity log for details.`,
   };
 
   const heading  = eventLabels[event] || '⚠️ Security Event';
-  const bodyText = eventDescriptions[event] || `Event: ${event} — Actor: ${actorName} — Target: ${targetName}`;
+  const bodyText = eventDescriptions[event] || `Event: ${escapeHtml(event)} — Actor: ${n} — Target: ${tn}`;
 
   return `<!DOCTYPE html>
 <html><body style="font-family:Arial,sans-serif;background:#0a0c12;margin:0;padding:40px 20px;">
@@ -156,17 +172,17 @@ function buildAlertEmail({ event, actorName, actorRole, targetName, targetId, no
       <table style="width:100%;border-collapse:collapse;font-size:12px;color:#94a3b8;margin-bottom:20px;">
         <tr style="border-bottom:1px solid #1e2d40;">
           <td style="padding:8px 0;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#64748b;width:40%">Actor</td>
-          <td style="padding:8px 0;color:#f1f5f9;">${actorName} (${actorRole.replace(/_/g, ' ')})</td>
+          <td style="padding:8px 0;color:#f1f5f9;">${n} (${r})</td>
         </tr>
         <tr style="border-bottom:1px solid #1e2d40;">
           <td style="padding:8px 0;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#64748b;">Target</td>
-          <td style="padding:8px 0;color:#f1f5f9;">${targetName}${targetId ? ` <span style="color:#64748b;font-size:10px;">(${targetId})</span>` : ''}</td>
+          <td style="padding:8px 0;color:#f1f5f9;">${tn}${ti ? ` <span style="color:#64748b;font-size:10px;">(${ti})</span>` : ''}</td>
         </tr>
         <tr style="border-bottom:1px solid #1e2d40;">
           <td style="padding:8px 0;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#64748b;">Time</td>
-          <td style="padding:8px 0;color:#f1f5f9;">${timestamp}</td>
+          <td style="padding:8px 0;color:#f1f5f9;">${ts}</td>
         </tr>
-        ${notes ? `<tr><td style="padding:8px 0;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#64748b;">Notes</td><td style="padding:8px 0;color:#f1f5f9;">${notes}</td></tr>` : ''}
+        ${no ? `<tr><td style="padding:8px 0;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#64748b;">Notes</td><td style="padding:8px 0;color:#f1f5f9;">${no}</td></tr>` : ''}
       </table>
       <a href="https://pbhsjrotc.com/admin/logs" style="display:inline-block;background:#f59e0b;color:#0a0c12;font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:0.15em;padding:10px 20px;border-radius:8px;text-decoration:none;">
         View Activity Log →

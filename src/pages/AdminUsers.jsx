@@ -10,15 +10,18 @@ import { Navigate } from 'react-router-dom';
 import {
   UserCog, Search, CheckCircle2,
   Loader2, UserPlus, User, X, Edit3, KeyRound, Ban, Trash2,
-  ShieldCheck, ShieldOff, ToggleLeft, ToggleRight,
+  ShieldCheck, ShieldOff, ShieldAlert, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ROLE_HIERARCHY, ROLE_LABELS, ADMIN_LEVEL, STAFF_LEVEL, JROTC_POSITIONS,
-  COMPANY_HQ_LOCKED_POSITIONS, COMPANY_HQ_DEFAULT_POSITIONS,
+  ROLE_HIERARCHY, ROLE_LABELS, ADMIN_LEVEL, STAFF_LEVEL,
+  JROTC_RANKS, JROTC_POSITIONS, POSITION_RANKS,
+  COMPANY_HQ_LOCKED_POSITIONS, COMPANY_HQ_DEFAULT_POSITIONS, NO_SQUAD_POSITIONS,
+  rankExceedsMax,
 } from '../constants';
 import { useCompanies } from '../hooks/useCompanies';
 import AdminPageHeader from '../components/AdminPageHeader';
+import { useConfirm } from '../contexts/ConfirmContext';
 import { RosterRowSkeleton } from '../components/Skeleton';
 
 // ── BC Role Override Panel ─────────────────────────────────────────────────────
@@ -103,8 +106,9 @@ const formatCooldown = (seconds) => {
   return `${m}:${String(s).padStart(2, '0')}`;
 };
 
-const AdminUsers = () => {
+const AdminUsers = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
+  const confirm = useConfirm();
   
   const [personnel, setPersonnel] = useState([]);
   const [rosterLoading, setRosterLoading] = useState(true);
@@ -116,12 +120,19 @@ const AdminUsers = () => {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginEmailStatus, setLoginEmailStatus] = useState(null);
   const [resetPasswordStatus, setResetPasswordStatus] = useState(null);
+  const [resetMfaStatus, setResetMfaStatus] = useState(null);
   const [suspendStatus, setSuspendStatus] = useState(null);
   const [deleteAccountStatus, setDeleteAccountStatus] = useState(null);
   // Keyed by target uid, not global - resetting one cadet's password
   // shouldn't block resetting a different cadet's right after.
   const [resetCooldowns, setResetCooldowns] = useState({});
   const [now, setNow] = useState(Date.now());
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Access code management (admin only)
+  const [codeInput, setCodeInput] = useState('');
+  const [codeSaving, setCodeSaving] = useState(false);
+  const [codeStatus, setCodeStatus] = useState(null); // null | 'saved' | 'error'
 
   const resetCooldownSeconds = editingRecord
     ? Math.max(0, Math.ceil(((resetCooldowns[editingRecord.id] || 0) - now) / 1000))
@@ -153,8 +164,7 @@ const AdminUsers = () => {
     .filter(([slug]) => (ROLE_HIERARCHY[slug] || 0) < userLevel);
   const { companies: COMPANIES } = useCompanies();
 
-  // Dropdown Constants
-  const JROTC_RANKS = ["C/PVT", "C/PFC", "C/CPL", "C/SGT", "C/SSG", "C/SFC", "C/MSG", "C/1SG", "C/SGM", "C/CSM", "C/2LT", "C/1LT", "C/CPT", "C/MAJ", "C/LTC", "C/COL"];
+  // Dropdown Constants (JROTC_RANKS and POSITION_RANKS imported from constants.js)
   const LET_LEVELS = ["LET 1", "LET 2", "LET 3", "LET 4"];
   const PLATOONS = ["1st Platoon", "2nd Platoon", "3rd Platoon", "Company HQ"];
   const SQUADS = ["1st Squad", "2nd Squad", "3rd Squad", "4th Squad"];
@@ -212,7 +222,13 @@ const AdminUsers = () => {
   const handleAction = async (e) => {
     e.preventDefault();
 
+    // Prevent double-submission (double-click on Approve / Add to Roster would
+    // pass both byUid and byName empty-checks concurrently and create two roster entries).
+    if (isSaving) return;
+    setIsSaving(true);
+
     if (!FULL_NAME_PATTERN.test(formData.fullName.trim())) {
+      setIsSaving(false);
       showStatus("Full Name Must Be: LASTNAME, FIRSTNAME");
       return;
     }
@@ -224,11 +240,32 @@ const AdminUsers = () => {
     const wasPendingApproval = !!editingRecord && editingRecord.approved === false;
     const roleChanged = !!editingRecord && editingRecord.role !== formData.role;
 
+    // ── LET level / position cross-validation ─────────────────────────────────
+    // LET 1 → Squad Member only; LET 2+ → cannot be Squad Member.
+    if (formData.letLevel === 'LET 1' && formData.position !== 'Squad Member') {
+      setIsSaving(false);
+      showStatus('LET 1 CADETS CAN ONLY HOLD THE SQUAD MEMBER POSITION. Please correct the position before saving.');
+      return;
+    }
+    if (formData.letLevel && formData.letLevel !== 'LET 1' && formData.position === 'Squad Member') {
+      setIsSaving(false);
+      showStatus('SQUAD MEMBER IS ONLY AVAILABLE FOR LET 1 CADETS. LET 2–4 CADETS MUST HAVE A DIFFERENT POSITION.');
+      return;
+    }
+
+    // ── Rank ceiling enforcement ──────────────────────────────────────────────
+    if (rankExceedsMax(formData.rank, formData.position)) {
+      setIsSaving(false);
+      showStatus(`${formData.rank} exceeds the authorized max rank (${POSITION_RANKS[formData.position]}) for ${formData.position}. Please select a lower rank.`);
+      return;
+    }
+
     // ── Self-approval block ────────────────────────────────────────────────────
     // Prevent a user manager from approving an account whose linkedUid points to
     // their own roster entry — blocks the "create a second account and approve
     // it yourself" exploit. Firestore rules enforce the same check server-side.
     if (wasPendingApproval && editingRecord.linkedUid && editingRecord.linkedUid === user?.uid) {
+      setIsSaving(false);
       showStatus('BLOCKED: You cannot approve an account linked to your own roster entry. Ask another staff member to review this account.');
       return;
     }
@@ -248,6 +285,7 @@ const AdminUsers = () => {
           const holderName = existingHolders[0]?.data()?.fullName || 'another account';
           if (newRole === 'battalion_commander') {
             // Hard block — no override
+            setIsSaving(false);
             showStatus(`BLOCKED: Battalion Commander is already assigned to ${holderName}. That role must be revoked before it can be reassigned.`);
             return;
           } else {
@@ -258,6 +296,7 @@ const AdminUsers = () => {
             const overrides = overrideSnap.docs[0]?.data() || {};
             const overrideKey = newRole === 'battalion_xo' ? 'allowDualXO' : 'allowDualCSM';
             if (!overrides[overrideKey]) {
+              setIsSaving(false);
               showStatus(`BLOCKED: ${newRole === 'battalion_xo' ? 'Battalion XO' : 'Battalion CSM'} is already assigned to ${holderName}. The Battalion Commander must enable a role override first.`);
               return;
             }
@@ -481,6 +520,8 @@ const AdminUsers = () => {
       } else {
         showStatus(`Error Saving Record (${code || err?.message || 'unknown'})`);
       }
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -551,13 +592,37 @@ const AdminUsers = () => {
     }
   };
 
+  // Strips all enrolled phone MFA factors from the account so the cadet
+  // can sign in with email + password only until they re-enroll 2FA.
+  const handleResetMfa = async () => {
+    if (!editingRecord) return;
+    const ok = await confirm(`Remove 2FA enrollment for ${editingRecord.fullName || 'this account'}? They will be able to sign in with just their password until they re-enroll.`, { title: 'Remove 2FA', destructive: false });
+    if (!ok) return;
+    setResetMfaStatus('working');
+    try {
+      const idToken = await user.getIdToken();
+      const res = await fetch('/api/admin-update-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ type: 'reset-mfa', targetUid: editingRecord.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to remove 2FA');
+      setResetMfaStatus('success');
+      setTimeout(() => setResetMfaStatus(null), 3000);
+    } catch (err) {
+      setResetMfaStatus(err.message || 'error');
+    }
+  };
+
   // Disables/re-enables the account's actual Firebase Auth login (blocks
   // sign-in entirely, not just a soft in-app flag) and mirrors the state to
   // Firestore for the roster badge below.
   const handleToggleSuspend = async () => {
     if (!editingRecord) return;
     const suspending = !editingRecord.suspended;
-    if (!window.confirm(`${suspending ? 'Suspend' : 'Reactivate'} ${editingRecord.fullName || 'this account'}?`)) return;
+    const ok = await confirm(`${suspending ? 'Suspend' : 'Reactivate'} ${editingRecord.fullName || 'this account'}?`, { title: suspending ? 'Suspend Account' : 'Reactivate Account', destructive: suspending });
+    if (!ok) return;
     setSuspendStatus('working');
     try {
       const idToken = await user.getIdToken();
@@ -646,7 +711,8 @@ const AdminUsers = () => {
   // Permanently deletes an approved account from the Danger Zone.
   const handleDeleteAccount = async () => {
     if (!editingRecord) return;
-    if (!window.confirm(`Permanently delete ${editingRecord.fullName || 'this account'}? This cannot be undone.`)) return;
+    const ok = await confirm(`Permanently delete ${editingRecord.fullName || 'this account'}? This cannot be undone.`, { title: 'Delete Account', destructive: true });
+    if (!ok) return;
     await _doDeleteAccount('Account Deleted', 'delete');
   };
 
@@ -654,7 +720,8 @@ const AdminUsers = () => {
   // confirmation text and toast so the action reads clearly as a denial.
   const handleDenyAccount = async () => {
     if (!editingRecord) return;
-    if (!window.confirm(`Deny ${editingRecord.fullName || 'this account'}'s registration request? This cannot be undone.`)) return;
+    const ok = await confirm(`Deny ${editingRecord.fullName || 'this account'}'s registration request? This cannot be undone.`, { title: 'Deny Registration', destructive: true });
+    if (!ok) return;
     await _doDeleteAccount('Registration Denied', 'deny');
   };
 
@@ -667,11 +734,8 @@ const AdminUsers = () => {
   if (!isAuthorized) return <Navigate to="/admin/dashboard" />;
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
-        <AdminPageHeader
-          icon={UserCog}
-          title="Accounts"
-        />
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+        {!hideHeader && <AdminPageHeader icon={UserCog} title="Accounts" />}
         <div className="flex justify-end -mt-4 mb-8">
           <button
             onClick={() => { setFormData(initialFormState); setShowAddModal(true); }}
@@ -749,13 +813,106 @@ const AdminUsers = () => {
                 </div>
 
                 <div className="flex gap-2">
-                    <button title="Edit personnel record" onClick={() => { setEditingRecord(p); setFormData(p); setLoginEmail(p.email || ''); setLoginEmailStatus(null); setResetPasswordStatus(null); setSuspendStatus(null); setDeleteAccountStatus(null); }} className="p-3 bg-slate-100 dark:bg-white/5 rounded-xl hover:bg-yellow-500 hover:text-slate-950 transition-all text-slate-500">
+                    <button title="Edit personnel record" onClick={() => { setEditingRecord(p); setFormData(p); setLoginEmail(p.email || ''); setLoginEmailStatus(null); setResetPasswordStatus(null); setResetMfaStatus(null); setSuspendStatus(null); setDeleteAccountStatus(null); }} className="p-3 bg-slate-100 dark:bg-white/5 rounded-xl hover:bg-yellow-500 hover:text-slate-950 transition-all text-slate-500">
                       <Edit3 size={18} />
                     </button>
                 </div>
              </div>
           ))}
         </div>
+
+      {/* ─── Access Code Management (Admin-level only) ─── */}
+      {userLevel >= ADMIN_LEVEL && (
+        <div className="mt-12 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-white/5 p-8 rounded-[2rem] space-y-5">
+          <div className="flex items-center gap-3 mb-1">
+            <ShieldAlert size={18} className="text-yellow-600 dark:text-yellow-500 shrink-0" />
+            <h3 className="text-xs font-black text-yellow-600 dark:text-yellow-500 uppercase tracking-widest">Battalion Access Code</h3>
+          </div>
+
+          <div className="flex items-start gap-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 text-[11px] text-yellow-700 dark:text-yellow-300">
+            <ShieldAlert size={14} className="flex-shrink-0 mt-0.5" />
+            This code gates who can create an account. Changing it is a security event — leadership will be notified via push notification and the activity log will be flagged. Store the new code somewhere safe (e.g. a secure note shared with the SAI) before applying it.
+          </div>
+
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            The code is never stored as plain text — only its SHA-256 hash is written to Firestore. After saving, the plain text you typed is not recoverable from the portal.
+          </p>
+
+          <div className="space-y-2">
+            <label className="block text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">New Access Code</label>
+            <div className="relative">
+              <KeyRound size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="password"
+                autoComplete="new-password"
+                placeholder="Type new code…"
+                value={codeInput}
+                onChange={e => { setCodeInput(e.target.value); setCodeStatus(null); }}
+                className="w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-3 pl-10 rounded-xl outline-none focus:border-yellow-500 text-sm font-bold text-slate-900 dark:text-white"
+              />
+            </div>
+            {codeStatus === 'saved' && <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">✓ Code updated — leadership has been notified</p>}
+            {codeStatus === 'error' && <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mt-1">✕ Save failed — check your connection and try again</p>}
+          </div>
+
+          <button
+            disabled={codeSaving || !codeInput.trim()}
+            onClick={async () => {
+              setCodeSaving(true);
+              setCodeStatus(null);
+              try {
+                // Hash client-side — plaintext never leaves the browser
+                const encoded = new TextEncoder().encode(codeInput.trim());
+                const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+                const hash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+                await setDoc(doc(db, 'settings', 'signupCode'), {
+                  hash,
+                  updatedAt: new Date().toISOString(),
+                  updatedBy: userData?.fullName || 'admin',
+                });
+
+                // Security-flagged log entry — visible in Admin Log under Security
+                writeLog({
+                  type: 'account',
+                  action: 'access_code_changed',
+                  description: `⚑ Battalion signup access code was changed by ${userData?.fullName || 'an admin'}.`,
+                  userId: user?.uid || '',
+                  userFullName: userData?.fullName || 'admin',
+                  userRole: role || '',
+                  category: 'security',
+                });
+
+                // Push notification to all staff (70+) — non-blocking
+                user?.getIdToken?.().then(idToken => {
+                  fetch('/api/send-push', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      idToken,
+                      title: '🔐 Security Alert',
+                      body: `Battalion access code was changed by ${userData?.fullName || 'an admin'}. Update your records.`,
+                    }),
+                  }).catch(() => { /* push failure is non-fatal */ });
+                }).catch(() => { /* token error is non-fatal */ });
+
+                setCodeInput('');
+                setCodeStatus('saved');
+              } catch (err) {
+                console.error('Access code save failed:', err);
+                setCodeStatus('error');
+              } finally {
+                setCodeSaving(false);
+              }
+            }}
+            className="w-full bg-yellow-500 text-slate-950 font-black uppercase py-5 rounded-2xl hover:bg-yellow-400 transition-all text-sm shadow-lg shadow-yellow-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {codeSaving ? <Loader2 size={18} className="animate-spin" /> : <ShieldAlert size={18} />}
+            {codeSaving ? 'Saving…' : 'Update Access Code'}
+          </button>
+        </div>
+      )}
+
       {/* Add/Edit Modal */}
       <AnimatePresence>
         {(showAddModal || editingRecord) && (
@@ -833,7 +990,7 @@ const AdminUsers = () => {
                   </div>
                 )}
 
-                {!BATTALION_COMPANIES.includes(formData.company) && formData.platoon !== 'Company HQ' && (
+                {!BATTALION_COMPANIES.includes(formData.company) && formData.platoon !== 'Company HQ' && !NO_SQUAD_POSITIONS.includes(formData.position) && (
                   <div className="space-y-1">
                     <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">Squad</label>
                     <select className="w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-4 rounded-2xl outline-none text-sm font-bold text-slate-900 dark:text-white appearance-none" value={formData.squad} onChange={e => setFormData({...formData, squad: e.target.value})}>
@@ -877,6 +1034,26 @@ const AdminUsers = () => {
                     )}
                     {JROTC_RANKS.map(r => <option key={r} value={r} className="bg-white dark:bg-slate-900">{r}</option>)}
                   </select>
+                  {(() => {
+                    const authRank = POSITION_RANKS[formData.position] || '';
+                    const isOver   = authRank && formData.rank && rankExceedsMax(formData.rank, formData.position);
+                    const isUnder  = authRank && formData.rank && !isOver && formData.rank !== authRank;
+                    if (!authRank) return null;
+                    return (
+                      <p className={`text-[10px] font-bold flex items-center flex-wrap gap-1.5 mt-1 ml-1 ${isOver ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                        {isOver
+                          ? <span className="font-black">⛔ OVER RANK — max for this position is {authRank}.</span>
+                          : <><span>Max rank for this position:</span><span className="font-black">{authRank}</span></>
+                        }
+                        {(isOver || isUnder) && (
+                          <button type="button" onClick={() => setFormData(f => ({...f, rank: authRank}))}
+                            className="ml-1 underline underline-offset-2 hover:opacity-70 transition-opacity">
+                            Use {authRank}
+                          </button>
+                        )}
+                      </p>
+                    );
+                  })()}
                 </div>
 
                 <div className="space-y-1">
@@ -894,13 +1071,19 @@ const AdminUsers = () => {
                     value={formData.position}
                     onChange={e => {
                       const newPos = e.target.value;
-                      const isHqLocked  = COMPANY_HQ_LOCKED_POSITIONS.includes(newPos);
-                      const isHqDefault = COMPANY_HQ_DEFAULT_POSITIONS.includes(newPos);
+                      const isHqLocked   = COMPANY_HQ_LOCKED_POSITIONS.includes(newPos);
+                      const isHqDefault  = COMPANY_HQ_DEFAULT_POSITIONS.includes(newPos);
+                      const isNoSquad    = NO_SQUAD_POSITIONS.includes(newPos);
+                      const authRank     = POSITION_RANKS[newPos] || '';
                       setFormData({
                         ...formData,
                         position: newPos,
+                        // Auto-fill rank when blank and regulation specifies one
+                        ...(!formData.rank && authRank ? { rank: authRank } : {}),
                         // Auto-assign Company HQ for command/staff roles; lock for forced positions.
                         ...(isHqLocked || isHqDefault ? { platoon: 'Company HQ', squad: '' } : {}),
+                        // Platoon Leaders / Platoon Sergeants belong to a platoon but not a squad.
+                        ...(isNoSquad && !(isHqLocked || isHqDefault) ? { squad: '' } : {}),
                       });
                     }}
                   >
@@ -937,21 +1120,25 @@ const AdminUsers = () => {
                   <div className="md:col-span-2 flex gap-3 mt-4">
                     <button
                       type="submit"
-                      className="flex-1 bg-green-600 hover:bg-green-500 text-white font-black uppercase py-5 rounded-2xl transition-all text-sm shadow-lg shadow-green-600/20 flex items-center justify-center gap-2"
+                      disabled={isSaving}
+                      className="flex-1 bg-green-600 hover:bg-green-500 text-white font-black uppercase py-5 rounded-2xl transition-all text-sm shadow-lg shadow-green-600/20 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <CheckCircle2 size={17} /> Approve Account
+                      {isSaving ? <Loader2 size={17} className="animate-spin" /> : <CheckCircle2 size={17} />}
+                      {isSaving ? 'Saving…' : 'Approve Account'}
                     </button>
                     <button
                       type="button"
                       onClick={handleDenyAccount}
-                      className="flex-1 bg-red-600 hover:bg-red-500 text-white font-black uppercase py-5 rounded-2xl transition-all text-sm shadow-lg shadow-red-600/20 flex items-center justify-center gap-2"
+                      disabled={isSaving}
+                      className="flex-1 bg-red-600 hover:bg-red-500 text-white font-black uppercase py-5 rounded-2xl transition-all text-sm shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <X size={17} /> Deny Account
                     </button>
                   </div>
                 ) : (
-                  <button type="submit" className="md:col-span-2 w-full bg-yellow-500 text-slate-950 font-black uppercase py-5 rounded-2xl hover:bg-yellow-400 transition-all mt-4 text-sm shadow-lg shadow-yellow-500/20">
-                    {editingRecord ? 'Update Record' : 'Authorize & Add to Roster'}
+                  <button type="submit" disabled={isSaving} className="md:col-span-2 w-full bg-yellow-500 text-slate-950 font-black uppercase py-5 rounded-2xl hover:bg-yellow-400 transition-all mt-4 text-sm shadow-lg shadow-yellow-500/20 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    {isSaving ? <Loader2 size={18} className="animate-spin" /> : null}
+                    {isSaving ? 'Saving…' : editingRecord ? 'Update Record' : 'Authorize & Add to Roster'}
                   </button>
                 )}
               </form>
@@ -1007,6 +1194,24 @@ const AdminUsers = () => {
                   </div>
                   {resetPasswordStatus && resetPasswordStatus !== 'sending' && resetPasswordStatus !== 'success' && (
                     <p className="text-[10px] text-red-500 font-bold mt-2">{resetPasswordStatus}</p>
+                  )}
+
+                  <div className="flex items-center justify-between gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-white/5 flex-wrap">
+                    <p className="text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-widest">
+                      Removes enrolled 2FA phone — they sign in with password only until they re-enroll
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleResetMfa}
+                      disabled={resetMfaStatus === 'working'}
+                      className={`px-6 py-3 rounded-xl font-black uppercase text-xs flex items-center gap-2 whitespace-nowrap transition-all ${resetMfaStatus === 'success' ? 'bg-green-500 text-white' : 'bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50'}`}
+                    >
+                      <ShieldOff size={14} />
+                      {resetMfaStatus === 'working' ? 'Removing...' : resetMfaStatus === 'success' ? '2FA Removed' : 'Reset 2FA'}
+                    </button>
+                  </div>
+                  {resetMfaStatus && resetMfaStatus !== 'working' && resetMfaStatus !== 'success' && (
+                    <p className="text-[10px] text-red-500 font-bold mt-2">{resetMfaStatus}</p>
                   )}
 
                   {/* DANGER ZONE */}

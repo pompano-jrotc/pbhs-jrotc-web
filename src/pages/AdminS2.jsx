@@ -68,7 +68,7 @@ const statusColor = (s) =>
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-const AdminS2 = () => {
+const AdminS2 = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
   const userLevel    = ROLE_HIERARCHY[role] || 0;
   const isS2         = role === S2_ROLE;
@@ -94,8 +94,8 @@ const AdminS2 = () => {
   }
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
-      <AdminPageHeader icon={Shield} title="S2 Inspections" meta={`Intelligence · ${ROLE_LABELS[role] || role}`} />
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+      {!hideHeader && <AdminPageHeader icon={Shield} title="S2 Inspections" meta={`Intelligence · ${ROLE_LABELS[role] || role}`} />}
 
         {/* S2 management tabs */}
         {canManage && (

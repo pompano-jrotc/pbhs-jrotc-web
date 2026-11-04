@@ -51,10 +51,9 @@ export function useCompanies() {
     return unsub;
   }, []);
 
-  // companiesWithBattalion is kept for backward compatibility with callers
-  // that still use it — it is identical to `companies` (lettered companies
-  // only: Alpha, Bravo, Charlie, Delta). Battalion is NOT in this list.
-  const companiesWithBattalion = companies;
+  // companiesWithBattalion always includes 'Battalion' at the end.
+  // Use this anywhere a dropdown or list must offer Battalion as an option.
+  const companiesWithBattalion = [...companies, 'Battalion'];
 
   return { companies, companiesWithBattalion, loading };
 }

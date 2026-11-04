@@ -611,14 +611,14 @@ function RequestRow({ req, isAdmin, onAction, currentUid }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function AdminSupplyRequests() {
+export default function AdminSupplyRequests({ hideHeader = false }) {
   const { userData, role } = useAuth();
   const level = ROLE_HIERARCHY[role] ?? 0;
   // Build a user object matching the shape SubmitForm + listeners expect
   const user = userData;
 
   const isAdmin   = level >= ADMIN_LEVEL;
-  const canSubmit = level >= COMMAND_LEVEL;
+  const canSubmit = level >= 12; // squad_leader_assistant and above can submit requests
 
   const [tab, setTab]           = useState('queue');
   const [requests, setRequests] = useState([]);
@@ -658,8 +658,8 @@ export default function AdminSupplyRequests() {
 
   if (!canSubmit) {
     return (
-      <div className="flex-1 p-6 md:p-10 w-full">
-        <AdminPageHeader icon={ShoppingCart} title="Supply Requests" meta="Materials & Office Supplies" />
+      <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+        {!hideHeader && <AdminPageHeader icon={ShoppingCart} title="Supply Requests" meta="Materials & Office Supplies" />}
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <ShoppingCart size={40} className="text-slate-300 dark:text-slate-600 mb-4" />
           <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">
@@ -677,12 +677,14 @@ export default function AdminSupplyRequests() {
   const pendingCount = requests.filter(r => r.status === 'Pending').length;
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
-      <AdminPageHeader
-        icon={ShoppingCart}
-        title="Supply Requests"
-        meta={`Materials & Office Supplies · ${ROLE_LABELS[role] || role}`}
-      />
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
+      {!hideHeader && (
+        <AdminPageHeader
+          icon={ShoppingCart}
+          title="Supply Requests"
+          meta={`Materials & Office Supplies · ${ROLE_LABELS[role] || role}`}
+        />
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 mb-8 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 w-fit">

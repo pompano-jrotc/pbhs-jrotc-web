@@ -34,7 +34,7 @@ const emptyAlbum = () => ({
 const inputClass = "w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-3 rounded-xl outline-none focus:border-yellow-500 text-sm font-bold text-slate-900 dark:text-white transition-colors";
 const labelClass = "text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 block mb-1";
 
-const AdminPhotos = () => {
+const AdminPhotos = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
   // Only S5/S6 and top-4 (ADMIN_LEVEL) — same as AdminContent/AdminDocuments
   const isAuthorized = role === 's5_public_affairs' || role === 's6_technology' || (ROLE_HIERARCHY[role] || 0) >= ADMIN_LEVEL;
@@ -145,10 +145,10 @@ const AdminPhotos = () => {
   if (!isAuthorized) return <Navigate to="/admin/dashboard" />;
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
       <div className="max-w-4xl mx-auto">
 
-        <AdminPageHeader icon={Image} title="Photo Gallery" />
+        {!hideHeader && <AdminPageHeader icon={Image} title="Photo Gallery" />}
 
         <div className="flex justify-end mb-6">
           <button onClick={openAdd} className="bg-yellow-500 text-slate-950 px-6 py-3 rounded-2xl font-black uppercase text-xs flex items-center gap-2 hover:bg-yellow-400 shadow-lg shadow-yellow-500/20 transition-all">

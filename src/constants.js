@@ -1,6 +1,9 @@
 // src/constants.js
 
 export const ROLE_HIERARCHY = {
+  // Tier: District (Level 105)
+  'district_army_instructor': 105,
+
   // Tier: Instructors (Level 100-95)
   'senior_army_instructor': 100,
   'army_instructor': 95,
@@ -49,6 +52,7 @@ export const ROLE_HIERARCHY = {
 };
 
 export const ROLE_LABELS = {
+  district_army_instructor: 'District Army Instructor (DAI)',
   senior_army_instructor: 'Senior Army Instructor (SAI)',
   army_instructor: 'Army Instructor (AI)',
   battalion_commander: 'Battalion Commander',
@@ -102,6 +106,13 @@ export const JROTC_RANKS = [
 ];
 
 // Positions that ALWAYS get "Company HQ" as their platoon — non-negotiable.
+// Positions that lead a platoon — they belong to a platoon but have no squad.
+// Hide the squad field whenever one of these is selected.
+export const NO_SQUAD_POSITIONS = [
+  'Platoon Leader',
+  'Platoon Sergeant',
+];
+
 // Changing position to one of these auto-locks the platoon select to "Company HQ".
 export const COMPANY_HQ_LOCKED_POSITIONS = [
   'Company Commander',
@@ -136,6 +147,7 @@ export const BATTALION_POSITIONS = [
   'Battalion Staff (S-7)',
   'Sergeant Major',
   'Battalion XO',
+  'Battalion Deputy Commander',
   'Battalion CSM',
   'Battalion Commander',
 ];
@@ -169,7 +181,82 @@ export const JROTC_POSITIONS = [
   'Battalion Staff (S-7)',
   'Sergeant Major',
   'Battalion XO',
+  'Battalion Deputy Commander',
   'Battalion CSM',
   'Battalion Commander',
-  'Team Lead',
 ];
+
+// ── Rank-position helpers ─────────────────────────────────────────────────────
+
+// Returns true when `rank` is strictly above the authorized max for `position`.
+// A rank equal to or below the max is always valid.
+export function rankExceedsMax(rank, position) {
+  const maxRank = POSITION_RANKS[position];
+  if (!maxRank || !rank) return false;
+  return JROTC_RANKS.indexOf(rank) > JROTC_RANKS.indexOf(maxRank);
+}
+
+// Returns the promotion target rank for a given board number:
+//   Board 1 → one rank below the authorized max (runway to max)
+//   Board 2 → the authorized max itself
+// Returns null when the position has no authorized rank.
+export function boardTargetRank(position, board) {
+  const maxRank = POSITION_RANKS[position];
+  if (!maxRank) return null;
+  const maxIdx = JROTC_RANKS.indexOf(maxRank);
+  if (board === 1) return maxIdx > 0 ? JROTC_RANKS[maxIdx - 1] : maxRank;
+  return maxRank;
+}
+
+// Special-assignment billets that are held in addition to a primary position.
+// These are never the cadet's main position — they appear as a secondary
+// designation on roster entries (stored in the `secondaryPosition` field).
+export const SECONDARY_POSITIONS = [
+  'Color Guard Commander',
+  'Drill Captain',
+  'Rifle Team Commander',
+  'Raider Team Commander',
+  'Raider Team Co-Commander',
+];
+
+// Authorized cadet rank for each position per AR 145-2 / JROTC battalion
+// organization (paragraph 2-6 through 2-12).
+// This is the MAXIMUM rank a cadet may hold for the position — being at or
+// below this rank is always valid. After Promotion Board 1, cadets are
+// promoted to one rank below the max; after Board 2, to the max itself.
+// Positions without a fixed authorized rank are omitted.
+export const POSITION_RANKS = {
+  'Battalion Commander':        'C/LTC',
+  'Battalion Deputy Commander': 'C/MAJ',
+  'Battalion XO':               'C/MAJ',
+  'Battalion CSM':              'C/CSM',
+  'Color Guard Commander':      'C/CSM',
+  'Sergeant Major':             'C/SGM',
+  'Battalion Staff (S-1)':      'C/CPT',
+  'Battalion Staff (S-2)':      'C/CPT',
+  'Battalion Staff (S-3)':      'C/CPT',
+  'Battalion Staff (S-4)':      'C/CPT',
+  'Battalion Staff (S-5)':      'C/CPT',
+  'Battalion Staff (S-6)':      'C/CPT',
+  'Battalion Staff (S-7)':      'C/CPT',
+  'Rifle Team Commander':       'C/CPT',
+  'Raider Team Commander':      'C/CPT',
+  'Company Commander':          'C/CPT',
+  'Drill Captain':              'C/1LT',
+  'Raider Team Co-Commander':   'C/1LT',
+  'Company XO':                 'C/1LT',
+  'Company S1 Assistant':       'C/MSG',
+  'Company S2 Assistant':       'C/MSG',
+  'Company S3 Assistant':       'C/MSG',
+  'Company S4 Assistant':       'C/MSG',
+  'Company S5 Assistant':       'C/MSG',
+  'Company S6 Assistant':       'C/MSG',
+  'Company S7 Assistant':       'C/MSG',
+  'Master Sergeant':            'C/MSG',
+  'Platoon Sergeant':           'C/MSG',
+  'First Sergeant':             'C/1SG',
+  'Platoon Leader':             'C/2LT',
+  'Squad Leader':               'C/SGT',
+  'Squad Leader Assistant':     'C/CPL',
+  'Squad Member':               'C/PVT',
+};

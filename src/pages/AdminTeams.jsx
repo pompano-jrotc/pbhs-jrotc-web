@@ -3,7 +3,7 @@ import { db } from '../firebase';
 import { collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { writeLog } from '../lib/writeLog';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import {
   Save, Trash2, Edit3, ShieldAlert,
   Mail, CheckCircle2, Users, Plus, Loader2,
@@ -13,8 +13,9 @@ import { ROLE_HIERARCHY, STAFF_LEVEL } from '../constants';
 import { uploadToCloudinary } from '../utils/cloudinaryUpload';
 import AdminPageHeader from '../components/AdminPageHeader';
 
-const AdminTeams = () => {
+const AdminTeams = ({ hideHeader = false }) => {
   const { user, role, userData, loading: authLoading } = useAuth();
+  const [searchParams] = useSearchParams();
   const [teams, setTeams] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -70,6 +71,26 @@ const AdminTeams = () => {
       return () => unsubscribe();
     }
   }, [authLoading, user, isAuthorized]);
+
+  // If navigated here with ?team=<keyword> (e.g. from the roster special-assignment badge),
+  // auto-open the matching team for editing on first load.
+  const autoOpenedRef = React.useRef(false);
+  useEffect(() => {
+    const keyword = searchParams.get('team');
+    if (!keyword || teams.length === 0 || autoOpenedRef.current) return;
+    const match = teams.find(t => t.name.toLowerCase().includes(keyword.toLowerCase()));
+    if (match) {
+      autoOpenedRef.current = true;
+      setEditingId(match.id);
+      setFormData({
+        ...match,
+        requirements: Array.isArray(match.requirements) ? match.requirements.join(', ') : match.requirements || '',
+        disciplines:  Array.isArray(match.disciplines)  ? match.disciplines.join(', ')  : match.disciplines  || '',
+        leadership:   match.leadership || [],
+      });
+      setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 150);
+    }
+  }, [teams, searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentTeam = teams.find(t => t.id === editingId);
   const userInTeam = currentTeam?.leadership?.find(l => l.email?.toLowerCase().trim() === userEmail);
@@ -175,8 +196,8 @@ const AdminTeams = () => {
   if (!isAuthorized && !dataLoading) return <Navigate to="/admin/dashboard" replace />;
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full relative">
-      
+    <div className={`${hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'} relative`}>
+
       {/* STATUS TOAST */}
       {showStatus && (
         <div className={`fixed top-8 right-8 z-[100] flex items-center gap-3 p-4 rounded-2xl border shadow-2xl animate-in fade-in slide-in-from-top-4 ${
@@ -190,7 +211,7 @@ const AdminTeams = () => {
       )}
 
       <div className="max-w-6xl mx-auto">
-        <AdminPageHeader icon={ShieldAlert} title="Manage Teams" />
+        {!hideHeader && <AdminPageHeader icon={ShieldAlert} title="Manage Teams" />}
 
         <div className="grid lg:grid-cols-3 gap-12 animate-in fade-in slide-in-from-bottom-2">
             <div className="lg:col-span-2 space-y-8">

@@ -6,6 +6,7 @@ import { useIdleLogout } from './hooks/useIdleLogout';
 import { ROLE_HIERARCHY, STAFF_LEVEL, COMMAND_LEVEL, ADMIN_LEVEL } from './constants';
 import { canAccessRoute } from './lib/authz';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ConfirmProvider } from './contexts/ConfirmContext';
 import { setAnalyticsAdminMode } from './firebase';
 
 // --- COMPONENTS ---
@@ -14,6 +15,7 @@ import { setAnalyticsAdminMode } from './firebase';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CookieConsent from './components/CookieConsent';
+import { Analytics } from '@vercel/analytics/react';
 import AdminLayout from './components/AdminLayout';
 import TosGate from './components/TosGate';
 
@@ -29,15 +31,11 @@ const SignUp = lazy(() => import('./pages/SignUp'));
 const Photos = lazy(() => import('./pages/Photos'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
-// TaskManagement page merged into AdminOrders — kept as a lazy import
-// only so the old /admin/assign-tasks route can redirect instead of 404.
-// Once all bookmarks are gone this can be removed entirely.
 const CadetInfo = lazy(() => import('./pages/CadetInfo'));
 const Teams = lazy(() => import('./pages/Teams'));
 const Announcements = lazy(() => import('./pages/Announcements'));
 const PromotionBoard = lazy(() => import('./pages/PromotionBoard'));
 const Leadership = lazy(() => import('./pages/Leadership'));
-const AdminOrders = lazy(() => import('./pages/AdminOrders'));
 const AdminAnnouncements = lazy(() => import('./pages/AdminAnnouncements'));
 const UniformRequests = lazy(() => import('./pages/UniformRequests'));
 const CommanderInfo = lazy(() => import('./pages/CommanderInfo'));
@@ -54,7 +52,8 @@ const AdminPhotos = lazy(() => import('./pages/AdminPhotos'));
 const MyProfile = lazy(() => import('./pages/MyProfile'));
 const AboutPage = lazy(() => import('./pages/AboutPage'));
 const CalendarPage = lazy(() => import('./pages/CalendarPage'));
-const WinningColors = lazy(() => import('./pages/WinningColors'));
+const WinningColors  = lazy(() => import('./pages/WinningColors'));
+const UniformGuide   = lazy(() => import('./pages/UniformGuide'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const HowToJoin = lazy(() => import('./pages/HowToJoin'));
@@ -62,6 +61,7 @@ const AdminWelcome = lazy(() => import('./pages/AdminWelcome'));
 const Newsletters = lazy(() => import('./pages/Newsletters'));
 const AdminNewsletters = lazy(() => import('./pages/AdminNewsletters'));
 const AdminCadetChallenge = lazy(() => import('./pages/AdminCadetChallenge'));
+const AdminLeaderboard    = lazy(() => import('./pages/AdminLeaderboard'));
 const AdminRoster         = lazy(() => import('./pages/AdminRoster'));
 const AdminS2             = lazy(() => import('./pages/AdminS2'));
 const AdminS6             = lazy(() => import('./pages/AdminS6'));
@@ -76,8 +76,27 @@ const AdminHonorCompany   = lazy(() => import('./pages/AdminHonorCompany'));
 const AdminLog            = lazy(() => import('./pages/AdminLog'));
 const AdminSupplyRequests = lazy(() => import('./pages/AdminSupplyRequests'));
 const AdminCadetHistory   = lazy(() => import('./pages/AdminCadetHistory'));
-const AdminChangelog      = lazy(() => import('./pages/AdminChangelog'));
+const AdminChangelog           = lazy(() => import('./pages/AdminChangelog'));
+const AdminLeadershipCalendar  = lazy(() => import('./pages/AdminLeadershipCalendar'));
+const AdminParticipation  = lazy(() => import('./pages/AdminParticipation'));
+const AdminS5             = lazy(() => import('./pages/AdminS5'));
+const AdminStaff          = lazy(() => import('./pages/AdminStaff'));
+const AdminProgramsHub    = lazy(() => import('./pages/AdminProgramsHub'));
+const AdminLogsHub        = lazy(() => import('./pages/AdminLogsHub'));
+const AdminPublishingHub  = lazy(() => import('./pages/AdminPublishingHub'));
+const AdminRosterHub      = lazy(() => import('./pages/AdminRosterHub'));
+const AdminPersonnelHub   = lazy(() => import('./pages/AdminPersonnelHub'));
+const AdminCadetProfile   = lazy(() => import('./pages/AdminCadetProfile'));
+const RecommendRibbon     = lazy(() => import('./pages/RecommendRibbon'));
 const MindsetQuiz         = lazy(() => import('./pages/MindsetQuiz'));
+const KnowledgeQuiz       = lazy(() => import('./pages/KnowledgeQuiz'));
+const CadetPortal         = lazy(() => import('./pages/CadetPortal'));
+const AdminServiceHours   = lazy(() => import('./pages/AdminServiceHours'));
+const AdminAttendance     = lazy(() => import('./pages/AdminAttendance'));
+const AdminScholarshipBoard = lazy(() => import('./pages/AdminScholarshipBoard'));
+const AdminAchievementWall  = lazy(() => import('./pages/AdminAchievementWall'));
+const AdminAFIPrep          = lazy(() => import('./pages/AdminAFIPrep'));
+const AdminTeamsPrivate     = lazy(() => import('./pages/AdminTeamsPrivate'));
 
 const RouteFallback = () => (
   <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -196,6 +215,7 @@ const AppContent = () => {
           {/* Welcome/onboarding wizard — no sidebar, accessible to any signed-in user */}
           <Route path="/admin/welcome" element={<ProtectedRoute><AdminWelcome /></ProtectedRoute>} />
           <Route path="/about" element={<AboutPage />} />
+          <Route path="/leaderboard" element={<AdminLeaderboard />} />
           {/* Safety-net redirect: Home.jsx hero used "/About" (capital A) which
               React Router v6 treats as a distinct path — this catches any
               bookmarks or links still using the old casing. */}
@@ -206,8 +226,11 @@ const AppContent = () => {
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/cadet-info/winning-colors" element={<WinningColors />} />
+          <Route path="/cadet-info/uniform"        element={<UniformGuide />} />
           <Route path="/how-to-join" element={<HowToJoin />} />
+          <Route path="/recommend" element={<RecommendRibbon />} />
           <Route path="/mindset-quiz" element={<MindsetQuiz />} />
+          <Route path="/knowledge-quiz" element={<KnowledgeQuiz />} />
 
           {/* --- PROTECTED ADMIN ROUTES (wrapped in AdminLayout for persistent sidebar) --- */}
           {/* AdminLayout is a pathless layout route that renders <AdminSidebar /> +
@@ -216,16 +239,6 @@ const AppContent = () => {
               those pages don't need the authenticated sidebar. */}
           <Route element={<AdminLayout />}>
             <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
-            {/* /admin/assign-tasks merged into /admin/orders — redirect any old bookmarks */}
-            <Route path="/admin/assign-tasks" element={<Navigate to="/admin/orders" replace />} />
-            <Route
-              path="/admin/orders"
-              element={
-                <ProtectedRoute minLevel={STAFF_LEVEL}>
-                  <AdminOrders />
-                </ProtectedRoute>
-              }
-            />
             {/* Gated: S4 assistants, company command (CC/XO/1SG), S4 logistics,
                 and battalion command (adminLevel override). All lower tiers are
                 redirected — cadets, squad/platoon leadership don't have access. */}
@@ -237,137 +250,80 @@ const AppContent = () => {
               </ProtectedRoute>
             } />
 
-            {/* --- GLOBAL ANNOUNCEMENTS (ADMIN) --- */}
-            {/* S5 + all admin-level (80+): BC, XO, CSM, SGM, instructors */}
+            {/* --- ANNOUNCEMENTS (ADMIN) --- */}
+            {/* Company command (45+) see company section; S5/S6/admin also see global broadcast */}
             <Route
               path="/admin/announcements"
               element={
-                <ProtectedRoute allowedRoles={['s5_public_affairs']}>
+                <ProtectedRoute minLevel={COMMAND_LEVEL}>
                   <AdminAnnouncements />
                 </ProtectedRoute>
               }
             />
 
-            {/* Personnel: S1 + S6 manage accounts; XO/BC/CSM/SGM/instructors can view. */}
+            {/* Individual Cadet Profile (company staff 35+) */}
             <Route
-              path="/admin/users"
+              path="/admin/personnel/:rosterDocId"
               element={
-                <ProtectedRoute allowedRoles={['s1_adjutant', 's6_technology']}>
-                  <AdminUsers />
+                <ProtectedRoute minLevel={35} allowedRoles={['company_s1_assistant', 'company_s2_assistant', 'company_s3_assistant', 'company_s4_assistant', 'company_s5_assistant', 'company_s6_assistant', 'company_s7_assistant']}>
+                  <AdminCadetProfile />
                 </ProtectedRoute>
               }
             />
 
-            {/* AdminTeams gates per-team access itself via commanderEmails */}
-            <Route path="/admin/teams" element={<ProtectedRoute minLevel={STAFF_LEVEL}><AdminTeams /></ProtectedRoute>} />
-
-            {/* Leadership board: public-site management — S5 + XO + instructors only */}
+            {/* Personnel Hub: Roster · Cadet History · Accounts · Cadet Challenge */}
             <Route
-              path="/admin/leadership"
-              element={
-                <ProtectedRoute allowedRoles={['s5_public_affairs']} excludedRoles={RESTRICTED_CMD}>
-                  <AdminLeadership />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Content, Documents, Photos: S5 + S6 author; XO + instructors can edit */}
-            <Route
-              path="/admin/content"
-              element={
-                <ProtectedRoute allowedRoles={['s5_public_affairs', 's6_technology']} excludedRoles={RESTRICTED_CMD}>
-                  <AdminContent />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/admin/documents"
-              element={
-                <ProtectedRoute allowedRoles={['s5_public_affairs', 's6_technology']} excludedRoles={RESTRICTED_CMD}>
-                  <AdminDocuments />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/admin/photos"
-              element={
-                <ProtectedRoute allowedRoles={['s5_public_affairs', 's6_technology']} excludedRoles={RESTRICTED_CMD}>
-                  <AdminPhotos />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Newsletters: S5 publishes; XO + instructors can manage */}
-            <Route
-              path="/admin/newsletters"
-              element={
-                <ProtectedRoute allowedRoles={['s5_public_affairs']} excludedRoles={RESTRICTED_CMD}>
-                  <AdminNewsletters />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Camp Attendance: all staff except S6 (operational, not tech scope) */}
-            <Route
-              path="/admin/camps"
-              element={
-                <ProtectedRoute minLevel={STAFF_LEVEL} excludedRoles={['s6_technology']}>
-                  <AdminCamps />
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/admin/stats"
-              element={
-                <ProtectedRoute minLevel={STAFF_LEVEL}>
-                  <AdminStats />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Cadet Challenge: open to S1/S3 assistants (35) and company command (45+);
-                no minLevel here — internal access tiers handled inside the component,
-                same pattern as /admin/teams. Firestore rules enforce backend boundaries. */}
-            <Route path="/admin/cadet-challenge" element={<ProtectedRoute><AdminCadetChallenge /></ProtectedRoute>} />
-
-            {/* Battalion Roster: company command (45+) minimum; company_s1_assistant
-                also allowed so they can see their company's roster alongside
-                Cadet Challenge work. Both allowedRoles + minLevel means it's an
-                OR — canAccessRoute handles this combination. Internal per-company
-                scoping and read-only mode handled inside the component. */}
-            <Route
-              path="/admin/roster"
+              path="/admin/personnel"
               element={
                 <ProtectedRoute minLevel={COMMAND_LEVEL} allowedRoles={['company_s1_assistant', 'company_s3_assistant']}>
-                  <AdminRoster />
+                  <AdminPersonnelHub />
                 </ProtectedRoute>
               }
             />
+            {/* Legacy personnel routes → Personnel Hub */}
+            <Route path="/admin/users" element={<Navigate to="/admin/personnel?tab=accounts" replace />} />
 
-            {/* S2 Intelligence: battalion S2 + company S2 assistants + XO + instructors.
-                SGM/BC/CSM excluded — S2 is a staff function, not a command review tool. */}
-            <Route
-              path="/admin/s2"
-              element={
-                <ProtectedRoute allowedRoles={['s2_intelligence', 'company_s2_assistant']} excludedRoles={RESTRICTED_CMD}>
-                  <AdminS2 />
-                </ProtectedRoute>
-              }
-            />
+            {/* Legacy teams route → Publishing Hub */}
+            <Route path="/admin/teams" element={<Navigate to="/admin/publishing?tab=teams" replace />} />
 
-            {/* S6 Technology: S6 + company S6 assistants + S5 (read-only history) + XO + instructors.
-                SGM/BC/CSM excluded — technology management is outside their scope. */}
+            {/* Publishing Hub: Leadership · Content · Documents · Newsletters ·
+                Photo Gallery · Battalion Stats · Customization */}
             <Route
-              path="/admin/s6"
+              path="/admin/publishing"
               element={
-                <ProtectedRoute allowedRoles={['s6_technology', 'company_s6_assistant', 's5_public_affairs']} excludedRoles={RESTRICTED_CMD}>
-                  <AdminS6 />
+                <ProtectedRoute allowedRoles={[
+                  's5_public_affairs', 's6_technology',
+                ]} excludedRoles={RESTRICTED_CMD} minLevel={STAFF_LEVEL}>
+                  <AdminPublishingHub />
                 </ProtectedRoute>
               }
             />
+            {/* Legacy publishing routes → Publishing Hub */}
+            <Route path="/admin/leadership"  element={<Navigate to="/admin/publishing?tab=leadership"  replace />} />
+            <Route path="/admin/content"     element={<Navigate to="/admin/publishing?tab=content"     replace />} />
+            <Route path="/admin/documents"   element={<Navigate to="/admin/publishing?tab=documents"   replace />} />
+            <Route path="/admin/newsletters" element={<Navigate to="/admin/publishing?tab=newsletters" replace />} />
+            <Route path="/admin/photos"      element={<Navigate to="/admin/publishing?tab=photos"      replace />} />
+
+            {/* Programs Hub → Staff Hub S1 */}
+            <Route path="/admin/programs"      element={<Navigate to="/admin/staff?tab=s1" replace />} />
+            <Route path="/admin/camps"         element={<Navigate to="/admin/staff?tab=s1" replace />} />
+            <Route path="/admin/participation" element={<Navigate to="/admin/staff?tab=s1" replace />} />
+
+            <Route path="/admin/stats" element={<Navigate to="/admin/staff?tab=s6" replace />} />
+
+            <Route path="/admin/leaderboard" element={<ProtectedRoute><AdminLeaderboard /></ProtectedRoute>} />
+
+            {/* Legacy routes → Personnel Hub */}
+            <Route path="/admin/cadet-challenge" element={<Navigate to="/admin/personnel?tab=challenge" replace />} />
+            <Route path="/admin/roster-hub"      element={<Navigate to="/admin/personnel?tab=roster"    replace />} />
+            <Route path="/admin/roster"          element={<Navigate to="/admin/personnel?tab=roster"    replace />} />
+            <Route path="/admin/cadet-history"   element={<Navigate to="/admin/personnel?tab=history"   replace />} />
+
+            {/* Legacy staff routes — redirect to unified Staff Hub */}
+            <Route path="/admin/s2"      element={<Navigate to="/admin/staff?tab=s2" replace />} />
+            <Route path="/admin/s5-shop" element={<Navigate to="/admin/staff?tab=s5" replace />} />
+            <Route path="/admin/s6"      element={<Navigate to="/admin/staff?tab=s6" replace />} />
 
             {/* Fundraiser Tracking — Fallen Heroes: every authenticated portal user can
                 reach this route; the component itself handles the split between full
@@ -395,90 +351,49 @@ const AppContent = () => {
             {/* No minLevel here: every signed-in user manages their own profile */}
             <Route path="/admin/profile" element={<ProtectedRoute><MyProfile /></ProtectedRoute>} />
 
-            {/* Customization: S6 configures company names; XO + instructors can also edit.
-                SGM/BC/CSM excluded — portal configuration is outside their scope. */}
+            {/* Legacy companies route → Publishing Hub Customization tab */}
+            <Route path="/admin/companies" element={<Navigate to="/admin/publishing?tab=companies" replace />} />
+
+            {/* Legacy S1 route → Staff Hub */}
+            <Route path="/admin/s1" element={<Navigate to="/admin/staff?tab=s1" replace />} />
+
+            {/* Unified Staff Hub: S1 · S2 · S4 · S5 · S6 tabs; component gates per-tab access. */}
             <Route
-              path="/admin/companies"
+              path="/admin/staff"
               element={
-                <ProtectedRoute allowedRoles={['s6_technology']} excludedRoles={RESTRICTED_CMD}>
-                  <AdminCompanies />
+                <ProtectedRoute minLevel={5}>
+                  <AdminStaff />
                 </ProtectedRoute>
               }
             />
 
-            {/* S1 Tracker: form turn-in tracking + roster link.
-                S1/S3 adjutants, battalion XO, company command (CC/XO/1SG),
-                company S1 and S3 assistants. S4/S5/S6/S7 staff excluded —
-                this is a personnel accountability tool, not a general-staff page.
-                ADMIN_LEVEL (80+) always overrides. */}
-            <Route
-              path="/admin/s1"
-              element={
-                <ProtectedRoute allowedRoles={[
-                  's1_adjutant', 's3_operations', 'battalion_xo',
-                  'company_s1_assistant', 'company_xo', 'company_1sg', 'company_master_sergeant',
-                  'company_commander', 'company_s3_assistant',
-                ]}>
-                  <AdminS1 />
-                </ProtectedRoute>
-              }
-            />
+            {/* Legacy log routes → Staff Hub */}
+            <Route path="/admin/logs"         element={<Navigate to="/admin/staff?tab=s1" replace />} />
+            <Route path="/admin/meeting-logs" element={<Navigate to="/admin/staff?tab=s1" replace />} />
+            <Route path="/admin/aar-logs"     element={<Navigate to="/admin/staff?tab=s3" replace />} />
 
-            {/* Meeting Logs — all staff (70+) create/view; XO/CSM/BC/S1 edit all; company cmd sees shared */}
-            <Route
-              path="/admin/meeting-logs"
-              element={
-                <ProtectedRoute minLevel={COMMAND_LEVEL} allowedRoles={['company_commander', 'company_xo', 'company_1sg', 'company_master_sergeant']}>
-                  <AdminMeetingLogs />
-                </ProtectedRoute>
-              }
-            />
+            {/* Calendar Events → Staff Hub S3 */}
+            <Route path="/admin/events" element={<Navigate to="/admin/staff?tab=s3" replace />} />
 
-            {/* AAR Logs — staff (70+) see all; company command (45+) see own company */}
+            {/* Legacy feedback route → Staff Hub S6 */}
+            <Route path="/admin/feedback" element={<Navigate to="/admin/staff?tab=s6" replace />} />
+
+            {/* Honor Company → Staff Hub S3 */}
+            <Route path="/admin/honor-company" element={<Navigate to="/admin/staff?tab=s3" replace />} />
+
+            {/* Leadership Calendar — dedicated route for L45+ command leadership */}
             <Route
-              path="/admin/aar-logs"
+              path="/admin/leadership-calendar"
               element={
                 <ProtectedRoute minLevel={COMMAND_LEVEL}>
-                  <AdminAARLogs />
+                  <AdminLeadershipCalendar />
                 </ProtectedRoute>
               }
             />
 
-            {/* Calendar Events — all authenticated staff can create/edit/delete events */}
-            <Route
-              path="/admin/events"
-              element={<ProtectedRoute minLevel={STAFF_LEVEL}><AdminEvents /></ProtectedRoute>}
-            />
 
-            {/* Feedback Hub — any staff can submit (via floating button); view gated by role */}
-            <Route
-              path="/admin/feedback"
-              element={
-                <ProtectedRoute allowedRoles={['s5_public_affairs', 's6_technology', 'battalion_xo', 'battalion_csm', 'battalion_commander']}>
-                  <AdminFeedback />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Honor Company — private scoreboard, staff only */}
-            <Route
-              path="/admin/honor-company"
-              element={
-                <ProtectedRoute minLevel={STAFF_LEVEL}>
-                  <AdminHonorCompany />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Activity Log — staff only */}
-            <Route
-              path="/admin/log"
-              element={
-                <ProtectedRoute minLevel={STAFF_LEVEL}>
-                  <AdminLog />
-                </ProtectedRoute>
-              }
-            />
+            {/* Legacy activity log route → Staff Hub S6 */}
+            <Route path="/admin/log" element={<Navigate to="/admin/staff?tab=s6" replace />} />
             {/* Company Leadership+ can submit; admin can approve/deny/fulfill */}
             <Route
               path="/admin/supply-requests"
@@ -488,20 +403,53 @@ const AppContent = () => {
                 </ProtectedRoute>
               }
             />
-            {/* Company Leadership+ can view; admin can archive and delete */}
-            <Route
-              path="/admin/cadet-history"
-              element={
-                <ProtectedRoute minLevel={COMMAND_LEVEL}>
-                  <AdminCadetHistory />
-                </ProtectedRoute>
-              }
-            />
 
             {/* Version History — read-only, open to every authenticated portal user */}
             <Route
               path="/admin/changelog"
               element={<ProtectedRoute><AdminChangelog /></ProtectedRoute>}
+            />
+
+            {/* Cadet Record Portal — personal dashboard for all approved users */}
+            <Route
+              path="/admin/my"
+              element={<ProtectedRoute><CadetPortal /></ProtectedRoute>}
+            />
+
+            {/* Service Hours — all cadets can submit; staff 70+ can review */}
+            <Route
+              path="/admin/service-hours"
+              element={<ProtectedRoute><AdminServiceHours /></ProtectedRoute>}
+            />
+
+            {/* Attendance — events/practices/meetings (NOT class attendance) */}
+            <Route
+              path="/admin/attendance"
+              element={<ProtectedRoute minLevel={COMMAND_LEVEL}><AdminAttendance /></ProtectedRoute>}
+            />
+
+            {/* Scholarship & Opportunity Board — all cadets view; staff 70+ post */}
+            <Route
+              path="/admin/scholarships"
+              element={<ProtectedRoute><AdminScholarshipBoard /></ProtectedRoute>}
+            />
+
+            {/* Achievement Wall — all cadets view; staff 70+ post/hide */}
+            <Route
+              path="/admin/achievements"
+              element={<ProtectedRoute><AdminAchievementWall /></ProtectedRoute>}
+            />
+
+            {/* AFI Prep Tool — command 45+ edit; staff 70+ create sessions */}
+            <Route
+              path="/admin/afi-prep"
+              element={<ProtectedRoute minLevel={COMMAND_LEVEL}><AdminAFIPrep /></ProtectedRoute>}
+            />
+
+            {/* Teams Private — internal roster, competition results, notes */}
+            <Route
+              path="/admin/teams-private"
+              element={<ProtectedRoute minLevel={COMMAND_LEVEL}><AdminTeamsPrivate /></ProtectedRoute>}
             />
           </Route>
 
@@ -520,6 +468,7 @@ const AppContent = () => {
       {!isAdminPage && <Footer />}
 
       <CookieConsent />
+      <Analytics />
     </div>
   );
 };
@@ -527,11 +476,13 @@ const AppContent = () => {
 export default function App() {
   return (
     <ThemeProvider>
-      <Router>
-        <div className="bg-slate-50 dark:bg-slate-950 min-h-screen font-sans text-slate-900 dark:text-white">
-          <AppContent />
-        </div>
-      </Router>
+      <ConfirmProvider>
+        <Router>
+          <div className="bg-slate-50 dark:bg-slate-950 min-h-screen font-sans text-slate-900 dark:text-white">
+            <AppContent />
+          </div>
+        </Router>
+      </ConfirmProvider>
     </ThemeProvider>
   );
 }

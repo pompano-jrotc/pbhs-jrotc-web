@@ -3,24 +3,30 @@
 // Broadcasts an FCM push notification to every approved user who has at
 // least one registered device token stored in Firestore.
 //
+// Optionally sends email announcement notifications via Resend when
+// `announcementType` is included in the request body (merged here to stay
+// within Vercel Hobby's 12-function limit).
+//
 // Body:
-//   idToken  string   Firebase ID token of the calling user (must be staff 70+)
-//   title    string   Notification title (default: "PBHS JROTC")
-//   body     string   Notification body text (required)
+//   idToken          string   Firebase ID token of the calling user
+//   title            string   (push) Notification title — omit to skip push
+//   body             string   (push) Notification body text — omit to skip push
+//   announcementType string?  'global' | 'company' — triggers email send
+//   content          string?  Announcement text (required when announcementType set)
+//   issuer           string?  Display name, e.g. "C/1LT Smith"
+//   company          string?  Required when announcementType === 'company'
+//   pdfUrl           string?  Optional PDF link
+//   pdfFileName      string?  Optional PDF filename
 //
-// The caller's role is verified server-side — the same staff (70+) gate
-// that guards the Announcements page client-side.
-//
-// Token hygiene: FCM returns UNREGISTERED for tokens that belong to devices
-// that have since revoked permission or uninstalled the app. We remove those
-// stale tokens from Firestore so future sends are clean.
+// Auth gates:
+//   push (title+body present):       staff 70+ required
+//   global announcement email:       staff 70+ required
+//   company announcement email:      command 45+ required
 
 import { jwtVerify, createRemoteJWKSet, SignJWT, importPKCS8 } from 'jose';
-import { checkRateLimit } from '../lib/rateLimit.js';
+import { checkRateLimit, checkRateLimitWithTTL } from '../lib/rateLimit.js';
 
 // ── Firebase auth / service-account helpers ───────────────────────────────────
-// Pattern matches notify-cycle.js — shared utilities would be cleaner but
-// each Vercel function is a separate module so they self-contain the helpers.
 
 const JWKS = createRemoteJWKSet(
   new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
@@ -38,8 +44,7 @@ function getServiceAccount() {
   return _serviceAccount;
 }
 
-// FCM HTTP v1 requires the firebase.messaging OAuth scope — different from
-// the datastore scope used by Firestore REST calls in other notify-*.js files.
+// FCM HTTP v1 requires the firebase.messaging OAuth scope.
 let _fcmToken = null;
 async function getFcmAccessToken() {
   if (_fcmToken && _fcmToken.expiresAt > Date.now() + 30_000) return _fcmToken.value;
@@ -71,7 +76,7 @@ async function getFcmAccessToken() {
   return _fcmToken.value;
 }
 
-// Separate Firestore access token (datastore scope) for querying/updating docs.
+// Datastore scope token for Firestore REST calls.
 let _fsToken = null;
 async function getFirestoreAccessToken() {
   if (_fsToken && _fsToken.expiresAt > Date.now() + 30_000) return _fsToken.value;
@@ -103,6 +108,14 @@ async function getFirestoreAccessToken() {
   return _fsToken.value;
 }
 
+const HIERARCHY = {
+  senior_army_instructor: 100, army_instructor: 95,
+  battalion_commander: 90, battalion_xo: 85, battalion_csm: 85, sergeant_major: 80,
+  s1_adjutant: 70, s2_intelligence: 70, s3_operations: 70, s4_logistics: 70,
+  s5_public_affairs: 70, s6_technology: 70, s7_special_projects: 70,
+  company_commander: 55, company_xo: 50, company_1sg: 45, company_master_sergeant: 45,
+};
+
 /** Verify Firebase ID token → { uid, role, userLevel } */
 async function verifyAndGetLevel(idToken) {
   const account   = getServiceAccount();
@@ -117,15 +130,10 @@ async function verifyAndGetLevel(idToken) {
   if (!docRes.ok) throw new Error('Caller user doc not found');
   const doc         = await docRes.json();
   const role        = doc.fields?.role?.stringValue || 'cadet';
-  const HIERARCHY   = {
-    senior_army_instructor: 100, army_instructor: 95,
-    battalion_commander: 90, battalion_xo: 85, battalion_csm: 85, sergeant_major: 80,
-    s1_adjutant: 70, s2_intelligence: 70, s3_operations: 70, s4_logistics: 70,
-    s5_public_affairs: 70, s6_technology: 70, s7_special_projects: 70,
-    company_commander: 55, company_xo: 50, company_1sg: 45, company_master_sergeant: 45,
-  };
   return { uid, role, userLevel: HIERARCHY[role] || 0 };
 }
+
+// ── Push helpers ──────────────────────────────────────────────────────────────
 
 /** Collect all FCM tokens from approved users. Returns { tokens: string[], tokenToUid: Map } */
 async function getAllTokens(accessToken, projectId) {
@@ -149,7 +157,7 @@ async function getAllTokens(accessToken, projectId) {
   });
   const rows = await res.json();
 
-  const tokens    = [];
+  const tokens     = [];
   const tokenToUid = new Map();
   for (const r of rows) {
     if (!r.document?.fields) continue;
@@ -187,7 +195,7 @@ async function sendOne(fcmToken, accessToken, projectId, title, body) {
     }),
   });
   if (res.ok) return { ok: true, errorCode: null };
-  const err = await res.json().catch(() => ({}));
+  const err  = await res.json().catch(() => ({}));
   const code = err.error?.details?.[0]?.errorCode || err.error?.message || 'UNKNOWN';
   return { ok: false, errorCode: code };
 }
@@ -219,6 +227,169 @@ async function removeStaleTokens(fsToken, projectId, staleTokensByUid) {
   );
 }
 
+// ── Email helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Fetch approved users, optionally scoped to a company.
+ * Returns { recipients, stats } where stats breaks down why users are excluded.
+ */
+async function getEmailRecipients(accessToken, projectId, company = null) {
+  const url     = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:runQuery`;
+  const filters = [
+    { fieldFilter: { field: { fieldPath: 'approved' }, op: 'EQUAL', value: { booleanValue: true } } },
+  ];
+  if (company) {
+    filters.push({ fieldFilter: { field: { fieldPath: 'company' }, op: 'EQUAL', value: { stringValue: company } } });
+  }
+  const body = {
+    structuredQuery: {
+      from: [{ collectionId: 'users' }],
+      where: filters.length === 1
+        ? filters[0]
+        : { compositeFilter: { op: 'AND', filters } },
+    },
+  };
+  const res  = await fetch(url, {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body:    JSON.stringify(body),
+  });
+  const rows = await res.json();
+  const approved = rows.filter(r => r.document?.fields);
+  const mapped   = approved.map(r => ({
+    email:              r.document.fields.email?.stringValue    || '',
+    emailAnnouncements: r.document.fields.emailAnnouncements?.booleanValue,
+  }));
+  const noEmail   = mapped.filter(u => !u.email).length;
+  const optedOut  = mapped.filter(u => u.email && u.emailAnnouncements === false).length;
+  const recipients = mapped.filter(u => u.email && u.emailAnnouncements !== false);
+  return {
+    recipients,
+    stats: {
+      approved: approved.length,
+      noEmail,
+      optedOut,
+      willReceive: recipients.length,
+    },
+  };
+}
+
+/**
+ * Send emails in batch (up to 100 per call) to stay within Resend's 10 req/s
+ * rate limit. Returns { sent, failed } counts.
+ */
+async function resendSendBatch(emails) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error('RESEND_API_KEY not set.');
+
+  let sent = 0, failed = 0;
+  // Chunk into groups of 100 (Resend batch limit)
+  for (let i = 0; i < emails.length; i += 100) {
+    const chunk = emails.slice(i, i + 100);
+    const res = await fetch('https://api.resend.com/emails/batch', {
+      method:  'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body:    JSON.stringify(chunk),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      sent += Array.isArray(data?.data) ? data.data.length : chunk.length;
+    } else if (res.status === 429) {
+      const data = await res.json().catch(() => ({}));
+      const err = new Error('Resend daily email limit reached');
+      err.code = 'email_daily_limit';
+      err.resendMessage = data?.message || 'Daily sending limit reached';
+      throw err;
+    } else {
+      const text = await res.text();
+      console.error(`Resend batch failed (chunk ${i / 100 + 1}): ${text}`);
+      failed += chunk.length;
+    }
+  }
+  return { sent, failed };
+}
+
+function buildAnnouncementEmail({ type, company, issuer, content, pdfUrl, pdfFileName }) {
+  const isCompany  = type === 'company';
+  const headerLabel = isCompany ? `${company} Company Announcement` : 'Battalion-Wide Broadcast';
+  const tagColor    = isCompany ? '#3b82f6' : '#eab308';
+  const tagBg       = isCompany ? '#1e3a5f' : '#422006';
+
+  const pdfBlock = pdfUrl ? `
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0 0;">
+      <tr><td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;">
+        <a href="https://www.pbhsjrotc.com/announcements" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:#0f172a;">
+          <span style="font-size:20px;">📎</span>
+          <span style="font-size:13px;font-weight:700;color:#0f172a;">${pdfFileName || 'Attached PDF'}</span>
+          <span style="font-size:11px;color:#94a3b8;font-weight:700;margin-left:4px;">View on portal ↗</span>
+        </a>
+      </td></tr>
+    </table>` : '';
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${headerLabel}</title></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#f1f5f9;">
+<tr><td align="center" style="padding:40px 16px;">
+<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:560px;">
+
+  <!-- Header -->
+  <tr><td style="background:#0f172a;border-radius:16px 16px 0 0;padding:28px 32px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;">
+      <tr>
+        <td>
+          <p style="margin:0;font-size:11px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#eab308;">PBHS JROTC</p>
+          <p style="margin:4px 0 0;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#64748b;">Tornado Battalion · Command Portal</p>
+        </td>
+        <td align="right">
+          <span style="display:inline-block;background:${tagBg};color:${tagColor};font-size:9px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;padding:4px 10px;border-radius:6px;border:1px solid ${tagColor}40;">
+            ${isCompany ? company + ' Co.' : 'Global Broadcast'}
+          </span>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+
+  <!-- Yellow accent bar -->
+  <tr><td style="background:#eab308;height:3px;"></td></tr>
+
+  <!-- Body -->
+  <tr><td style="background:#fff;padding:36px 32px;">
+    <p style="margin:0 0 6px;font-size:10px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;">${headerLabel}</p>
+    <h1 style="margin:0 0 24px;font-size:22px;font-weight:900;color:#0f172a;line-height:1.2;">New Announcement</h1>
+
+    <!-- Message bubble -->
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 24px;">
+      <tr><td style="background:#f8fafc;border-left:4px solid #eab308;border-radius:0 12px 12px 0;padding:20px 24px;">
+        <p style="margin:0;font-size:15px;line-height:1.7;color:#1e293b;font-style:italic;">"${content.replace(/\n/g, '<br>')}"</p>
+      </td></tr>
+    </table>
+
+    <p style="margin:0;font-size:12px;color:#64748b;">
+      Posted by <strong style="color:#0f172a;">${issuer}</strong>
+    </p>
+    ${pdfBlock}
+
+    <!-- CTA -->
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px 0 0;">
+      <tr><td style="background:#eab308;border-radius:10px;padding:0;">
+        <a href="https://www.pbhsjrotc.com/announcements" style="display:inline-block;padding:13px 28px;font-size:12px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:#0f172a;text-decoration:none;">
+          View Announcement →
+        </a>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <!-- Footer -->
+  <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;border-radius:0 0 16px 16px;padding:20px 32px;">
+    <p style="margin:0;font-size:10px;color:#94a3b8;text-align:center;">Pompano Beach High School JROTC · 600 NE 13th Ave, Pompano Beach, FL 33060</p>
+    <p style="margin:6px 0 0;font-size:10px;color:#94a3b8;text-align:center;">
+      To opt out of announcement emails, visit <a href="https://www.pbhsjrotc.com/admin/profile" style="color:#eab308;">My Profile</a> in the Command Portal.
+    </p>
+  </td></tr>
+
+</table></td></tr></table></body></html>`;
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -227,49 +398,133 @@ export default async function handler(req, res) {
   try { await checkRateLimit(req, 'send-push', 10, 60); }
   catch { return res.status(429).json({ error: 'Too many requests' }); }
 
-  const { idToken, title = 'PBHS JROTC', body } = req.body || {};
-  if (!idToken || !body) return res.status(400).json({ error: 'Missing idToken or body' });
+  const {
+    idToken,
+    title,
+    body,
+    announcementType,
+    content,
+    issuer,
+    company,
+    pdfUrl,
+    pdfFileName,
+  } = req.body || {};
+
+  const doPush  = !!(title && body);
+  const doEmail = !!announcementType;
+
+  if (!idToken)                                return res.status(400).json({ error: 'Missing idToken' });
+  if (!doPush && !doEmail)                     return res.status(400).json({ error: 'Missing title/body or announcementType' });
+  if (doEmail && !content)                     return res.status(400).json({ error: 'Missing content for announcement email' });
+  if (doEmail && announcementType === 'company' && !company)
+                                               return res.status(400).json({ error: 'Missing company for company announcement' });
 
   let uid, userLevel;
   try {
     ({ uid, userLevel } = await verifyAndGetLevel(idToken));
-  } catch (err) {
+  } catch {
     return res.status(401).json({ error: 'Invalid token' });
   }
 
-  if (userLevel < 70) return res.status(403).json({ error: 'Staff level (70+) required' });
+  // Auth gate: push and global email require staff 70+; company email requires command 45+.
+  if (doPush && userLevel < 70)                return res.status(403).json({ error: 'Staff level (70+) required for push' });
+  if (doEmail && announcementType === 'global' && userLevel < 70)
+                                               return res.status(403).json({ error: 'Staff level (70+) required for global email' });
+  if (doEmail && announcementType === 'company' && userLevel < 45)
+                                               return res.status(403).json({ error: 'Command level (45+) required for company email' });
 
-  const account    = getServiceAccount();
-  const projectId  = account.project_id;
-  const [fcmToken, fsToken] = await Promise.all([getFcmAccessToken(), getFirestoreAccessToken()]);
-  const { tokens, tokenToUid } = await getAllTokens(fsToken, projectId);
-
-  if (!tokens.length) return res.status(200).json({ ok: true, sent: 0, failed: 0 });
-
-  // Send all concurrently; FCM HTTP v1 is per-token.
-  const results = await Promise.all(
-    tokens.map(t => sendOne(t, fcmToken, projectId, title, body).then(r => ({ token: t, ...r })))
-  );
-
-  const sent   = results.filter(r => r.ok).length;
-  const failed = results.filter(r => !r.ok).length;
-
-  // Collect stale tokens (UNREGISTERED = device unsubscribed or app cleared).
-  const stale = results.filter(r => !r.ok && ['UNREGISTERED', 'INVALID_ARGUMENT'].includes(r.errorCode));
-  if (stale.length) {
-    const byUid = new Map();
-    for (const { token } of stale) {
-      const u = tokenToUid.get(token);
-      if (u) {
-        if (!byUid.has(u)) byUid.set(u, []);
-        byUid.get(u).push(token);
-      }
+  // Per-user cooldown: 1 email announcement per 10 minutes.
+  // This prevents accidental double-sends and protects the Resend daily quota.
+  if (doEmail) {
+    const cooldown = await checkRateLimitWithTTL(`announ:cool:${uid}`, 1, 600);
+    if (!cooldown.allowed) {
+      const mins = Math.ceil((cooldown.ttl || 600) / 60);
+      return res.status(429).json({
+        error: 'cooldown',
+        message: `Please wait ${mins} more minute${mins !== 1 ? 's' : ''} before sending another announcement.`,
+        retryAfterSeconds: cooldown.ttl || 600,
+      });
     }
-    // Fire-and-forget — don't let cleanup delay the response.
-    removeStaleTokens(fsToken, projectId, byUid).catch(err =>
-      console.error('send-push: stale token cleanup failed', err)
-    );
   }
 
-  return res.status(200).json({ ok: true, sent, failed });
+  const account   = getServiceAccount();
+  const projectId = account.project_id;
+  const fsToken   = await getFirestoreAccessToken();
+
+  const result = { ok: true };
+
+  // ── Push notification ──────────────────────────────────────────────────────
+  if (doPush) {
+    const fcmToken = await getFcmAccessToken();
+    const { tokens, tokenToUid } = await getAllTokens(fsToken, projectId);
+
+    if (tokens.length) {
+      const results = await Promise.all(
+        tokens.map(t => sendOne(t, fcmToken, projectId, title, body).then(r => ({ token: t, ...r })))
+      );
+
+      result.pushSent   = results.filter(r => r.ok).length;
+      result.pushFailed = results.filter(r => !r.ok).length;
+
+      const stale = results.filter(r => !r.ok && ['UNREGISTERED', 'INVALID_ARGUMENT'].includes(r.errorCode));
+      if (stale.length) {
+        const byUid = new Map();
+        for (const { token } of stale) {
+          const u = tokenToUid.get(token);
+          if (u) {
+            if (!byUid.has(u)) byUid.set(u, []);
+            byUid.get(u).push(token);
+          }
+        }
+        removeStaleTokens(fsToken, projectId, byUid).catch(err =>
+          console.error('send-push: stale token cleanup failed', err)
+        );
+      }
+    } else {
+      result.pushSent   = 0;
+      result.pushFailed = 0;
+    }
+  }
+
+  // ── Announcement email ─────────────────────────────────────────────────────
+  if (doEmail) {
+    const { recipients, stats } = await getEmailRecipients(
+      fsToken, projectId,
+      announcementType === 'company' ? company : null
+    );
+
+    result.emailStats = stats;
+
+    if (recipients.length) {
+      const subject = announcementType === 'company'
+        ? `${company} Company Announcement — PBHS JROTC`
+        : 'Battalion-Wide Broadcast — PBHS JROTC';
+      const html = buildAnnouncementEmail({ type: announcementType, company, issuer, content, pdfUrl, pdfFileName });
+
+      const emails = recipients.map(u => ({
+        from:    'PBHS JROTC <announcements@mail.pbhsjrotc.com>',
+        to:      [u.email],
+        subject,
+        html,
+      }));
+      try {
+        const { sent, failed } = await resendSendBatch(emails);
+        result.emailSent   = sent;
+        result.emailFailed = failed;
+      } catch (err) {
+        if (err.code === 'email_daily_limit') {
+          return res.status(429).json({
+            error: 'email_daily_limit',
+            message: 'Daily email limit reached — email notifications will resume tomorrow. The announcement was still posted.',
+          });
+        }
+        throw err;
+      }
+    } else {
+      result.emailSent   = 0;
+      result.emailFailed = 0;
+    }
+  }
+
+  return res.status(200).json(result);
 }

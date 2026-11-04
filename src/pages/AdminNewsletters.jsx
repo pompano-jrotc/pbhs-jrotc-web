@@ -16,6 +16,7 @@ import ScrambleText from '../components/ScrambleText';
 import AdminPageHeader from '../components/AdminPageHeader';
 import { motion, AnimatePresence } from 'framer-motion';
 import { uploadPdfToStorage } from '../utils/storageUpload';
+import DatePicker from '../components/DatePicker';
 
 const EMPTY_FORM = {
   title: '', issue: '', date: '', summary: '', body: '',
@@ -32,7 +33,7 @@ const formatDate = (val) => {
   return !isNaN(d) ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : val;
 };
 
-const AdminNewsletters = () => {
+const AdminNewsletters = ({ hideHeader = false }) => {
   const { user, userData, role, loading: authLoading } = useAuth();
   // Wait until auth+Firestore loading is done before evaluating authorization.
   // role is null until the Firestore snapshot resolves; evaluating early would
@@ -156,10 +157,10 @@ const AdminNewsletters = () => {
   if (!isAuthorized && !authLoading) return <Navigate to="/admin/dashboard" replace />;
 
   return (
-    <div className="flex-1 p-6 md:p-10 w-full">
+    <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
       <div className="max-w-5xl mx-auto">
 
-        <AdminPageHeader icon={Newspaper} title="Newsletters" />
+        {!hideHeader && <AdminPageHeader icon={Newspaper} title="Newsletters" />}
 
         <div className="flex justify-end mb-6">
           <button
@@ -272,7 +273,7 @@ const AdminNewsletters = () => {
                     </div>
                     <div>
                       <label className={labelClass}>Date</label>
-                      <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className={inputClass} />
+                      <DatePicker value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
                     </div>
                   </div>
 

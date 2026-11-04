@@ -261,6 +261,10 @@ const AdminCadetChallenge = ({ hideHeader = false }) => {
   const [dataLoading,   setDataLoading]     = useState(true);
   const [allRosterMap,  setAllRosterMap]    = useState({});   // docId → rosterData for ribbon eval across all companies
 
+  // ── Print options state ───────────────────────────────────────────────────────
+  const [showPrintOptions,   setShowPrintOptions]   = useState(false);
+  const [printChallengeCols, setPrintChallengeCols] = useState(['pushUps', 'sitUps', 'shuttleRun', 'oneMile', 'sitNReach']);
+
   // ── Personal-view state (users without input/view access) ─────────────────────
   const [myRosterDocId,     setMyRosterDocId]     = useState(null);
   const [myRosterDocLoaded, setMyRosterDocLoaded] = useState(false);
@@ -647,6 +651,24 @@ const AdminCadetChallenge = ({ hideHeader = false }) => {
       };
     });
   }, [canViewAll, filterCompany, allRecords, allRosterMap, companyRecords, cadets, bnCadets, activeCompany]);
+
+  // ── Cadet Challenge roster print ─────────────────────────────────────────────
+  const CHALLENGE_PRINT_COL_DEFS = [
+    { key: 'pushUps',    label: 'Push-Ups',    getValue: c => { const r = recordMap[c.uid]; return r?.pushUps    ?? ''; } },
+    { key: 'sitUps',     label: 'Sit-Ups',     getValue: c => { const r = recordMap[c.uid]; return r?.sitUps     ?? ''; } },
+    { key: 'shuttleRun', label: 'Shuttle Run', getValue: c => { const r = recordMap[c.uid]; return r?.shuttleRun ?? ''; } },
+    { key: 'oneMile',    label: 'One-Mile',    getValue: c => { const r = recordMap[c.uid]; return r?.oneMile    ?? ''; } },
+    { key: 'sitNReach',  label: 'Sit-N-Reach', getValue: c => { const r = recordMap[c.uid]; return r?.sitNReach  ?? ''; } },
+    { key: 'blank',      label: '',            getValue: () => '' },
+  ];
+
+  const handlePrintChallengeRoster = () => {
+    const selectedColDefs = CHALLENGE_PRINT_COL_DEFS.filter(d => printChallengeCols.includes(d.key));
+    const cols = selectedColDefs.length > 0 ? selectedColDefs : null;
+    const co = filterCompany || activeCompany;
+    printRoster(allCadets, `${co} Company – Cycle #${selectedCycle}`, cols ? { columns: cols } : undefined);
+    setShowPrintOptions(false);
+  };
 
   const handleExportChallenge = () => {
     const rows = companyRecords.map(r => ({
@@ -1194,16 +1216,54 @@ const AdminCadetChallenge = ({ hideHeader = false }) => {
             </button>
           )}
           {allCadets.length > 0 && activeCompany && (
-            <button
-              onClick={() => {
-                const co = filterCompany || activeCompany;
-                printRoster(allCadets, `${co} Company – Cycle #${selectedCycle}`);
-              }}
-              title="Print company roster"
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all border bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 text-slate-500 dark:text-slate-400 hover:border-yellow-500 hover:text-yellow-600"
-            >
-              <Printer size={13} /> Print Roster
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowPrintOptions(o => !o)}
+                title="Print company roster"
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all border bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 text-slate-500 dark:text-slate-400 hover:border-yellow-500 hover:text-yellow-600"
+              >
+                <Printer size={13} /> Print Roster
+              </button>
+              {showPrintOptions && (
+                <div className="absolute left-0 top-full mt-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-xl p-4 min-w-[220px]">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">Columns to Include</p>
+                  <div className="space-y-2 mb-3">
+                    {CHALLENGE_PRINT_COL_DEFS.map(col => (
+                      <label key={col.key} className="flex items-center gap-2.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={printChallengeCols.includes(col.key)}
+                          onChange={e => setPrintChallengeCols(prev =>
+                            e.target.checked ? [...prev, col.key] : prev.filter(k => k !== col.key)
+                          )}
+                          className="accent-yellow-500 w-3.5 h-3.5"
+                        />
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                          {col.label || 'Blank Column'}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-slate-400 dark:text-slate-500 mb-3">
+                    Battalion leadership always included.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handlePrintChallengeRoster}
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 hover:bg-yellow-400 text-slate-950 px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                    >
+                      <Printer size={11} /> Print PDF
+                    </button>
+                    <button
+                      onClick={() => setShowPrintOptions(false)}
+                      className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-[10px] font-black uppercase transition-all"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
