@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="340"    label="Patches"     />
-        <Stat value="678"    label="Commits"     />
+        <Stat value="341"    label="Patches"     />
+        <Stat value="679"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.146" label="Current"     />
+        <Stat value="v1.8.147" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,13 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.146" date="Nov 4" title="Promotion Board — Battalion Board Nominations Panel" isCurrent changes={<>
+        <Release versions="v1.8.147" date="Nov 4" title="Promotion Board — Nominations: Staff Assistants Grouped, Company Scoped" isCurrent changes={<>
+          <C type="fix">S1PromotionBoard nominations — all Company S1–S7 Assistant positions collapsed into one Staff Assistant slot per company (only the best-scoring assistant is nominated, since only one goes)</C>
+          <C type="fix">Company leadership (below battalion staff level) now only sees their own company's nominations; battalion-level users still see all companies</C>
+          <C type="feat">Staff Assistant card shows the actual specific position (e.g. "Staff Assistant · Company S3 Assistant") so the nominee's billet is still visible</C>
+        </>}
+        />
+        <Release versions="v1.8.146" date="Nov 4" title="Promotion Board — Battalion Board Nominations Panel" changes={<>
           <C type="feat">S1PromotionBoard — Battalion Board Nominations panel appears below Board Averages; for each company × position (excluding battalion-level billets) it shows the cadet with the highest % score as the nominee</C>
           <C type="feat">Nominees sorted high → low by position rank; cards show position title, cadet name, percent grade and raw score / possible</C>
           <C type="fix">Only cadets with at least one score entered (pct &gt; 0) appear; ties broken by raw total score</C>

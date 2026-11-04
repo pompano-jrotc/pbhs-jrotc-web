@@ -936,23 +936,30 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
   // ── Battalion Board Nominations ───────────────────────────────────────────────
   // For each company × position (excluding battalion-level positions), find the
   // cadet with the highest percentage score. Only cadets with pct > 0 qualify.
+  // All Company S1-S7 Assistants are collapsed into one "Staff Assistant" slot.
+  const STAFF_ASST_POSITIONS = new Set([
+    'Company S1 Assistant', 'Company S2 Assistant', 'Company S3 Assistant',
+    'Company S4 Assistant', 'Company S5 Assistant', 'Company S6 Assistant',
+    'Company S7 Assistant',
+  ]);
   const battalionNominations = useMemo(() => {
     const cats = selectedBoard?.categories || DEFAULT_CATEGORIES;
     const isBattalionPos = new Set(BATTALION_POSITIONS);
-    // [company][position] → best scoring cadet
+    // [company][posKey] → best scoring cadet
     const best = {};
     visibleScores.forEach(s => {
-      const position = s.position || positionMap[s.rosterDocId] || '';
-      if (!position || isBattalionPos.has(position)) return;
+      const rawPos  = s.position || positionMap[s.rosterDocId] || '';
+      if (!rawPos || isBattalionPos.has(rawPos)) return;
+      const posKey  = STAFF_ASST_POSITIONS.has(rawPos) ? 'Staff Assistant' : rawPos;
       const company = s.company || 'Unknown';
       const total   = calcTotal(s.scores, s.extraCredit, cats);
       const possible = calcPossible(s.scores, cats);
       const pct = possible > 0 ? Math.round((total / possible) * 100) : 0;
       if (pct === 0) return;
       if (!best[company]) best[company] = {};
-      const cur = best[company][position];
+      const cur = best[company][posKey];
       if (!cur || pct > cur.pct || (pct === cur.pct && total > cur.total)) {
-        best[company][position] = { cadetName: s.cadetName, rank: s.rank, pct, total, possible };
+        best[company][posKey] = { cadetName: s.cadetName, rank: s.rank, pct, total, possible, originalPos: rawPos };
       }
     });
     return Object.entries(best)
@@ -960,8 +967,12 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
       .map(([company, positions]) => ({
         company,
         nominees: Object.entries(positions)
-          .sort(([a], [b]) => JROTC_POSITIONS.indexOf(b) - JROTC_POSITIONS.indexOf(a))
-          .map(([position, data]) => ({ position, ...data })),
+          .sort(([a], [b]) => {
+            const idxA = JROTC_POSITIONS.indexOf(a === 'Staff Assistant' ? 'Company S1 Assistant' : a);
+            const idxB = JROTC_POSITIONS.indexOf(b === 'Staff Assistant' ? 'Company S1 Assistant' : b);
+            return idxB - idxA;
+          })
+          .map(([posKey, data]) => ({ position: posKey, ...data })),
       }));
   }, [visibleScores, positionMap, selectedBoard]);
 
@@ -2682,44 +2693,55 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
         )}
 
         {/* ── Battalion Board Nominations ── */}
-        {battalionNominations.length > 0 && (
-          <div className="mt-4 rounded-2xl border border-yellow-200 dark:border-yellow-500/20 overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-3 bg-yellow-50/70 dark:bg-yellow-500/5 border-b border-yellow-200 dark:border-yellow-500/15">
-              <Medal size={13} className="text-yellow-600 dark:text-yellow-400" />
-              <p className="text-xs font-black uppercase tracking-widest text-yellow-700 dark:text-yellow-300">
-                Battalion Board Nominations
-              </p>
-              <span className="ml-auto text-[10px] text-yellow-600 dark:text-yellow-400 font-bold">
-                Highest scorer per position per company
-              </span>
-            </div>
-            <div className="divide-y divide-yellow-100 dark:divide-yellow-500/10">
-              {battalionNominations.map(({ company, nominees }) => (
-                <div key={company} className="px-5 py-4">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">
-                    {company} Company
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {nominees.map(({ position, cadetName, rank, pct, total, possible }) => (
-                      <div key={position} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3 py-2.5 gap-2">
-                        <div className="min-w-0">
-                          <p className="text-[9px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">{position}</p>
-                          <p className="text-sm font-black text-slate-800 dark:text-white truncate">
-                            {rank ? `${rank} ` : ''}{cadetName}
-                          </p>
+        {(() => {
+          const visibleNoms = isBattalionLevel
+            ? battalionNominations
+            : battalionNominations.filter(n => n.company === myCompany);
+          if (visibleNoms.length === 0) return null;
+          return (
+            <div className="mt-4 rounded-2xl border border-yellow-200 dark:border-yellow-500/20 overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3 bg-yellow-50/70 dark:bg-yellow-500/5 border-b border-yellow-200 dark:border-yellow-500/15">
+                <Medal size={13} className="text-yellow-600 dark:text-yellow-400" />
+                <p className="text-xs font-black uppercase tracking-widest text-yellow-700 dark:text-yellow-300">
+                  Battalion Board Nominations
+                </p>
+                <span className="ml-auto text-[10px] text-yellow-600 dark:text-yellow-400 font-bold">
+                  Highest scorer per position per company
+                </span>
+              </div>
+              <div className="divide-y divide-yellow-100 dark:divide-yellow-500/10">
+                {visibleNoms.map(({ company, nominees }) => (
+                  <div key={company} className="px-5 py-4">
+                    {isBattalionLevel && (
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-3">
+                        {company} Company
+                      </p>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {nominees.map(({ position, cadetName, rank, pct, total, possible, originalPos }) => (
+                        <div key={position} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3 py-2.5 gap-2">
+                          <div className="min-w-0">
+                            <p className="text-[9px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">
+                              {position}
+                              {position === 'Staff Assistant' && originalPos ? ` · ${originalPos}` : ''}
+                            </p>
+                            <p className="text-sm font-black text-slate-800 dark:text-white truncate">
+                              {rank ? `${rank} ` : ''}{cadetName}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className={`text-base font-black tabular-nums ${scoreColor(pct)}`}>{pct}%</p>
+                            <p className="text-[9px] text-slate-400 dark:text-slate-500">{total} / {possible}</p>
+                          </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <p className={`text-base font-black tabular-nums ${scoreColor(pct)}`}>{pct}%</p>
-                          <p className="text-[9px] text-slate-400 dark:text-slate-500">{total} / {possible}</p>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Eligibility legend */}
         {!loadingElig && (
