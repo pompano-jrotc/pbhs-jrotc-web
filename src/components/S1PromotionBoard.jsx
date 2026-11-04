@@ -323,10 +323,10 @@ function tsToDateStr(ts) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function scoreColor(total) {
-  if (total >= 1080) return 'text-green-600 dark:text-green-400';
-  if (total >= 960)  return 'text-yellow-600 dark:text-yellow-500';
-  if (total > 0)     return 'text-orange-500 dark:text-orange-400';
+function scoreColor(pct) {
+  if (pct >= 90) return 'text-green-600 dark:text-green-400';
+  if (pct >= 80) return 'text-yellow-600 dark:text-yellow-500';
+  if (pct > 0)   return 'text-orange-500 dark:text-orange-400';
   return 'text-slate-300 dark:text-slate-600';
 }
 
@@ -455,9 +455,20 @@ function ScoreTableRow({ scoreDoc, canEdit, isLocked = false, formsOk, ccOk, onS
 
       {/* Total */}
       <td className="px-3 py-2 text-center">
-        <span className={`text-sm font-black ${scoreColor(total)}`}>{total}</span>
+        <span className="text-sm font-black text-slate-700 dark:text-slate-200">{total}</span>
         <p className="text-[9px] text-slate-300 dark:text-slate-600">/ {calcPossible(scoreDoc.scores, categories)}</p>
       </td>
+
+      {/* Percent */}
+      {(() => {
+        const possible = calcPossible(scoreDoc.scores, categories);
+        const pct = possible > 0 ? Math.round((total / possible) * 100) : 0;
+        return (
+          <td className="px-3 py-2 text-center">
+            <span className={`text-sm font-black ${scoreColor(pct)}`}>{pct}%</span>
+          </td>
+        );
+      })()}
     </tr>
   );
 }
@@ -2527,6 +2538,7 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
                     ))}
                     <th className="px-1.5 py-2 text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">EC</th>
                     <th className="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">Total</th>
+                    <th className="px-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center">%</th>
                   </tr>
                 </thead>
                 <tbody>
