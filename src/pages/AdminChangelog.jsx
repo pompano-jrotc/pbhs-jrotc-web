@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="339"    label="Patches"     />
-        <Stat value="677"    label="Commits"     />
+        <Stat value="340"    label="Patches"     />
+        <Stat value="678"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.145" label="Current"     />
+        <Stat value="v1.8.146" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,13 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.145" date="Nov 4" title="Promotion Board — Percent Grade Column" isCurrent changes={<>
+        <Release versions="v1.8.146" date="Nov 4" title="Promotion Board — Battalion Board Nominations Panel" isCurrent changes={<>
+          <C type="feat">S1PromotionBoard — Battalion Board Nominations panel appears below Board Averages; for each company × position (excluding battalion-level billets) it shows the cadet with the highest % score as the nominee</C>
+          <C type="feat">Nominees sorted high → low by position rank; cards show position title, cadet name, percent grade and raw score / possible</C>
+          <C type="fix">Only cadets with at least one score entered (pct &gt; 0) appear; ties broken by raw total score</C>
+        </>}
+        />
+        <Release versions="v1.8.145" date="Nov 4" title="Promotion Board — Percent Grade Column" changes={<>
           <C type="feat">S1PromotionBoard — added % column showing (total ÷ possible) × 100 for each cadet; color is green ≥90%, yellow ≥80%, orange &gt;0%, gray at 0</C>
           <C type="fix">scoreColor now takes a percentage instead of raw score so colors reflect actual performance regardless of how many N/A categories reduce the denominator</C>
           <C type="fix">Total column is now neutral (white/dark-white) — color belongs to the % column only</C>
