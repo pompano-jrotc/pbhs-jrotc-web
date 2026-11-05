@@ -1050,6 +1050,10 @@ const AdminChangelog = () => {
           <C type="feat">Special assignment badges on the roster link directly to the matching team in Admin → Teams; same links appear in the cadet history detail view</C>
         </>} />
 
+        <Release versions="v1.6.102" date="Nov 4" title="Promotion Board Save Indicator" changes={<>
+          <C type="feat">Score and extra-credit saves now show a brief "✓ Saved" toast in the bottom-right corner of the promotion board table</C>
+        </>} />
+
         <Release versions="v1.6.101" date="Nov 4" title="Promotion Board 1SG Score Entry Fix" changes={<>
           <C type="fix">Firestore security rule for promotionScores update was requiring level 50 (Company XO) — Company 1SG (level 45) could see the score table but writes were silently rejected; lowered threshold to 45 so 1SGs can now save scores</C>
         </>} />

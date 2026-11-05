@@ -28,7 +28,7 @@
 //     extraCredit (0–100), totalScore,
 //     notes, updatedAt, updatedByName
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { db, auth } from '../firebase';
 import {
   collection, query, where, onSnapshot,
@@ -494,6 +494,14 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
   const [ccCompleteMap,  setCcCompleteMap]   = useState({}); // rosterDocId -> true if CC complete
   const [loadingElig,    setLoadingElig]     = useState(false);
   const [showArchived,   setShowArchived]    = useState(false);
+
+  const [savedFlash,   setSavedFlash]   = useState(false);
+  const savedTimer = useRef(null);
+  const showSaved = useCallback(() => {
+    setSavedFlash(true);
+    clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setSavedFlash(false), 1800);
+  }, []);
 
   // S1 filter controls
   const [minScore,     setMinScore]     = useState(0);
@@ -1354,7 +1362,7 @@ ${nomHtml}
       totalPossible:       newPoss,
       updatedAt:           Timestamp.now(),
       updatedByName:       userData?.fullName || '',
-    }).catch(err => console.error('Score save error:', err));
+    }).then(() => showSaved()).catch(err => console.error('Score save error:', err));
   };
 
   const handleExtraCreditBlur = async (scoreDocId, value) => {
@@ -1370,7 +1378,7 @@ ${nomHtml}
       totalPossible: newPoss,
       updatedAt:     Timestamp.now(),
       updatedByName: userData?.fullName || '',
-    }).catch(err => console.error('Extra credit save error:', err));
+    }).then(() => showSaved()).catch(err => console.error('Extra credit save error:', err));
   };
 
   const handleSaveBoardSettings = async () => {
@@ -3699,6 +3707,16 @@ ${nomHtml}
           </div>
         </div>
       )}
+
+      {/* Save indicator */}
+      <div
+        className="fixed bottom-6 right-6 z-50 pointer-events-none transition-all duration-300"
+        style={{ opacity: savedFlash ? 1 : 0, transform: savedFlash ? 'translateY(0)' : 'translateY(8px)' }}
+      >
+        <span className="inline-flex items-center gap-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-black uppercase tracking-widest px-5 py-3 rounded-2xl shadow-xl">
+          ✓ Saved
+        </span>
+      </div>
     </div>
   );
 };
