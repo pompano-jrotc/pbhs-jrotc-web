@@ -673,8 +673,8 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow update: if isSignedIn() && (
         userDoc().role == 's1_adjutant' || myLevel() >= 85 ||
-        // Company XO (50+) may only toggle companyStatus (submit/unlock their company).
-        (myLevel() >= 50 &&
+        // Company top-3 (45+: CC/XO/1SG) may only toggle companyStatus (submit/unlock their company).
+        (myLevel() >= 45 &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['companyStatus']))
       );
       allow delete: if isSignedIn() && (

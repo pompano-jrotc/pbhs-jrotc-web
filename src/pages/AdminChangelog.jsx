@@ -1050,6 +1050,10 @@ const AdminChangelog = () => {
           <C type="feat">Special assignment badges on the roster link directly to the matching team in Admin → Teams; same links appear in the cadet history detail view</C>
         </>} />
 
+        <Release versions="v1.6.104" date="Nov 4" title="Promotion Board 1SG Submit Fix" changes={<>
+          <C type="fix">Firestore promotionBoards update rule required level 50 (Company XO) to submit company scores — Company 1SG (level 45) could see the Submit button but the write was rejected; lowered the companyStatus-only update threshold to 45</C>
+        </>} />
+
         <Release versions="v1.6.103" date="Nov 4" title="Promotion Board EC Always Editable" changes={<>
           <C type="fix">Extra credit input was locked for company 1SG (and XO/CC) whenever a cadet's Testing Mode was finalized — the testingComplete flag correctly locks knowledge scores but extra credit should remain editable; split canEdit into canEditScores and canEditEC so EC stays open regardless of testingComplete</C>
         </>} />
