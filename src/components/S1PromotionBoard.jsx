@@ -55,10 +55,10 @@ const DEFAULT_CATEGORIES = [
   { id: 'jrotc_meaning',     label: 'JROTC Meaning'                      },
   { id: 'let_meaning',       label: 'LET Meaning'                        },
   { id: 'mission_statement', label: 'Mission Statement'                  },
-  { id: 'sai_ai',            label: 'Who & What Are the SAI and AI'      },
+  { id: 'sai',               label: 'Who & What Is the SAI'              },
+  { id: 'ai',                label: 'Who & What Is the AI'               },
   { id: 'all_duties',        label: 'List All Duties'                    },
   { id: 'chain_of_command',  label: 'Battalion Chain of Command'         },
-  { id: 'def_leadership',    label: 'Definition of Leadership'           },
   { id: 'cadet_ranks',       label: 'Cadet Ranks (Show Ranks)'           },
   { id: 'principles',        label: 'Principles of Leadership'           },
 ];
@@ -99,9 +99,6 @@ const ANSWER_KEY = {
   mission_statement: {
     lines: ['"To motivate young people to be better citizens."'],
   },
-  def_leadership: {
-    lines: ['"The ability to motivate (guide) others to accomplish a mission (task) in the manner desired by providing purpose, direction, and motivation."'],
-  },
   cadet_ranks: {
     lines: [
       'Enlisted (low → high):',
@@ -125,8 +122,9 @@ const ANSWER_KEY = {
       '11. Train your subordinates as a team.',
     ],
   },
-  // Computed dynamically at render (sai_ai, all_duties, chain_of_command)
-  sai_ai:           null,
+  // Computed dynamically at render (sai, ai, all_duties, chain_of_command)
+  sai:              null,
+  ai:               null,
   all_duties:       null,
   chain_of_command: null,
 };
@@ -181,10 +179,10 @@ const CAT_SHORT = {
   jrotc_meaning:     'JROTC',
   let_meaning:       'LET',
   mission_statement: 'Mission',
-  sai_ai:            'SAI/AI',
+  sai:               'SAI',
+  ai:                'AI',
   all_duties:        'Duties',
   chain_of_command:  'CoC',
-  def_leadership:    'Ldrship',
   cadet_ranks:       'Ranks',
   principles:        'Principles',
 };
@@ -225,10 +223,10 @@ const _mkItems = (duties, coc, principles) => [
   'JROTC Meaning',
   'LET Meaning',
   'Mission Statement',
-  'What and Who are the SAI and AI',
+  'Who & What Is the SAI',
+  'Who & What Is the AI',
   duties,
   coc,
-  'Definition of Leadership',
   'Cadet Ranks (Show Ranks)',
   principles,
 ];
@@ -2436,14 +2434,19 @@ ${nomHtml}
                   {(() => {
                     let keyLines = ANSWER_KEY[cat?.id]?.lines ?? null;
 
-                    if (cat?.id === 'sai_ai' && instructors.length > 0) {
+                    if (cat?.id === 'sai' && instructors.length > 0) {
                       const sai = instructors.filter(i => i.type === 'SAI');
-                      const ai  = instructors.filter(i => i.type === 'AI');
                       keyLines = [
                         'SAI (Senior Army Instructor) — Commissioned or warrant officer; commands the program.',
                         ...(sai.length ? sai.map(i => `SAI: ${i.name}`) : ['SAI: (none on record)']),
+                      ];
+                    }
+
+                    if (cat?.id === 'ai' && instructors.length > 0) {
+                      const ai = instructors.filter(i => i.type === 'AI');
+                      keyLines = [
                         'AI (Army Instructor) — Non-commissioned officer; assists the SAI in day-to-day instruction.',
-                        ...(ai.length  ? ai.map(i  => `AI: ${i.name}`)  : ['AI: (none on record)']),
+                        ...(ai.length ? ai.map(i => `AI: ${i.name}`) : ['AI: (none on record)']),
                       ];
                     }
 
@@ -3369,7 +3372,7 @@ ${nomHtml}
 
                 {posReqEditorTab === 'knowledge' && (() => {
                   // Categories where a count input doesn't apply — all-or-nothing knowledge
-                  const NO_COUNT_CATS = new Set(['cadet_creed','ldrship','jrotc_meaning','let_meaning','mission_statement','sai_ai','def_leadership']);
+                  const NO_COUNT_CATS = new Set(['cadet_creed','ldrship','jrotc_meaning','let_meaning','mission_statement','sai','ai']);
                   const allCatIds   = DEFAULT_CATEGORIES.map(c => c.id);
                   const required    = cur.requiredCategories   ?? allCatIds;
                   const counts      = cur.requiredCounts       ?? {};

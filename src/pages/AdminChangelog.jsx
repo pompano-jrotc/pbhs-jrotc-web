@@ -1050,6 +1050,10 @@ const AdminChangelog = () => {
           <C type="feat">Special assignment badges on the roster link directly to the matching team in Admin → Teams; same links appear in the cadet history detail view</C>
         </>} />
 
+        <Release versions="v1.6.100" date="Nov 4" title="Promotion Board Column Fix" changes={<>
+          <C type="fix">Promotion Board grading table: removed duplicate "Ldrship" column (Definition of Leadership was listed separately from LDRSHIP); split combined SAI/AI column into separate SAI and AI columns</C>
+        </>} />
+
         <Release versions="v1.6.88 – 99" date="Sep 2" title="The S1 Tracker Overhaul" changes={<>
           <C type="feat">Auto-sync enrolls new cadets into all active form events on roster add; a safety-net sync on event open catches any missing entries and patches stale name, rank, or LET data</C>
           <C type="feat">Due dates editable inline — S1 and Company XO can edit their own events; Battalion filter restored to show only Zulu/Battalion submissions with correct stat cards and LET grouping</C>
