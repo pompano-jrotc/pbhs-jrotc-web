@@ -1054,6 +1054,11 @@ const AdminChangelog = () => {
           <C type="fix">Firestore promotionBoards update rule required level 50 (Company XO) to submit company scores — Company 1SG (level 45) could see the Submit button but the write was rejected; lowered the companyStatus-only update threshold to 45</C>
         </>} />
 
+        <Release versions="v1.6.105" date="Nov 4" title="Testing Mode N/A Option" changes={<>
+          <C type="feat">Testing Mode question screen now has an "N/A — Not required for this position" button; selecting it skips that category from the score total and saves it as N/A in the score table</C>
+          <C type="fix">Results phase now correctly excludes N/A categories from the base possible points and displays "N/A" instead of a number for those rows</C>
+        </>} />
+
         <Release versions="v1.6.103" date="Nov 4" title="Promotion Board EC Always Editable" changes={<>
           <C type="fix">Extra credit input was locked for company 1SG (and XO/CC) whenever a cadet's Testing Mode was finalized — the testingComplete flag correctly locks knowledge scores but extra credit should remain editable; split canEdit into canEditScores and canEditEC so EC stays open regardless of testingComplete</C>
         </>} />

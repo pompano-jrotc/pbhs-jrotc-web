@@ -283,6 +283,7 @@ export const DEFAULT_POSITION_REQUIREMENTS = {
 
 // Scoring: 0 mistakes → 100, 1 → 90, 2 → 80, 3+ → 0
 function mistakesToScore(n) {
+  if (n === 'na') return 'na';
   if (n === 0) return 100;
   if (n === 1) return  90;
   if (n === 2) return  80;
@@ -2501,6 +2502,12 @@ ${nomHtml}
                       </button>
                     ))}
                   </div>
+                  <button
+                    onClick={() => testRecordMistakes('na')}
+                    className="mt-3 w-full py-3 rounded-2xl bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-black uppercase tracking-widest transition-colors"
+                  >
+                    N/A — Not required for this position
+                  </button>
 
                   {/* Back button (if not on first category) */}
                   {testMode.step > 0 && (
@@ -2642,13 +2649,15 @@ ${nomHtml}
               testMode.categories.forEach(cat => {
                 catScores[cat.id] = mistakesToScore(testMode.mistakes[cat.id] ?? 3);
               });
-              const baseMax    = testMode.categories.length * 100; // 1100
-              const baseTotal  = Object.values(catScores).reduce((a, b) => a + b, 0);
+              const naCount    = Object.values(catScores).filter(s => s === 'na').length;
+              const baseMax    = (testMode.categories.length - naCount) * 100;
+              const baseTotal  = Object.values(catScores).reduce((a, b) => b === 'na' ? a : a + b, 0);
               const ec         = testMode.extraCredit;
               const grandTotal = baseTotal + ec;
-              const basePct    = Math.round((baseTotal / baseMax) * 100);
+              const basePct    = baseMax > 0 ? Math.round((baseTotal / baseMax) * 100) : 100;
 
               const scoreCol = (s) =>
+                s === 'na' ? 'text-slate-500' :
                 s === 100 ? 'text-green-400' :
                 s === 90  ? 'text-yellow-400' :
                 s === 80  ? 'text-orange-400' :
@@ -2721,8 +2730,8 @@ ${nomHtml}
                           <div key={cat.id} className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0">
                             <span className="text-[9px] font-bold text-slate-600 w-5 shrink-0 text-right">{i+1}.</span>
                             <span className="text-xs text-slate-300 flex-1">{cat.label}</span>
-                            <span className="text-[10px] text-slate-500 shrink-0">{m >= 3 ? '3+' : m} mistake{m !== 1 ? 's' : ''}</span>
-                            <span className={`text-sm font-black shrink-0 w-8 text-right tabular-nums ${scoreCol(s)}`}>{s}</span>
+                            <span className="text-[10px] text-slate-500 shrink-0">{m === 'na' ? 'N/A' : `${m >= 3 ? '3+' : m} mistake${m !== 1 ? 's' : ''}`}</span>
+                            <span className={`text-sm font-black shrink-0 w-8 text-right tabular-nums ${scoreCol(s)}`}>{s === 'na' ? 'N/A' : s}</span>
                           </div>
                         );
                       })}
