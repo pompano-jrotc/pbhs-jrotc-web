@@ -1051,7 +1051,8 @@ const AdminChangelog = () => {
         </>} />
 
         <Release versions="v1.6.102" date="Nov 4" title="Promotion Board Save Indicator" changes={<>
-          <C type="feat">Score and extra-credit saves now show a brief "✓ Saved" toast in the bottom-right corner of the promotion board table</C>
+          <C type="feat">Score and extra-credit saves now show a brief "✓ Saved" toast in the bottom-right corner while in the board detail view</C>
+          <C type="fix">Toast was only rendered in the list view — moved it into the detail view where score entry actually happens</C>
         </>} />
 
         <Release versions="v1.6.101" date="Nov 4" title="Promotion Board 1SG Score Entry Fix" changes={<>

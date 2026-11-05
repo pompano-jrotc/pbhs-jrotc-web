@@ -3171,6 +3171,15 @@ ${nomHtml}
           </div>
         </div>
       )}
+      {/* Save indicator */}
+      <div
+        className="fixed bottom-6 right-6 z-50 pointer-events-none transition-all duration-300"
+        style={{ opacity: savedFlash ? 1 : 0, transform: savedFlash ? 'translateY(0)' : 'translateY(8px)' }}
+      >
+        <span className="inline-flex items-center gap-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-black uppercase tracking-widest px-5 py-3 rounded-2xl shadow-xl">
+          ✓ Saved
+        </span>
+      </div>
       </>
     );
   }
