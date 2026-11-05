@@ -7,7 +7,9 @@
 export const normalizeCompany = (co) => {
   if (!co) return '';
   const s = String(co).trim().replace(/^_+/, '');
-  return s === 'Zulu' ? 'Battalion' : s;
+  const lower = s.toLowerCase();
+  if (lower === 'battalion' || lower === 'zulu') return 'Battalion';
+  return s;
 };
 
 export const isHQCompany = (co) => normalizeCompany(co) === 'Battalion';

@@ -1054,6 +1054,11 @@ const AdminChangelog = () => {
           <C type="fix">Firestore promotionBoards update rule required level 50 (Company XO) to submit company scores — Company 1SG (level 45) could see the Submit button but the write was rejected; lowered the companyStatus-only update threshold to 45</C>
         </>} />
 
+        <Release versions="v1.6.109" date="Nov 5" title="Leaderboard Public Fixes (follow-up)" changes={<>
+          <C type="fix">normalizeCompany now matches 'battalion' and 'zulu' case-insensitively so a company stored as "_battalion" (lowercase) normalizes to 'Battalion' and merges with the correct company group instead of appearing as a duplicate card</C>
+          <C type="fix">Public leaderboard API cache changed to no-store so fundraiser totals always match the live admin view with no staleness lag</C>
+        </>} />
+
         <Release versions="v1.6.108" date="Nov 5" title="Leaderboard Public Fixes" changes={<>
           <C type="fix">Fundraiser total (e.g. "Total: $11,829.90") is now hidden on the public /leaderboard route — it only appears in the admin view</C>
           <C type="fix">Cadet with company stored as "_Battalion" (leading underscore) appeared in a separate "_BATTALION COMPANY" bucket; normalizeCompany now strips leading underscores so the entry merges into the correct Battalion Company group</C>
