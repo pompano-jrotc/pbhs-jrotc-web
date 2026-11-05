@@ -1050,6 +1050,10 @@ const AdminChangelog = () => {
           <C type="feat">Special assignment badges on the roster link directly to the matching team in Admin → Teams; same links appear in the cadet history detail view</C>
         </>} />
 
+        <Release versions="v1.6.103" date="Nov 4" title="Promotion Board EC Always Editable" changes={<>
+          <C type="fix">Extra credit input was locked for company 1SG (and XO/CC) whenever a cadet's Testing Mode was finalized — the testingComplete flag correctly locks knowledge scores but extra credit should remain editable; split canEdit into canEditScores and canEditEC so EC stays open regardless of testingComplete</C>
+        </>} />
+
         <Release versions="v1.6.102" date="Nov 4" title="Promotion Board Save Indicator" changes={<>
           <C type="feat">Score and extra-credit saves now show a brief "✓ Saved" toast in the bottom-right corner while in the board detail view</C>
           <C type="fix">Toast was only rendered in the list view — moved it into the detail view where score entry actually happens</C>

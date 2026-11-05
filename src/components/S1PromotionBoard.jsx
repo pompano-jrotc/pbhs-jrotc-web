@@ -374,7 +374,7 @@ function ECOtherForm({ disabled, remaining, onAdd }) {
 // ── ScoreTableRow ──────────────────────────────────────────────────────────────
 // Renders one cadet row in the score entry / review table.
 // Extra credit uses an uncontrolled input + onBlur save to avoid setState-in-effect.
-function ScoreTableRow({ scoreDoc, canEdit, isLocked = false, formsOk, ccOk, onScoreChange, onExtraCreditBlur, categories = DEFAULT_CATEGORIES }) {
+function ScoreTableRow({ scoreDoc, canEdit, canEditEC, isLocked = false, formsOk, ccOk, onScoreChange, onExtraCreditBlur, categories = DEFAULT_CATEGORIES }) {
   const ecRef  = useRef(null);
   const total  = calcTotal(scoreDoc.scores, scoreDoc.extraCredit, categories);
 
@@ -430,7 +430,7 @@ function ScoreTableRow({ scoreDoc, canEdit, isLocked = false, formsOk, ccOk, onS
 
       {/* Extra credit */}
       <td className="px-1.5 py-2 text-center">
-        {canEdit ? (
+        {(canEdit || canEditEC) ? (
           <input
             ref={ecRef}
             type="number"
@@ -2802,6 +2802,7 @@ ${nomHtml}
                                   ? canEditThisBoard
                                   : canEditThisBoard && !scoreDoc.testingComplete
                               }
+                              canEditEC={canEditThisBoard}
                               isLocked={!!scoreDoc.testingComplete && !isBattalionLevel}
                               formsOk={!pendingFormMap[scoreDoc.rosterDocId]}
                               ccOk={!!ccCompleteMap[scoreDoc.rosterDocId]}
@@ -2821,6 +2822,7 @@ ${nomHtml}
                               ? canEditThisBoard
                               : canEditThisBoard && !scoreDoc.testingComplete
                           }
+                          canEditEC={canEditThisBoard}
                           isLocked={!!scoreDoc.testingComplete && !isBattalionLevel}
                           formsOk={!pendingFormMap[scoreDoc.rosterDocId]}
                           ccOk={!!ccCompleteMap[scoreDoc.rosterDocId]}
