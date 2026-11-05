@@ -1050,6 +1050,10 @@ const AdminChangelog = () => {
           <C type="feat">Special assignment badges on the roster link directly to the matching team in Admin → Teams; same links appear in the cadet history detail view</C>
         </>} />
 
+        <Release versions="v1.6.101" date="Nov 4" title="Promotion Board 1SG Score Entry Fix" changes={<>
+          <C type="fix">Firestore security rule for promotionScores update was requiring level 50 (Company XO) — Company 1SG (level 45) could see the score table but writes were silently rejected; lowered threshold to 45 so 1SGs can now save scores</C>
+        </>} />
+
         <Release versions="v1.6.100" date="Nov 4" title="Promotion Board Column Fix" changes={<>
           <C type="fix">Promotion Board grading table: removed duplicate "Ldrship" column (Definition of Leadership was listed separately from LDRSHIP); split combined SAI/AI column into separate SAI and AI columns</C>
         </>} />

@@ -700,7 +700,7 @@ service cloud.firestore {
       );
       allow update: if isSignedIn() && (
         myLevel() >= 70 ||
-        (myLevel() >= 50 && resource.data.company == userDoc().company)
+        (myLevel() >= 45 && resource.data.company == userDoc().company)
       );
       allow delete: if isSignedIn() && (
         userDoc().role == 's1_adjutant' || myLevel() >= 85
