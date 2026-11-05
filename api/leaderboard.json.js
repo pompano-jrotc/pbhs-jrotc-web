@@ -94,7 +94,7 @@ export default async function handler(request) {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=300', // 5-minute cache — scores don't change in real-time
+        'Cache-Control': 'public, max-age=30',
         'Access-Control-Allow-Origin': '*',
       },
     });

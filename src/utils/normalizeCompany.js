@@ -4,6 +4,10 @@
 // Firestore still holds legacy records with company:'Zulu' — this maps them
 // to 'Battalion' so the UI never shows 'Zulu' to any user.
 
-export const normalizeCompany = (co) => (co === 'Zulu' ? 'Battalion' : (co || ''));
+export const normalizeCompany = (co) => {
+  if (!co) return '';
+  const s = String(co).trim().replace(/^_+/, '');
+  return s === 'Zulu' ? 'Battalion' : s;
+};
 
-export const isHQCompany = (co) => co === 'Battalion' || co === 'Zulu';
+export const isHQCompany = (co) => normalizeCompany(co) === 'Battalion';

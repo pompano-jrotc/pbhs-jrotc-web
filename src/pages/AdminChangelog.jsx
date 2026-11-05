@@ -1054,6 +1054,12 @@ const AdminChangelog = () => {
           <C type="fix">Firestore promotionBoards update rule required level 50 (Company XO) to submit company scores — Company 1SG (level 45) could see the Submit button but the write was rejected; lowered the companyStatus-only update threshold to 45</C>
         </>} />
 
+        <Release versions="v1.6.108" date="Nov 5" title="Leaderboard Public Fixes" changes={<>
+          <C type="fix">Fundraiser total (e.g. "Total: $11,829.90") is now hidden on the public /leaderboard route — it only appears in the admin view</C>
+          <C type="fix">Cadet with company stored as "_Battalion" (leading underscore) appeared in a separate "_BATTALION COMPANY" bucket; normalizeCompany now strips leading underscores so the entry merges into the correct Battalion Company group</C>
+          <C type="fix">Public leaderboard fundraiser data could lag admin view by up to 5 minutes; reduced API cache time from 5 min to 30 s</C>
+        </>} />
+
         <Release versions="v1.6.105" date="Nov 4" title="Testing Mode N/A Option" changes={<>
           <C type="feat">Testing Mode question screen now has an "N/A — Not required for this position" button; selecting it skips that category from the score total and saves it as N/A in the score table</C>
           <C type="fix">Results phase now correctly excludes N/A categories from the base possible points and displays "N/A" instead of a number for those rows</C>

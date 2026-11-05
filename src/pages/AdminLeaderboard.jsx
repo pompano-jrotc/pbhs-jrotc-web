@@ -57,6 +57,7 @@ const AdminLeaderboard = () => {
   const { user, role, loading: authLoading } = useAuth();
   const userLevel = ROLE_HIERARCHY[role] || 0;
   const { pathname } = useLocation();
+  const isAdmin = pathname.startsWith('/admin');
   // Public route (/leaderboard) never touches Firestore — avoids permission-denied
   // errors regardless of the viewer's auth state or role level. Admin route
   // (/admin/leaderboard) uses live Firestore for L70+ who can read all collections.
@@ -177,7 +178,7 @@ const AdminLeaderboard = () => {
     const byIdAll = {};
     src.forEach(e => {
       const key = e.cadetId && e.cadetId !== 'manual' ? e.cadetId : `manual_${e.cadetName}`;
-      if (!byIdAll[key]) byIdAll[key] = { name: e.cadetName, company: e.company, total: 0 };
+      if (!byIdAll[key]) byIdAll[key] = { name: e.cadetName, company: normalizeCompany(e.company || ''), total: 0 };
       byIdAll[key].total += e.amount || 0;
     });
     const all = Object.values(byIdAll).filter(d => d.total > 0).sort((a, b) => b.total - a.total);
@@ -230,7 +231,7 @@ const AdminLeaderboard = () => {
                     <Medal size={13} className="text-yellow-500" />
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Top Raised</span>
                   </div>
-                  <span className="text-[9px] font-black uppercase tracking-widest text-yellow-600 dark:text-yellow-500">Total: ${topDonors.totalRaised.toFixed(2)}</span>
+                  {isAdmin && <span className="text-[9px] font-black uppercase tracking-widest text-yellow-600 dark:text-yellow-500">Total: ${topDonors.totalRaised.toFixed(2)}</span>}
                 </div>
                 <div className="px-2 py-1">
                   <div className="px-2 py-2 mb-1">
