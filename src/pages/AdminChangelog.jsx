@@ -1054,6 +1054,10 @@ const AdminChangelog = () => {
           <C type="fix">Firestore promotionBoards update rule required level 50 (Company XO) to submit company scores — Company 1SG (level 45) could see the Submit button but the write was rejected; lowered the companyStatus-only update threshold to 45</C>
         </>} />
 
+        <Release versions="v1.6.110" date="Nov 5" title="Leaderboard Live Fundraiser Fix" changes={<>
+          <C type="fix">Public /leaderboard fundraiser section was served from a cached API snapshot, so numbers could differ from the admin view; fundraiserEntries Firestore rule now allows any signed-in cadet to read, and the leaderboard subscribes to live Firestore updates for all authenticated users</C>
+        </>} />
+
         <Release versions="v1.6.109" date="Nov 5" title="Leaderboard Public Fixes (follow-up)" changes={<>
           <C type="fix">normalizeCompany now matches 'battalion' and 'zulu' case-insensitively so a company stored as "_battalion" (lowercase) normalizes to 'Battalion' and merges with the correct company group instead of appearing as a duplicate card</C>
           <C type="fix">Public leaderboard API cache changed to no-store so fundraiser totals always match the live admin view with no staleness lag</C>

@@ -558,11 +558,9 @@ service cloud.firestore {
     // update — company command for own company; staff (70+) for all.
     // delete — staff (70+) only.
     match /fundraiserEntries/{entryId} {
-      allow read: if isSignedIn() && (
-        myLevel() >= 70 ||
-        (myLevel() >= 45 && resource.data.company == userDoc().company) ||
-        resource.data.linkedUid == request.auth.uid
-      );
+      // Any signed-in portal member can read — powers the public
+      // Battalion Leaderboard fundraiser section visible to all cadets.
+      allow read: if isSignedIn();
       allow create: if isSignedIn() && (
         myLevel() >= 70 ||
         (myLevel() >= 45 && request.resource.data.company == userDoc().company)

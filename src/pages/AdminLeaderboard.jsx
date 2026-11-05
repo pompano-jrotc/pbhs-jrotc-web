@@ -58,10 +58,13 @@ const AdminLeaderboard = () => {
   const userLevel = ROLE_HIERARCHY[role] || 0;
   const { pathname } = useLocation();
   const isAdmin = pathname.startsWith('/admin');
-  // Public route (/leaderboard) never touches Firestore — avoids permission-denied
-  // errors regardless of the viewer's auth state or role level. Admin route
-  // (/admin/leaderboard) uses live Firestore for L70+ who can read all collections.
+  // Admin route (/admin/leaderboard) uses live Firestore for L70+ who can read
+  // all collections (records, roster, fundraiser).
+  // Public route (/leaderboard) uses the API for fitness/roster data (roster is
+  // restricted), but uses a live Firestore subscription for fundraiserEntries
+  // which is now readable by any signed-in cadet.
   const useFirestore = pathname.startsWith('/admin') && userLevel >= 70;
+  const useLiveFundraiser = !!user && !authLoading;
 
   const [records,    setRecords]    = useState([]);
   const [rosterMap,  setRosterMap]  = useState({});
@@ -98,14 +101,15 @@ const AdminLeaderboard = () => {
     return () => { unsubRec(); unsubRoster(); };
   }, [authLoading, useFirestore]);
 
-  // Live fundraiser subscription — admin route + L70+ only.
+  // Live fundraiser subscription — any signed-in user (fundraiserEntries is now
+  // readable by all cadets). Overrides whatever the API fetch loaded.
   useEffect(() => {
-    if (authLoading || !useFirestore) return;
+    if (!useLiveFundraiser) return;
     const unsub = onSnapshot(collection(db, 'fundraiserEntries'), snap => {
       setFundraiserEntries(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, () => {});
     return () => unsub();
-  }, [authLoading, useFirestore]);
+  }, [useLiveFundraiser]);
 
   // Compute personal-best per cadet per event across all cycles
   const { companies, leaderboard } = useMemo(() => {
