@@ -121,6 +121,34 @@ const ProtectedRoute = ({ children, minLevel, allowedRoles, excludedRoles }) => 
 
   if (!user) return <Navigate to="/admin" />;
 
+  // Approval gate: account must be approved by staff before accessing any portal page.
+  // approved is set to false on signup and flipped to true when an admin approves the account.
+  // Absent field (undefined) = existing account = treated as approved.
+  if (userData && userData.approved === false) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+        <div className="mb-6 text-center">
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-1">PBHS</p>
+          <h1 className="text-2xl font-black uppercase italic tracking-tighter text-white">
+            Battalion <span className="text-yellow-500">Portal</span>
+          </h1>
+        </div>
+        <div className="w-full max-w-xs bg-slate-900 border border-white/5 rounded-3xl p-6 shadow-2xl space-y-4">
+          <div className="w-14 h-14 mx-auto rounded-full bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center">
+            <div className="w-5 h-5 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black uppercase italic tracking-tight text-white mb-2">Pending Approval</h2>
+            <p className="text-xs text-slate-400 font-medium leading-relaxed">
+              Your account is awaiting approval from a staff instructor. You will receive an email once your account is approved.
+            </p>
+          </div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">Above and Beyond</p>
+        </div>
+      </div>
+    );
+  }
+
   const userLevel = ROLE_HIERARCHY[role] || 0;
 
   // Onboarding gate: newly approved accounts must complete email verification

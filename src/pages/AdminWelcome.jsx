@@ -92,18 +92,23 @@ const AdminWelcome = () => {
   const mfaMandatory = userLevel >= STAFF_LEVEL;
 
   // ── Determine starting step ──────────────────
+  // Order: TOS → email verify → MFA enrollment.
   useEffect(() => {
     if (!user) return;
-    const alreadyVerified = auth.currentUser?.emailVerified ?? user.emailVerified;
-    const alreadyEnrolled = multiFactor(user).enrolledFactors.length > 0;
-
-    if (alreadyVerified && alreadyEnrolled) {
-      // Both complete — advance to TOS step (final step before finishing)
+    // TOS is step 1 — if not yet accepted, start there.
+    if (userData?.tosAccepted !== true) {
       setStep('tos');
       return;
     }
+    const alreadyVerified = auth.currentUser?.emailVerified ?? user.emailVerified;
+    const alreadyEnrolled = multiFactor(user).enrolledFactors.length > 0;
+    if (alreadyVerified && alreadyEnrolled) {
+      // All steps done — finish immediately.
+      finishOnboarding();
+      return;
+    }
     setStep(alreadyVerified ? 'phone' : 'email');
-  }, [user]);
+  }, [user, userData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Resend cooldown ticker ───────────────────
   useEffect(() => {
@@ -140,18 +145,31 @@ const AdminWelcome = () => {
   }, [step, user]);
 
   // ── Finish onboarding ────────────────────────
-  // Called only from the TOS step agree button — always sets tosAccepted at the same time.
+  // Called after MFA enrollment (or skip) — TOS was accepted in step 1.
   const finishOnboarding = async () => {
     setStep('completing');
     try {
       await updateDoc(doc(db, 'users', user.uid), {
         onboardingComplete: true,
-        tosAccepted:        true,
+        tosAccepted:        true,  // safety net in case TOS write was missed
         tosAcceptedAt:      serverTimestamp(),
         tosVersion:         CURRENT_TOS_VERSION,
       });
     } catch { /* best-effort */ }
     navigate('/admin/dashboard');
+  };
+
+  // ── Accept TOS and advance to email step ─────
+  // Persists tosAccepted immediately so a page reload resumes at the email step.
+  const acceptTos = async () => {
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        tosAccepted:   true,
+        tosAcceptedAt: serverTimestamp(),
+        tosVersion:    CURRENT_TOS_VERSION,
+      });
+    } catch { /* best-effort */ }
+    setStep('email');
   };
 
   // ── Email step handlers ──────────────────────
@@ -305,7 +323,7 @@ const AdminWelcome = () => {
         }).catch(console.error);
       });
 
-      setStep('tos');
+      finishOnboarding();
     } catch (err) {
       setMfaStatus(
         err.code === 'auth/invalid-verification-code'
@@ -344,18 +362,18 @@ const AdminWelcome = () => {
 
         {/* Step indicators */}
         <div className="flex items-center gap-2 mb-8">
-          <StepPip number={1} active={step === 'email'} done={step === 'phone' || step === 'tos'} label="Email" />
+          <StepPip number={1} active={step === 'tos'} done={step === 'email' || step === 'phone'} label="Terms" />
           <div className="flex-1 h-px bg-white/10" />
-          <StepPip number={2} active={step === 'phone'} done={step === 'tos'} label="2FA" />
+          <StepPip number={2} active={step === 'email'} done={step === 'phone'} label="Email" />
           <div className="flex-1 h-px bg-white/10" />
-          <StepPip number={3} active={step === 'tos'} done={false} label="Terms" />
+          <StepPip number={3} active={step === 'phone'} done={false} label="2FA" />
         </div>
 
-        {/* ── Step 1: Email Verification ── */}
+        {/* ── Step 2: Email Verification ── */}
         {step === 'email' && (
           <div className="space-y-5">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-yellow-500 mb-1">Step 1 of 3</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-yellow-500 mb-1">Step 2 of 3</p>
               <h2 className="text-xl font-black uppercase italic tracking-tight text-white">Verify Your Email</h2>
               <p className="text-xs text-slate-400 font-medium mt-1">
                 We sent a verification link to <span className="text-white font-bold">{user?.email}</span>. Open it, then come back.
@@ -428,11 +446,11 @@ const AdminWelcome = () => {
           </div>
         )}
 
-        {/* ── Step 2: Phone 2FA ── */}
+        {/* ── Step 3: Phone 2FA ── */}
         {step === 'phone' && (
           <div className="space-y-5">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-yellow-500 mb-1">Step 2 of 3</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-yellow-500 mb-1">Step 3 of 3</p>
               <h2 className="text-xl font-black uppercase italic tracking-tight text-white">Secure Your Account</h2>
               <p className="text-xs text-slate-400 font-medium mt-1">
                 {mfaMandatory
@@ -517,7 +535,7 @@ const AdminWelcome = () => {
                 {!mfaMandatory && (
                   <button
                     type="button"
-                    onClick={() => setStep('tos')}
+                    onClick={finishOnboarding}
                     className="w-full text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors"
                   >
                     Skip for now
@@ -570,11 +588,11 @@ const AdminWelcome = () => {
           </div>
         )}
 
-        {/* ── Step 3: Terms of Service ── */}
+        {/* ── Step 1: Terms of Service ── */}
         {step === 'tos' && (
           <div className="space-y-4">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-yellow-500 mb-1">Step 3 of 3</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-yellow-500 mb-1">Step 1 of 3</p>
               <h2 className="text-xl font-black uppercase italic tracking-tight text-white">Terms & Privacy</h2>
               <p className="text-xs text-slate-400 font-medium mt-1">
                 Review and agree before entering the portal.
@@ -641,11 +659,11 @@ const AdminWelcome = () => {
             </label>
 
             <button
-              onClick={finishOnboarding}
+              onClick={acceptTos}
               disabled={!tosChecked || !privacyChecked || !tosScrolled || tosCountdown > 0}
               className="w-full py-3.5 rounded-xl font-black uppercase text-sm flex items-center justify-center gap-2 bg-yellow-500 text-slate-950 hover:bg-yellow-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
-              <Shield size={14} /> Agree &amp; Enter Portal
+              <Shield size={14} /> Agree &amp; Continue
             </button>
           </div>
         )}
