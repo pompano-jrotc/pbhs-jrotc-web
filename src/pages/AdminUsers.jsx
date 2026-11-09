@@ -161,8 +161,13 @@ const AdminUsers = ({ hideHeader = false }) => {
 
   // Only show roles strictly below the current user's own level — prevents
   // privilege-cloning (setting someone to your own or a higher role).
+  // Exception: always include the editing record's existing role so the
+  // dropdown displays correctly even when it's at/above the user's level
+  // (e.g. an SAI editing another SAI's pending approval).
   const ROLE_OPTIONS = Object.entries(ROLE_LABELS)
-    .filter(([slug]) => (ROLE_HIERARCHY[slug] || 0) < userLevel);
+    .filter(([slug]) =>
+      (ROLE_HIERARCHY[slug] || 0) < userLevel || slug === editingRecord?.role
+    );
   const { companies: COMPANIES } = useCompanies();
 
   // Dropdown Constants (JROTC_RANKS and POSITION_RANKS imported from constants.js)

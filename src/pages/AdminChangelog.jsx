@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="681"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.152" label="Current"     />
+        <Stat value="v1.8.153" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,12 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.152" date="Nov 9" title="Admin Users &amp; My Profile — Instructor Account Support" isCurrent changes={<>
+        <Release versions="v1.8.153" date="Nov 9" title="Admin Users — Instructor Approval Fix" isCurrent changes={<>
+          <C type="fix">AdminUsers — role dropdown now includes the editing record's existing role even when it is at or above the current user's level, so pending instructor accounts display the correct role (e.g. SAI) instead of falling back to the first visible option</C>
+          <C type="fix">API update-user-fields — role ceiling check now skips when the submitted role matches the target's existing role; approving a pending instructor account no longer returns 403 just because the signup-assigned role equals the approver's own level</C>
+        </>}
+        />
+        <Release versions="v1.8.152" date="Nov 9" title="Admin Users &amp; My Profile — Instructor Account Support" changes={<>
           <C type="feat">AdminUsers — approval/edit form now detects instructor roles (army_instructor, senior_army_instructor, district_army_instructor); shows military ranks and instructor positions instead of JROTC ranks and cadet positions; hides Company, LET Level, Platoon, Squad, and Secondary Company fields for instructors; skips cadet-only validation</C>
           <C type="feat">MyProfile — Company, Platoon/Squad, and Class Period Company fields hidden for instructor accounts; footnote updated to reflect instructor-specific note about rank and role management</C>
         </>}

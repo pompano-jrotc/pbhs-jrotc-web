@@ -928,11 +928,17 @@ export default async function handler(req, res) {
       const { updateFields = {} } = req.body || {};
 
       // Re-read the caller's role so we can enforce the role-ceiling:
-      // staff cannot assign a role at or above their own permission level.
-      const callerRole = await getUserField(accessToken, projectId, callerUid, 'role');
+      // staff cannot ELEVATE someone to a role at or above their own level.
+      // We read the target's existing role so the ceiling only triggers when
+      // the role is actually being changed (approving a pending instructor
+      // account preserves the role set during signup and must not be blocked).
+      const [callerRole, existingRole] = await Promise.all([
+        getUserField(accessToken, projectId, callerUid, 'role'),
+        getUserField(accessToken, projectId, targetUid, 'role'),
+      ]);
       const callerLevel = ROLE_HIERARCHY[callerRole] || 0;
-      const newRoleSlug  = updateFields.role;
-      if (newRoleSlug && (ROLE_HIERARCHY[newRoleSlug] || 0) >= callerLevel) {
+      const newRoleSlug = updateFields.role;
+      if (newRoleSlug && newRoleSlug !== existingRole && (ROLE_HIERARCHY[newRoleSlug] || 0) >= callerLevel) {
         return res.status(403).json({ error: 'Cannot assign a role at or above your own permission level.' });
       }
 
