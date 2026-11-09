@@ -18,6 +18,7 @@ import {
   JROTC_RANKS, JROTC_POSITIONS, POSITION_RANKS,
   COMPANY_HQ_LOCKED_POSITIONS, COMPANY_HQ_DEFAULT_POSITIONS, NO_SQUAD_POSITIONS,
   rankExceedsMax,
+  MILITARY_RANKS, INSTRUCTOR_POSITIONS,
 } from '../constants';
 import { useCompanies } from '../hooks/useCompanies';
 import AdminPageHeader from '../components/AdminPageHeader';
@@ -240,24 +241,27 @@ const AdminUsers = ({ hideHeader = false }) => {
     const wasPendingApproval = !!editingRecord && editingRecord.approved === false;
     const roleChanged = !!editingRecord && editingRecord.role !== formData.role;
 
-    // ── LET level / position cross-validation ─────────────────────────────────
-    // LET 1 → Squad Member only; LET 2+ → cannot be Squad Member.
-    if (formData.letLevel === 'LET 1' && formData.position !== 'Squad Member') {
-      setIsSaving(false);
-      showStatus('LET 1 CADETS CAN ONLY HOLD THE SQUAD MEMBER POSITION. Please correct the position before saving.');
-      return;
-    }
-    if (formData.letLevel && formData.letLevel !== 'LET 1' && formData.position === 'Squad Member') {
-      setIsSaving(false);
-      showStatus('SQUAD MEMBER IS ONLY AVAILABLE FOR LET 1 CADETS. LET 2–4 CADETS MUST HAVE A DIFFERENT POSITION.');
-      return;
-    }
+    const isInstructorRole = ['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role);
 
-    // ── Rank ceiling enforcement ──────────────────────────────────────────────
-    if (rankExceedsMax(formData.rank, formData.position)) {
-      setIsSaving(false);
-      showStatus(`${formData.rank} exceeds the authorized max rank (${POSITION_RANKS[formData.position]}) for ${formData.position}. Please select a lower rank.`);
-      return;
+    if (!isInstructorRole) {
+      // ── LET level / position cross-validation ───────────────────────────────
+      // LET 1 → Squad Member only; LET 2+ → cannot be Squad Member.
+      if (formData.letLevel === 'LET 1' && formData.position !== 'Squad Member') {
+        setIsSaving(false);
+        showStatus('LET 1 CADETS CAN ONLY HOLD THE SQUAD MEMBER POSITION. Please correct the position before saving.');
+        return;
+      }
+      if (formData.letLevel && formData.letLevel !== 'LET 1' && formData.position === 'Squad Member') {
+        setIsSaving(false);
+        showStatus('SQUAD MEMBER IS ONLY AVAILABLE FOR LET 1 CADETS. LET 2–4 CADETS MUST HAVE A DIFFERENT POSITION.');
+        return;
+      }
+      // ── Rank ceiling enforcement ────────────────────────────────────────────
+      if (rankExceedsMax(formData.rank, formData.position)) {
+        setIsSaving(false);
+        showStatus(`${formData.rank} exceeds the authorized max rank (${POSITION_RANKS[formData.position]}) for ${formData.position}. Please select a lower rank.`);
+        return;
+      }
     }
 
     // ── Self-approval block ────────────────────────────────────────────────────
@@ -934,7 +938,8 @@ const AdminUsers = ({ hideHeader = false }) => {
                   <input required className="w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-4 rounded-2xl outline-none focus:border-yellow-500 text-sm font-bold text-slate-900 dark:text-white" placeholder="cadet@email.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value.toLowerCase()})} />
                 </div>
 
-                <div className="space-y-1">
+                {/* ── Company / LET / Platoon / Squad — hidden for instructor roles ── */}
+                {!['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role) && <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">Company</label>
                   <select disabled={!isBattalionStaff} className="w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-4 rounded-2xl outline-none text-sm font-bold text-slate-900 dark:text-white disabled:opacity-50 appearance-none" value={formData.company} onChange={e => {
                     const nextCompany = e.target.value;
@@ -953,17 +958,17 @@ const AdminUsers = ({ hideHeader = false }) => {
                     <option value="Battalion" className="bg-white dark:bg-slate-900">Battalion (HQ)</option>
                     {COMPANIES.map(c => <option key={c} value={c} className="bg-white dark:bg-slate-900">{c} Company</option>)}
                   </select>
-                </div>
+                </div>}
 
-                <div className="space-y-1">
+                {!['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role) && <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">LET Level</label>
                   <select className="w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-4 rounded-2xl outline-none text-sm font-bold text-slate-900 dark:text-white appearance-none" value={formData.letLevel} onChange={e => setFormData({...formData, letLevel: e.target.value})}>
                     {LET_LEVELS.map(l => <option key={l} value={l} className="bg-white dark:bg-slate-900">{l}</option>)}
                   </select>
-                </div>
+                </div>}
 
-                {/* Platoon / Squad — hidden for Battalion members */}
-                {!BATTALION_COMPANIES.includes(formData.company) && (
+                {/* Platoon / Squad — hidden for Battalion members and instructor roles */}
+                {!['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role) && !BATTALION_COMPANIES.includes(formData.company) && (
                   <div className="space-y-1">
                     <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">
                       Platoon
@@ -990,7 +995,7 @@ const AdminUsers = ({ hideHeader = false }) => {
                   </div>
                 )}
 
-                {!BATTALION_COMPANIES.includes(formData.company) && formData.platoon !== 'Company HQ' && !NO_SQUAD_POSITIONS.includes(formData.position) && (
+                {!['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role) && !BATTALION_COMPANIES.includes(formData.company) && formData.platoon !== 'Company HQ' && !NO_SQUAD_POSITIONS.includes(formData.position) && (
                   <div className="space-y-1">
                     <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">Squad</label>
                     <select className="w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-4 rounded-2xl outline-none text-sm font-bold text-slate-900 dark:text-white appearance-none" value={formData.squad} onChange={e => setFormData({...formData, squad: e.target.value})}>
@@ -999,9 +1004,8 @@ const AdminUsers = ({ hideHeader = false }) => {
                   </div>
                 )}
 
-                {/* Secondary Company — Battalion members only: the class
-                    period company they attend but are not officially part of */}
-                {BATTALION_COMPANIES.includes(formData.company) && (
+                {/* Secondary Company — Battalion cadet members only */}
+                {!['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role) && BATTALION_COMPANIES.includes(formData.company) && (
                   <div className="md:col-span-2 space-y-1">
                     <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">
                       Class Period Company (Secondary)
@@ -1025,14 +1029,18 @@ const AdminUsers = ({ hideHeader = false }) => {
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">Rank</label>
                   <select className="w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-4 rounded-2xl outline-none text-sm font-bold text-slate-900 dark:text-white appearance-none" value={formData.rank} onChange={e => setFormData({...formData, rank: e.target.value})}>
-                    {/* A legacy value that predates this dropdown (e.g. free-typed "CDT MAJ")
-                        won't match any option below - show it as-is instead of the <select>
-                        silently defaulting to whichever option happens to be first, which
-                        would overwrite it with the wrong rank on the next save. */}
-                    {formData.rank && !JROTC_RANKS.includes(formData.rank) && (
-                      <option value={formData.rank} className="bg-white dark:bg-slate-900">{formData.rank} (legacy - please update)</option>
-                    )}
-                    {JROTC_RANKS.map(r => <option key={r} value={r} className="bg-white dark:bg-slate-900">{r}</option>)}
+                    {['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role)
+                      ? MILITARY_RANKS.map(r => <option key={r} value={r} className="bg-white dark:bg-slate-900">{r}</option>)
+                      : (<>
+                          {/* A legacy value that predates this dropdown (e.g. free-typed "CDT MAJ")
+                              won't match any option below - show it as-is instead of the <select>
+                              silently defaulting to whichever option happens to be first. */}
+                          {formData.rank && !JROTC_RANKS.includes(formData.rank) && !MILITARY_RANKS.includes(formData.rank) && (
+                            <option value={formData.rank} className="bg-white dark:bg-slate-900">{formData.rank} (legacy - please update)</option>
+                          )}
+                          {JROTC_RANKS.map(r => <option key={r} value={r} className="bg-white dark:bg-slate-900">{r}</option>)}
+                        </>)
+                    }
                   </select>
                   {(() => {
                     const authRank = POSITION_RANKS[formData.position] || '';
@@ -1087,7 +1095,10 @@ const AdminUsers = ({ hideHeader = false }) => {
                       });
                     }}
                   >
-                    {JROTC_POSITIONS.map(p => <option key={p} value={p} className="bg-white dark:bg-slate-900">{p}</option>)}
+                    {['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role)
+                      ? INSTRUCTOR_POSITIONS.map(p => <option key={p} value={p} className="bg-white dark:bg-slate-900">{p}</option>)
+                      : JROTC_POSITIONS.map(p => <option key={p} value={p} className="bg-white dark:bg-slate-900">{p}</option>)
+                    }
                   </select>
                 </div>
 

@@ -613,19 +613,21 @@ const MyProfile = () => {
               <p className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest mb-1">Rank</p>
               <p className="text-sm font-bold">{userData?.rank || '—'}</p>
             </div>
-            <div>
-              <p className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest mb-1">Company</p>
-              <p className="text-sm font-bold">
-                {normalizeCompany(userData?.company) || '—'}
-              </p>
-            </div>
-            {userData?.company && !isHQCompany(userData.company) && (
+            {userData?.accountType !== 'instructor' && (
+              <div>
+                <p className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest mb-1">Company</p>
+                <p className="text-sm font-bold">
+                  {normalizeCompany(userData?.company) || '—'}
+                </p>
+              </div>
+            )}
+            {userData?.accountType !== 'instructor' && userData?.company && !isHQCompany(userData.company) && (
               <div>
                 <p className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest mb-1">Platoon / Squad</p>
                 <p className="text-sm font-bold">{userData?.platoon || '—'} &middot; {userData?.squad || '—'}</p>
               </div>
             )}
-            {isHQCompany(userData?.company) && userData?.secondaryCompany && (
+            {userData?.accountType !== 'instructor' && isHQCompany(userData?.company) && userData?.secondaryCompany && (
               <div>
                 <p className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest mb-1">Class Period Company</p>
                 <p className="text-sm font-bold">{userData.secondaryCompany} Company
@@ -639,7 +641,9 @@ const MyProfile = () => {
             </div>
           </div>
           <p className="text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-widest mt-6 pt-6 border-t border-slate-100 dark:border-white/5">
-            Rank, role, and unit assignment are managed by battalion staff. Contact S1 to request a change.
+            {userData?.accountType === 'instructor'
+              ? 'Rank and role are managed by portal administrators.'
+              : 'Rank, role, and unit assignment are managed by battalion staff. Contact S1 to request a change.'}
           </p>
         </div>
 

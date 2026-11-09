@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="681"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.151" label="Current"     />
+        <Stat value="v1.8.152" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,12 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.151" date="Nov 9" title="Sign Up — Instructor / Cadre Account Type" isCurrent changes={<>
+        <Release versions="v1.8.152" date="Nov 9" title="Admin Users &amp; My Profile — Instructor Account Support" isCurrent changes={<>
+          <C type="feat">AdminUsers — approval/edit form now detects instructor roles (army_instructor, senior_army_instructor, district_army_instructor); shows military ranks and instructor positions instead of JROTC ranks and cadet positions; hides Company, LET Level, Platoon, Squad, and Secondary Company fields for instructors; skips cadet-only validation</C>
+          <C type="feat">MyProfile — Company, Platoon/Squad, and Class Period Company fields hidden for instructor accounts; footnote updated to reflect instructor-specific note about rank and role management</C>
+        </>}
+        />
+        <Release versions="v1.8.151" date="Nov 9" title="Sign Up — Instructor / Cadre Account Type" changes={<>
           <C type="feat">SignUp — added Cadet / Instructor toggle; instructor accounts select a military rank (SSG–COL, WO1–CW5) and position (AI, SAI, DAI) instead of cadet rank, LET level, company, platoon, and squad</C>
           <C type="feat">constants — added MILITARY_RANKS, INSTRUCTOR_POSITIONS, and INSTRUCTOR_ROLE_MAP for use in signup and future admin tooling</C>
           <C type="feat">API — complete-signup now handles accountType: instructor; sets role directly from position map (army_instructor / senior_army_instructor / district_army_instructor), skips shadow-record lookup, starts pending approval</C>
