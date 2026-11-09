@@ -32,6 +32,7 @@ import {
   JROTC_RANKS, JROTC_POSITIONS, BATTALION_POSITIONS, POSITION_RANKS,
   COMPANY_HQ_LOCKED_POSITIONS, COMPANY_HQ_DEFAULT_POSITIONS, NO_SQUAD_POSITIONS,
   rankExceedsMax,
+  MILITARY_RANKS, INSTRUCTOR_POSITIONS,
 } from '../constants';
 import { usePageMeta } from '../hooks/usePageMeta';
 
@@ -54,7 +55,7 @@ const RECAPTCHA_SITE_KEY = '6Ld3tXwtAAAAAP7tu9bJa3fpwpju6LLDe9T2ujWO';
 const FALLBACK_SECRET_HASH = "587059e56cc6592a6054a0606758a821cc9eb7657635eb13f4b7c88a17e7ad7a";
 
 const SignUp = () => {
-  usePageMeta({ title: 'Create Cadet Account' });
+  usePageMeta({ title: 'Create Account' });
 
   // Active secret-code hash — loaded from Firestore on mount; falls back to the
   // compile-time constant if the doc is missing or the read fails.
@@ -85,6 +86,7 @@ const SignUp = () => {
     // if the user navigates back to signup the script is already ready. The id
     // guard above prevents duplicates.
   }, []);
+  const [accountType, setAccountType] = useState('cadet'); // 'cadet' | 'instructor'
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -94,9 +96,9 @@ const SignUp = () => {
     position: '',
     letLevel: 'LET 1',
     company: '',
-    platoon: '1st Platoon', // Added default
-    squad: '1st Squad',     // Added default
-    secondaryCompany: '',   // Battalion only — the class period company they attend
+    platoon: '1st Platoon',
+    squad: '1st Squad',
+    secondaryCompany: '',
     phone: '',
     secretCode: ''
   });
@@ -170,20 +172,21 @@ const SignUp = () => {
       return;
     }
 
-    // LET 1 → Squad Member only; LET 2+ → cannot be Squad Member.
-    if (formData.letLevel === 'LET 1' && formData.position !== 'Squad Member') {
-      setError("LET 1 CADETS MAY ONLY SELECT SQUAD MEMBER AS THEIR POSITION.");
-      return;
-    }
-    if (formData.letLevel !== 'LET 1' && formData.position === 'Squad Member') {
-      setError("SQUAD MEMBER IS ONLY AVAILABLE FOR LET 1 CADETS. LET 2–4 CADETS MUST SELECT A DIFFERENT POSITION.");
-      return;
-    }
-
-    // Rank ceiling: selected rank cannot exceed the authorized max for position
-    if (rankExceedsMax(formData.rank, formData.position)) {
-      setError(`${formData.rank} EXCEEDS THE AUTHORIZED MAX RANK (${POSITION_RANKS[formData.position]}) FOR ${formData.position}. PLEASE SELECT A LOWER RANK.`);
-      return;
+    if (accountType === 'cadet') {
+      // LET 1 → Squad Member only; LET 2+ → cannot be Squad Member.
+      if (formData.letLevel === 'LET 1' && formData.position !== 'Squad Member') {
+        setError("LET 1 CADETS MAY ONLY SELECT SQUAD MEMBER AS THEIR POSITION.");
+        return;
+      }
+      if (formData.letLevel !== 'LET 1' && formData.position === 'Squad Member') {
+        setError("SQUAD MEMBER IS ONLY AVAILABLE FOR LET 1 CADETS. LET 2–4 CADETS MUST SELECT A DIFFERENT POSITION.");
+        return;
+      }
+      // Rank ceiling: selected rank cannot exceed the authorized max for position
+      if (rankExceedsMax(formData.rank, formData.position)) {
+        setError(`${formData.rank} EXCEEDS THE AUTHORIZED MAX RANK (${POSITION_RANKS[formData.position]}) FOR ${formData.position}. PLEASE SELECT A LOWER RANK.`);
+        return;
+      }
     }
 
     setLoading(true);
@@ -256,17 +259,25 @@ const SignUp = () => {
         body: JSON.stringify({
           type: 'complete-signup',
           targetUid: user.uid,
-          profile: {
-            fullName: formData.name.toUpperCase(),
-            phone: formData.phone,
-            rank: formData.rank,
-            position: formData.position,
-            letLevel: formData.letLevel,
-            company: formData.company,
-            platoon: formData.platoon,
-            squad: formData.squad,
-            secondaryCompany: formData.secondaryCompany || null
-          }
+          profile: accountType === 'instructor'
+            ? {
+                accountType: 'instructor',
+                fullName: formData.name.toUpperCase(),
+                phone: formData.phone,
+                rank: formData.rank,
+                position: formData.position,
+              }
+            : {
+                fullName: formData.name.toUpperCase(),
+                phone: formData.phone,
+                rank: formData.rank,
+                position: formData.position,
+                letLevel: formData.letLevel,
+                company: formData.company,
+                platoon: formData.platoon,
+                squad: formData.squad,
+                secondaryCompany: formData.secondaryCompany || null,
+              }
         })
       });
       const data = await res.json();
@@ -307,7 +318,34 @@ const SignUp = () => {
 
           <div className="mb-8">
             <h2 className="text-3xl font-black uppercase italic text-yellow-500 tracking-tighter">Sign Up</h2>
-            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] mt-1">Create Your Cadet Account</p>
+            <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] mt-1">
+              {accountType === 'instructor' ? 'Create Your Instructor Account' : 'Create Your Cadet Account'}
+            </p>
+          </div>
+
+          {/* Account type toggle */}
+          <div className="flex gap-2 mb-6 p-1 bg-black/40 border border-white/5 rounded-xl">
+            {[
+              { key: 'cadet', label: 'Cadet' },
+              { key: 'instructor', label: 'Instructor / Cadre' },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  setAccountType(key);
+                  setFormData(f => ({ ...f, rank: '', position: '', letLevel: 'LET 1', company: '', platoon: '1st Platoon', squad: '1st Squad', secondaryCompany: '' }));
+                  setError('');
+                }}
+                className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  accountType === key
+                    ? 'bg-yellow-500 text-slate-950'
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           
           {error && (
@@ -344,53 +382,72 @@ const SignUp = () => {
               <SmoothInput type="password" placeholder="CONFIRM PASSWORD" required className="w-full bg-black/40 border border-white/10 rounded-xl p-3 pl-10 text-sm focus:border-yellow-500 outline-none transition-all font-bold text-white" onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})} />
             </div>
 
+            {/* Rank — cadet ranks vs. military ranks */}
             <div className="relative">
               <Medal className="absolute left-3 top-3 text-slate-600" size={18} />
               <select required value={formData.rank} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 pl-10 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white" onChange={(e) => setFormData({...formData, rank: e.target.value})}>
                 <option value="" disabled>SELECT RANK</option>
-                {JROTC_RANKS.map(r => <option key={r} value={r} className="bg-slate-900">{r}</option>)}
+                {accountType === 'instructor'
+                  ? MILITARY_RANKS.map(r => <option key={r} value={r} className="bg-slate-900">{r}</option>)
+                  : JROTC_RANKS.map(r => <option key={r} value={r} className="bg-slate-900">{r}</option>)
+                }
               </select>
-              <p className="text-amber-400 text-[9px] font-black uppercase tracking-widest mt-1.5 ml-1">
-                ⚠ Enter your current issued rank — not your max rank or position-associated rank. If unsure, select C/PVT.
-              </p>
+              {accountType === 'cadet' && (
+                <p className="text-amber-400 text-[9px] font-black uppercase tracking-widest mt-1.5 ml-1">
+                  ⚠ Enter your current issued rank — not your max rank or position-associated rank. If unsure, select C/PVT.
+                </p>
+              )}
             </div>
 
-            <div className="relative">
-              <select required value={formData.letLevel} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white" onChange={(e) => setFormData(f => ({...f, letLevel: e.target.value}))}>
-                <option value="" disabled>SELECT LET LEVEL</option>
-                {["LET 1", "LET 2", "LET 3", "LET 4"].map(l => <option key={l} value={l} className="bg-slate-900">{l}</option>)}
-              </select>
-            </div>
+            {/* LET level — cadets only */}
+            {accountType === 'cadet' && (
+              <div className="relative">
+                <select required value={formData.letLevel} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white" onChange={(e) => setFormData(f => ({...f, letLevel: e.target.value}))}>
+                  <option value="" disabled>SELECT LET LEVEL</option>
+                  {["LET 1", "LET 2", "LET 3", "LET 4"].map(l => <option key={l} value={l} className="bg-slate-900">{l}</option>)}
+                </select>
+              </div>
+            )}
 
-            <div className="relative">
+            {/* Position — cadet positions vs. instructor positions */}
+            <div className={`relative ${accountType === 'instructor' ? 'col-span-full md:col-span-1' : ''}`}>
               <Briefcase className="absolute left-3 top-3 text-slate-600" size={18} />
-              <select
-                required
-                value={formData.position}
-                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 pl-10 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white"
-                onChange={(e) => {
-                  const newPos = e.target.value;
-                  const isHqPos    = COMPANY_HQ_LOCKED_POSITIONS.includes(newPos) || COMPANY_HQ_DEFAULT_POSITIONS.includes(newPos);
-                  const isNoSquad  = NO_SQUAD_POSITIONS.includes(newPos);
-                  setFormData(f => ({
-                    ...f,
-                    position: newPos,
-                    // Auto-set Company HQ platoon for staff/leadership positions
-                    ...(isHqPos && !BATTALION_COMPANIES.includes(f.company)
-                      ? { platoon: 'Company HQ', squad: '' }
-                      : {}),
-                    // Platoon Leaders / Platoon Sergeants belong to a platoon but not a squad
-                    ...(!isHqPos && isNoSquad ? { squad: '' } : {}),
-                  }));
-                }}
-              >
-                <option value="" disabled>SELECT POSITION</option>
-                {/* Battalion-level positions require staff assignment — not self-selectable at signup */}
-                {JROTC_POSITIONS
-                  .filter(p => !BATTALION_POSITIONS.includes(p))
-                  .map(p => <option key={p} value={p} className="bg-slate-900">{p}</option>)}
-              </select>
-              {(() => {
+              {accountType === 'instructor' ? (
+                <select
+                  required
+                  value={formData.position}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl p-3 pl-10 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white"
+                  onChange={(e) => setFormData(f => ({ ...f, position: e.target.value }))}
+                >
+                  <option value="" disabled>SELECT POSITION</option>
+                  {INSTRUCTOR_POSITIONS.map(p => <option key={p} value={p} className="bg-slate-900">{p}</option>)}
+                </select>
+              ) : (
+                <select
+                  required
+                  value={formData.position}
+                  className="w-full bg-black/40 border border-white/10 rounded-xl p-3 pl-10 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white"
+                  onChange={(e) => {
+                    const newPos = e.target.value;
+                    const isHqPos   = COMPANY_HQ_LOCKED_POSITIONS.includes(newPos) || COMPANY_HQ_DEFAULT_POSITIONS.includes(newPos);
+                    const isNoSquad = NO_SQUAD_POSITIONS.includes(newPos);
+                    setFormData(f => ({
+                      ...f,
+                      position: newPos,
+                      ...(isHqPos && !BATTALION_COMPANIES.includes(f.company)
+                        ? { platoon: 'Company HQ', squad: '' }
+                        : {}),
+                      ...(!isHqPos && isNoSquad ? { squad: '' } : {}),
+                    }));
+                  }}
+                >
+                  <option value="" disabled>SELECT POSITION</option>
+                  {JROTC_POSITIONS
+                    .filter(p => !BATTALION_POSITIONS.includes(p))
+                    .map(p => <option key={p} value={p} className="bg-slate-900">{p}</option>)}
+                </select>
+              )}
+              {accountType === 'cadet' && (() => {
                 const authRank = POSITION_RANKS[formData.position] || '';
                 if (!authRank) return null;
                 const isOver = formData.rank && rankExceedsMax(formData.rank, formData.position);
@@ -405,8 +462,8 @@ const SignUp = () => {
               })()}
             </div>
 
-            {/* Platoon / Squad — hidden for Battalion members */}
-            {!BATTALION_COMPANIES.includes(formData.company) && (
+            {/* Platoon / Squad — hidden for Battalion members and instructors */}
+            {accountType === 'cadet' && !BATTALION_COMPANIES.includes(formData.company) && (
               <div className="relative">
                 <select required value={formData.platoon} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white" onChange={(e) => {
                   const newPlatoon = e.target.value;
@@ -422,7 +479,7 @@ const SignUp = () => {
               </div>
             )}
 
-            {!BATTALION_COMPANIES.includes(formData.company) && formData.platoon !== 'Company HQ' && !NO_SQUAD_POSITIONS.includes(formData.position) && (
+            {accountType === 'cadet' && !BATTALION_COMPANIES.includes(formData.company) && formData.platoon !== 'Company HQ' && !NO_SQUAD_POSITIONS.includes(formData.position) && (
               <div className="relative">
                 <select required value={formData.squad} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-yellow-500 outline-none appearance-none font-bold text-white" onChange={(e) => setFormData({...formData, squad: e.target.value})}>
                   {squads.map(s => <option key={s} value={s} className="bg-slate-900">{s}</option>)}
@@ -430,9 +487,8 @@ const SignUp = () => {
               </div>
             )}
 
-            {/* Secondary Company — only for Battalion members: the class period
-                they're assigned to observe (not officially a member of) */}
-            {BATTALION_COMPANIES.includes(formData.company) && (
+            {/* Secondary Company — only for Battalion cadet members */}
+            {accountType === 'cadet' && BATTALION_COMPANIES.includes(formData.company) && (
               <div className="relative col-span-full">
                 <select
                   required
@@ -451,7 +507,8 @@ const SignUp = () => {
               </div>
             )}
 
-            <div className="relative col-span-full">
+            {/* Company — cadets only */}
+            {accountType === 'cadet' && <div className="relative col-span-full">
               <select required value={formData.company} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm focus:border-yellow-500 outline-none appearance-none text-center font-black text-white" onChange={(e) => {
                 const nextCompany = e.target.value;
                 const isNextBattalion = BATTALION_COMPANIES.includes(nextCompany);
@@ -470,7 +527,7 @@ const SignUp = () => {
                 <option value="Battalion" className="bg-slate-900">Battalion (HQ)</option>
                 {companies.map(c => <option key={c} value={c} className="bg-slate-900">{c} Company</option>)}
               </select>
-            </div>
+            </div>}
 
             <div className="relative col-span-full">
               <ShieldCheck className="absolute left-3 top-3 text-yellow-500" size={18} />

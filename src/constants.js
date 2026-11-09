@@ -105,6 +105,25 @@ export const JROTC_RANKS = [
   'C/2LT', 'C/1LT', 'C/CPT', 'C/MAJ', 'C/LTC', 'C/COL',
 ];
 
+// Army instructor ranks — enlisted, warrant, and officer grades used in JROTC.
+export const MILITARY_RANKS = [
+  'SSG', 'SFC', 'MSG', '1SG', 'SGM', 'CSM',
+  'WO1', 'CW2', 'CW3', 'CW4', 'CW5',
+  '2LT', '1LT', 'CPT', 'MAJ', 'LTC', 'COL',
+];
+
+export const INSTRUCTOR_POSITIONS = [
+  'Army Instructor',
+  'Senior Army Instructor',
+  'District Army Instructor',
+];
+
+export const INSTRUCTOR_ROLE_MAP = {
+  'Army Instructor':          'army_instructor',
+  'Senior Army Instructor':   'senior_army_instructor',
+  'District Army Instructor': 'district_army_instructor',
+};
+
 // Positions that ALWAYS get "Company HQ" as their platoon — non-negotiable.
 // Positions that lead a platoon — they belong to a platoon but have no squad.
 // Hide the squad field whenever one of these is selected.

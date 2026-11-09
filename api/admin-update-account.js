@@ -514,6 +514,58 @@ export default async function handler(req, res) {
       // verified here from the server's own privileged read, never from
       // anything the client sent.
       const { profile = {} } = req.body || {};
+
+      // Instructor accounts (SAI/AI/DAI) have no cadet roster shadow record.
+      // Map their position to the correct role and skip the shadow lookup.
+      if (profile.accountType === 'instructor') {
+        const INSTRUCTOR_ROLE_MAP = {
+          'Army Instructor':          'army_instructor',
+          'Senior Army Instructor':   'senior_army_instructor',
+          'District Army Instructor': 'district_army_instructor',
+        };
+        const instructorRole = INSTRUCTOR_ROLE_MAP[profile.position] || 'army_instructor';
+        const instructorProfile = {
+          uid: targetUid,
+          fullName: (profile.fullName || '').toString(),
+          email: callerEmail,
+          phone: profile.phone || '',
+          rank: profile.rank || '',
+          position: profile.position || '',
+          company: '',
+          platoon: '',
+          squad: '',
+          letLevel: '',
+          gender: '',
+          accountType: 'instructor',
+          role: instructorRole,
+          isManual: false,
+          status: 'Active',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          accountLinked: false,
+          approved: false,
+        };
+        const instructorWrite = [{
+          update: {
+            name: `projects/${projectId}/databases/(default)/documents/users/${targetUid}`,
+            fields: toFirestoreFields(instructorProfile),
+          },
+        }];
+        const iRes = await fetch(
+          `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:commit`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ writes: instructorWrite }),
+          }
+        );
+        if (!iRes.ok) {
+          const iData = await iRes.json();
+          throw new Error(iData.error?.message || 'Failed to finish creating your account');
+        }
+        return res.status(200).json({ success: true });
+      }
+
       const shadow = await findShadowRecord(accessToken, projectId, callerEmail);
 
       const finalProfile = {

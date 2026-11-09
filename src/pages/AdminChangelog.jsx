@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="681"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.150" label="Current"     />
+        <Stat value="v1.8.151" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,13 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.150" date="Nov 9" title="S1 Shop — Service Hours, Attendance, AFI Prep Moved into S1 Tab" isCurrent changes={<>
+        <Release versions="v1.8.151" date="Nov 9" title="Sign Up — Instructor / Cadre Account Type" isCurrent changes={<>
+          <C type="feat">SignUp — added Cadet / Instructor toggle; instructor accounts select a military rank (SSG–COL, WO1–CW5) and position (AI, SAI, DAI) instead of cadet rank, LET level, company, platoon, and squad</C>
+          <C type="feat">constants — added MILITARY_RANKS, INSTRUCTOR_POSITIONS, and INSTRUCTOR_ROLE_MAP for use in signup and future admin tooling</C>
+          <C type="feat">API — complete-signup now handles accountType: instructor; sets role directly from position map (army_instructor / senior_army_instructor / district_army_instructor), skips shadow-record lookup, starts pending approval</C>
+        </>}
+        />
+        <Release versions="v1.8.150" date="Nov 9" title="S1 Shop — Service Hours, Attendance, AFI Prep Moved into S1 Tab" changes={<>
           <C type="feat">S1 Shop — Service Hours, Attendance, and AFI Prep moved from sidebar "My Tools" into S1 sub-tabs; accessible to users level 5+ (Service Hours) and 45+ (Attendance, AFI Prep)</C>
           <C type="fix">AdminSidebar — removed Service Hours, Attendance, and AFI Prep from "My Tools" section; standalone routes remain for direct URL access</C>
         </>}
