@@ -10,7 +10,7 @@ import { Navigate } from 'react-router-dom';
 import {
   UserCog, Search, CheckCircle2,
   Loader2, UserPlus, User, X, Edit3, KeyRound, Ban, Trash2,
-  ShieldCheck, ShieldOff, ShieldAlert, ToggleLeft, ToggleRight, Mail,
+  ShieldCheck, ShieldOff, ShieldAlert, ToggleLeft, ToggleRight,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -122,7 +122,6 @@ const AdminUsers = ({ hideHeader = false }) => {
   const [loginEmailStatus, setLoginEmailStatus] = useState(null);
   const [resetPasswordStatus, setResetPasswordStatus] = useState(null);
   const [resetMfaStatus, setResetMfaStatus] = useState(null);
-  const [resendWelcomeStatus, setResendWelcomeStatus] = useState(null);
   const [suspendStatus, setSuspendStatus] = useState(null);
   const [deleteAccountStatus, setDeleteAccountStatus] = useState(null);
   // Keyed by target uid, not global - resetting one cadet's password
@@ -625,25 +624,6 @@ const AdminUsers = ({ hideHeader = false }) => {
     }
   };
 
-  const handleResendWelcome = async () => {
-    if (!editingRecord) return;
-    setResendWelcomeStatus('sending');
-    try {
-      const idToken = await user.getIdToken();
-      const res = await fetch('/api/admin-update-account', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ type: 'welcome-notification', targetUid: editingRecord.id }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to send welcome');
-      setResendWelcomeStatus('success');
-      setTimeout(() => setResendWelcomeStatus(null), 4000);
-    } catch (err) {
-      setResendWelcomeStatus(err.message || 'error');
-    }
-  };
-
   // Disables/re-enables the account's actual Firebase Auth login (blocks
   // sign-in entirely, not just a soft in-app flag) and mirrors the state to
   // Firestore for the roster badge below.
@@ -847,7 +827,7 @@ const AdminUsers = ({ hideHeader = false }) => {
                 </div>
 
                 <div className="flex gap-2">
-                    <button title="Edit personnel record" onClick={() => { setEditingRecord(p); setFormData(p); setLoginEmail(p.email || ''); setLoginEmailStatus(null); setResetPasswordStatus(null); setResetMfaStatus(null); setResendWelcomeStatus(null); setSuspendStatus(null); setDeleteAccountStatus(null); }} className="p-3 bg-slate-100 dark:bg-white/5 rounded-xl hover:bg-yellow-500 hover:text-slate-950 transition-all text-slate-500">
+                    <button title="Edit personnel record" onClick={() => { setEditingRecord(p); setFormData(p); setLoginEmail(p.email || ''); setLoginEmailStatus(null); setResetPasswordStatus(null); setResetMfaStatus(null); setSuspendStatus(null); setDeleteAccountStatus(null); }} className="p-3 bg-slate-100 dark:bg-white/5 rounded-xl hover:bg-yellow-500 hover:text-slate-950 transition-all text-slate-500">
                       <Edit3 size={18} />
                     </button>
                 </div>
@@ -1183,30 +1163,6 @@ const AdminUsers = ({ hideHeader = false }) => {
                   </button>
                 )}
               </form>
-
-              {/* Resend Welcome — shown for approved accounts that never finished onboarding */}
-              {editingRecord && editingRecord.approved === true && editingRecord.onboardingComplete !== true && editingRecord.id !== user?.uid && (
-                <div className="mt-8 pt-8 border-t border-slate-100 dark:border-white/5">
-                  <h3 className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-widest mb-1">Onboarding</h3>
-                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <p className="text-[10px] text-slate-400 dark:text-slate-600 font-bold leading-relaxed">
-                      This account was approved but never completed the welcome wizard. Resending will trigger the email verification step and send the welcome email.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleResendWelcome}
-                      disabled={resendWelcomeStatus === 'sending'}
-                      className={`px-6 py-3 rounded-xl font-black uppercase text-xs flex items-center gap-2 whitespace-nowrap transition-all ${resendWelcomeStatus === 'success' ? 'bg-green-500 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50'}`}
-                    >
-                      <Mail size={14} />
-                      {resendWelcomeStatus === 'sending' ? 'Sending…' : resendWelcomeStatus === 'success' ? 'Welcome Sent' : 'Resend Welcome'}
-                    </button>
-                  </div>
-                  {resendWelcomeStatus && resendWelcomeStatus !== 'sending' && resendWelcomeStatus !== 'success' && (
-                    <p className="text-[10px] text-red-500 font-bold mt-2">{resendWelcomeStatus}</p>
-                  )}
-                </div>
-              )}
 
               {/* Real Firebase Auth login email - separate from the contact-email field above.
                   Only meaningful for an already-linked account. Changing your OWN login lives
