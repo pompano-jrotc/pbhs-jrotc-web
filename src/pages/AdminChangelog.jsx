@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="681"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.157" label="Current"     />
+        <Stat value="v1.8.158" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.157" date="Nov 9" title="API — Welcome Notification Rank Check Bypass" isCurrent changes={<>
+        <Release versions="v1.8.158" date="Nov 9" title="AdminUsers — Resend Welcome Button" isCurrent changes={<>
+          <C type="feature">AdminUsers — added Resend Welcome button to the edit modal for approved accounts where onboardingComplete !== true; calls welcome-notification API, sets onboardingComplete:false, and sends the welcome email so the account can enter the wizard</C>
+        </>}
+        />
+        <Release versions="v1.8.157" date="Nov 9" title="API — Welcome Notification Rank Check Bypass" changes={<>
           <C type="fix">admin-update-account — welcome-notification is now exempt from the canManageAccount rank check; after an approval save writes approved:true the pending-account bypass no longer applies, causing the follow-up welcome-notification to 403 and leaving onboardingComplete unset and the welcome email unsent</C>
         </>}
         />
