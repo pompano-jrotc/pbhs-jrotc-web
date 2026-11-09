@@ -499,7 +499,12 @@ export default async function handler(req, res) {
     // reset, email change, or account deletion). Acting on someone else's -
     // for any action type here - is restricted to the email-manager roles,
     // and only for personnel strictly below your own rank.
-    if (targetUid !== callerUid) {
+    //
+    // welcome-notification is exempt from the rank check: it only sets
+    // onboardingComplete:false and sends a welcome email, so the approver
+    // must be able to call it immediately after writing approved:true (at
+    // which point the pending-account bypass no longer applies).
+    if (targetUid !== callerUid && type !== 'welcome-notification') {
       const [callerRole, targetRole, targetApproved] = await Promise.all([
         getUserField(accessToken, projectId, callerUid, 'role'),
         getUserField(accessToken, projectId, targetUid, 'role'),
