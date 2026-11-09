@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="681"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.154" label="Current"     />
+        <Stat value="v1.8.155" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,13 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.154" date="Nov 9" title="Onboarding — Approval Gate &amp; Wizard Reorder" isCurrent changes={<>
+        <Release versions="v1.8.155" date="Nov 9" title="API — Instructor Approval Rank Check Fix" isCurrent changes={<>
+          <C type="fix">admin-update-account — canManageAccount now waives the rank ceiling for pending accounts (approved === false); battalion admins can approve instructor applications even when the instructor role level exceeds their own</C>
+          <C type="fix">admin-update-account — getUserField now reads booleanValue fields in addition to stringValue, enabling the approved flag to be fetched for the rank check</C>
+          <C type="fix">admin-update-account — added district_army_instructor (level 105) to the API-side ROLE_HIERARCHY to match src/constants.js</C>
+        </>}
+        />
+        <Release versions="v1.8.154" date="Nov 9" title="Onboarding — Approval Gate &amp; Wizard Reorder" changes={<>
           <C type="fix">App — ProtectedRoute now blocks portal access when userData.approved === false; unapproved accounts see a Pending Approval screen instead of reaching any portal page</C>
           <C type="fix">AdminWelcome — wizard step order changed from Email → 2FA → Terms to Terms → Email → 2FA; TOS acceptance is now persisted to Firestore immediately at step 1 so a page reload resumes at the correct step</C>
           <C type="fix">AdminWelcome — completing MFA enrollment now calls finishOnboarding directly; Skip for now also completes onboarding cleanly without routing through TOS again</C>

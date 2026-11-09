@@ -4,7 +4,7 @@ import { checkRateLimit } from '../lib/rateLimit.js';
 // Mirrors src/constants.js ROLE_HIERARCHY - keep these two in sync by hand
 // whenever the role table changes, same as firestore.rules already does.
 const ROLE_HIERARCHY = {
-  senior_army_instructor: 100, army_instructor: 95,
+  district_army_instructor: 105, senior_army_instructor: 100, army_instructor: 95,
   battalion_commander: 90, battalion_xo: 85, battalion_csm: 85, sergeant_major: 80,
   s1_adjutant: 70, s2_intelligence: 70, s3_operations: 70, s4_logistics: 70,
   s5_public_affairs: 70, s6_technology: 70, s7_special_projects: 70,
@@ -26,12 +26,14 @@ const EMAIL_MANAGER_ROLES = [
 
 // Pure authorization decision for acting on someone ELSE's account, pulled
 // out of the handler so it's unit-testable without mocking Firestore/JWT
-// verification. Behavior is unchanged from the inline checks this replaced.
-export function canManageAccount(callerRole, targetRole) {
+// verification. targetApproved=false waives the rank check: a pending account
+// has no active portal access, so an admin is vetting an application rather
+// than overriding an active higher-rank user.
+export function canManageAccount(callerRole, targetRole, targetApproved) {
   if (!EMAIL_MANAGER_ROLES.includes(callerRole)) {
     return { allowed: false, reason: 'Only battalion command, S1, or S6 can manage another cadet\'s account.' };
   }
-  if ((ROLE_HIERARCHY[targetRole] || 0) >= (ROLE_HIERARCHY[callerRole] || 0)) {
+  if (targetApproved !== false && (ROLE_HIERARCHY[targetRole] || 0) >= (ROLE_HIERARCHY[callerRole] || 0)) {
     return { allowed: false, reason: 'You can only manage accounts for personnel below your own rank.' };
   }
   return { allowed: true };
@@ -120,7 +122,10 @@ async function getUserField(accessToken, projectId, uid, field) {
   );
   if (!res.ok) return null;
   const data = await res.json();
-  return data.fields?.[field]?.stringValue || null;
+  const f = data.fields?.[field];
+  if (!f) return null;
+  if ('booleanValue' in f) return f.booleanValue;
+  return f.stringValue ?? null;
 }
 
 // Minimal plain-object <-> Firestore REST "fields" converters - only the
@@ -495,12 +500,13 @@ export default async function handler(req, res) {
     // for any action type here - is restricted to the email-manager roles,
     // and only for personnel strictly below your own rank.
     if (targetUid !== callerUid) {
-      const [callerRole, targetRole] = await Promise.all([
+      const [callerRole, targetRole, targetApproved] = await Promise.all([
         getUserField(accessToken, projectId, callerUid, 'role'),
         getUserField(accessToken, projectId, targetUid, 'role'),
+        getUserField(accessToken, projectId, targetUid, 'approved'),
       ]);
 
-      const decision = canManageAccount(callerRole, targetRole);
+      const decision = canManageAccount(callerRole, targetRole, targetApproved);
       if (!decision.allowed) {
         return res.status(403).json({ error: decision.reason });
       }
