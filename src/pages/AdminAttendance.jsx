@@ -215,7 +215,7 @@ const SessionCard = ({ session, canEdit }) => {
 };
 
 // ── Main ───────────────────────────────────────────────────────────────────────
-export default function AdminAttendance() {
+export default function AdminAttendance({ hideHeader = false }) {
   const { role } = useAuth();
   const userLevel = ROLE_HIERARCHY[role] || 0;
   const canEdit = userLevel >= COMMAND_L;
@@ -241,12 +241,14 @@ export default function AdminAttendance() {
   }, [sessions, filter]);
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
-      <AdminPageHeader
-        title="Attendance"
-        subtitle="Track attendance for events, practices, and meetings"
-        icon={ClipboardList}
-      />
+    <div className={hideHeader ? 'w-full' : 'p-4 md:p-6 space-y-6 max-w-5xl mx-auto'}>
+      {!hideHeader && (
+        <AdminPageHeader
+          title="Attendance"
+          subtitle="Track attendance for events, practices, and meetings"
+          icon={ClipboardList}
+        />
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">

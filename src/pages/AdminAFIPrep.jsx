@@ -294,7 +294,7 @@ const SessionCard = ({ session, canEdit }) => {
 };
 
 // ── Main ───────────────────────────────────────────────────────────────────────
-export default function AdminAFIPrep() {
+export default function AdminAFIPrep({ hideHeader = false }) {
   const { user, role } = useAuth();
   const userLevel = ROLE_HIERARCHY[role] || 0;
   const canEdit = userLevel >= COMMAND_L;
@@ -320,12 +320,14 @@ export default function AdminAFIPrep() {
   }, [sessions]);
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
-      <AdminPageHeader
-        title="AFI Prep"
-        subtitle="Annual Formal Inspection preparation and scoring"
-        icon={ClipboardCheck}
-      />
+    <div className={hideHeader ? 'w-full' : 'p-4 md:p-6 space-y-6 max-w-5xl mx-auto'}>
+      {!hideHeader && (
+        <AdminPageHeader
+          title="AFI Prep"
+          subtitle="Annual Formal Inspection preparation and scoring"
+          icon={ClipboardCheck}
+        />
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Sessions" value={sessions.length} />

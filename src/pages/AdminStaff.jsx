@@ -14,7 +14,7 @@ import {
   ClipboardList, Shield, Sparkles, Laptop, Users2, Package,
   Ruler, ShoppingCart, Shirt, NotepadText, ClipboardCheck,
   ScrollText, MessageSquare, Swords, Trophy, BarChart3, CalendarDays,
-  Tent, ListChecks, Bell, Lock, Star,
+  Tent, ListChecks, Bell, Lock, Star, Clock,
 } from 'lucide-react';
 import AdminPageHeader from '../components/AdminPageHeader';
 import AdminS1 from './AdminS1';
@@ -34,6 +34,9 @@ import AdminFeedback from './AdminFeedback';
 import AdminStats from './AdminStats';
 import AdminHonorCompany from './AdminHonorCompany';
 import AdminLoginNotification from './AdminLoginNotification';
+import AdminServiceHours from './AdminServiceHours';
+import AdminAttendance from './AdminAttendance';
+import AdminAFIPrep from './AdminAFIPrep';
 
 const AdminStaff = () => {
   const { role } = useAuth();
@@ -55,7 +58,10 @@ const AdminStaff = () => {
   const canSeeMeetingLogs    = userLevel >= 5;
   const canSeeCamps          = isBattalionStaff;
   const canSeeParticipation  = isBattalionStaff;
-  const canSeeAwardsRegistry = userLevel >= 45;
+  const canSeeAwardsRegistry   = userLevel >= 45;
+  const canSeeServiceHours     = userLevel >= 5;
+  const canSeeAttendance       = userLevel >= 45;
+  const canSeeAFIPrep          = userLevel >= 45;
 
   // ── S3 sub-tab visibility ─────────────────────────────────────────────────────
   const canSeeAAR                  = userLevel >= 20;
@@ -109,7 +115,10 @@ const AdminStaff = () => {
     { key: 'meeting-logs',     label: 'Meeting Logs',        icon: NotepadText,   show: canSeeMeetingLogs },
     { key: 'camps',            label: 'Camp Attendance',     icon: Tent,          show: canSeeCamps },
     { key: 'participation',    label: 'Participation',       icon: ListChecks,    show: canSeeParticipation },
-    { key: 'awards-registry',  label: 'Awards Registry',     icon: Star,          show: canSeeAwardsRegistry },
+    { key: 'awards-registry',  label: 'Awards Registry',     icon: Star,           show: canSeeAwardsRegistry },
+    { key: 'service-hours',    label: 'Service Hours',       icon: Clock,          show: canSeeServiceHours },
+    { key: 'attendance',       label: 'Attendance',          icon: ClipboardList,  show: canSeeAttendance },
+    { key: 'afi-prep',         label: 'AFI Prep',            icon: ClipboardCheck, show: canSeeAFIPrep },
   ].filter(t => t.show);
   const [s1SubTab, setS1SubTab] = useState(s1SubTabs[0]?.key || '');
 
@@ -198,6 +207,9 @@ const AdminStaff = () => {
           {s1SubTab === 'camps'           && canSeeCamps && <AdminCamps hideHeader />}
           {s1SubTab === 'participation'   && canSeeParticipation && <AdminParticipation hideHeader />}
           {s1SubTab === 'awards-registry' && canSeeAwardsRegistry && <AdminAwardsRegistry hideHeader />}
+          {s1SubTab === 'service-hours'   && canSeeServiceHours && <AdminServiceHours hideHeader />}
+          {s1SubTab === 'attendance'      && canSeeAttendance && <AdminAttendance hideHeader />}
+          {s1SubTab === 'afi-prep'        && canSeeAFIPrep && <AdminAFIPrep hideHeader />}
         </div>
       )}
 

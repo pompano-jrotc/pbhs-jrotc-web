@@ -224,7 +224,7 @@ const Info = ({ icon: Icon, label, value }) => (
 );
 
 // ── Main page ──────────────────────────────────────────────────────────────────
-export default function AdminServiceHours() {
+export default function AdminServiceHours({ hideHeader = false }) {
   const { user, userData, role } = useAuth();
   const userLevel = ROLE_HIERARCHY[role] || 0;
   const canReview = userLevel >= STAFF_REVIEW_LEVEL;
@@ -274,12 +274,14 @@ export default function AdminServiceHours() {
   const totalPending = entries.filter(e => e.status === 'pending').length;
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
-      <AdminPageHeader
-        title="Service Hours"
-        subtitle={canReview ? 'Review and approve cadet community service submissions' : 'Track your community service hours'}
-        icon={Award}
-      />
+    <div className={hideHeader ? 'w-full' : 'p-4 md:p-6 space-y-6 max-w-5xl mx-auto'}>
+      {!hideHeader && (
+        <AdminPageHeader
+          title="Service Hours"
+          subtitle={canReview ? 'Review and approve cadet community service submissions' : 'Track your community service hours'}
+          icon={Award}
+        />
+      )}
 
       {/* Stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

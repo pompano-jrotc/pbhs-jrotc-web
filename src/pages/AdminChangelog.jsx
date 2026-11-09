@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="681"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.149" label="Current"     />
+        <Stat value="v1.8.150" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,12 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.149" date="Nov 4" title="Promotion Board — Exclude Appointed Positions from Nominations" isCurrent changes={<>
+        <Release versions="v1.8.150" date="Nov 9" title="S1 Shop — Service Hours, Attendance, AFI Prep Moved into S1 Tab" isCurrent changes={<>
+          <C type="feat">S1 Shop — Service Hours, Attendance, and AFI Prep moved from sidebar "My Tools" into S1 sub-tabs; accessible to users level 5+ (Service Hours) and 45+ (Attendance, AFI Prep)</C>
+          <C type="fix">AdminSidebar — removed Service Hours, Attendance, and AFI Prep from "My Tools" section; standalone routes remain for direct URL access</C>
+        </>}
+        />
+        <Release versions="v1.8.149" date="Nov 4" title="Promotion Board — Exclude Appointed Positions from Nominations" changes={<>
           <C type="fix">S1PromotionBoard nominations — Company Commander, Company XO, First Sergeant, and Master Sergeant are now excluded from the Battalion Board Nominations panel; these positions are appointed, not filled through the promotion board process</C>
         </>}
         />

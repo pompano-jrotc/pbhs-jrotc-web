@@ -24,10 +24,8 @@ import {
   ChevronRight,
   CalendarDays,
   Award,
-  ClipboardList,
   GraduationCap,
   Trophy,
-  ClipboardCheck,
   Shield,
 } from 'lucide-react';
 import { ROLE_HIERARCHY, ADMIN_LEVEL, STAFF_LEVEL, COMMAND_LEVEL } from '../constants';
@@ -300,11 +298,8 @@ const AdminSidebar = ({
 
         {/* ── MY TOOLS ───────────────────────────────────────── */}
         <div className={`mt-3 pt-3 border-t border-slate-100 dark:border-white/5 ${collapsed ? '' : 'space-y-0.5'}`}>
-          {navLink('/admin/service-hours', Award, 'Service Hours')}
           {navLink('/admin/scholarships', GraduationCap, 'Scholarships')}
           {navLink('/admin/achievements', Trophy, 'Achievement Wall')}
-          {isCommander && navLink('/admin/attendance', ClipboardList, 'Attendance')}
-          {isStaffOrS4 && navLink('/admin/afi-prep', ClipboardCheck, 'AFI Prep')}
           {isCommander && navLink('/admin/teams-private', Shield, 'Teams (Internal)')}
         </div>
 
