@@ -742,6 +742,11 @@ const AdminUsers = ({ hideHeader = false }) => {
   
   if (!isAuthorized) return <Navigate to="/admin/dashboard" />;
 
+  // Fallback to accountType for pending instructor records where role may be
+  // absent or stale (e.g. a signup that completed before role was written).
+  const isInstructorRecord = ['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role)
+    || formData.accountType === 'instructor';
+
   return (
     <div className={hideHeader ? 'w-full' : 'flex-1 p-6 md:p-10 w-full'}>
         {!hideHeader && <AdminPageHeader icon={UserCog} title="Accounts" />}
@@ -944,7 +949,7 @@ const AdminUsers = ({ hideHeader = false }) => {
                 </div>
 
                 {/* ── Company / LET / Platoon / Squad — hidden for instructor roles ── */}
-                {!['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role) && <div className="space-y-1">
+                {!isInstructorRecord && <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">Company</label>
                   <select disabled={!isBattalionStaff} className="w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-4 rounded-2xl outline-none text-sm font-bold text-slate-900 dark:text-white disabled:opacity-50 appearance-none" value={formData.company} onChange={e => {
                     const nextCompany = e.target.value;
@@ -965,7 +970,7 @@ const AdminUsers = ({ hideHeader = false }) => {
                   </select>
                 </div>}
 
-                {!['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role) && <div className="space-y-1">
+                {!isInstructorRecord && <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">LET Level</label>
                   <select className="w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-4 rounded-2xl outline-none text-sm font-bold text-slate-900 dark:text-white appearance-none" value={formData.letLevel} onChange={e => setFormData({...formData, letLevel: e.target.value})}>
                     {LET_LEVELS.map(l => <option key={l} value={l} className="bg-white dark:bg-slate-900">{l}</option>)}
@@ -973,7 +978,7 @@ const AdminUsers = ({ hideHeader = false }) => {
                 </div>}
 
                 {/* Platoon / Squad — hidden for Battalion members and instructor roles */}
-                {!['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role) && !BATTALION_COMPANIES.includes(formData.company) && (
+                {!isInstructorRecord && !BATTALION_COMPANIES.includes(formData.company) && (
                   <div className="space-y-1">
                     <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">
                       Platoon
@@ -1000,7 +1005,7 @@ const AdminUsers = ({ hideHeader = false }) => {
                   </div>
                 )}
 
-                {!['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role) && !BATTALION_COMPANIES.includes(formData.company) && formData.platoon !== 'Company HQ' && !NO_SQUAD_POSITIONS.includes(formData.position) && (
+                {!isInstructorRecord && !BATTALION_COMPANIES.includes(formData.company) && formData.platoon !== 'Company HQ' && !NO_SQUAD_POSITIONS.includes(formData.position) && (
                   <div className="space-y-1">
                     <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">Squad</label>
                     <select className="w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-4 rounded-2xl outline-none text-sm font-bold text-slate-900 dark:text-white appearance-none" value={formData.squad} onChange={e => setFormData({...formData, squad: e.target.value})}>
@@ -1010,7 +1015,7 @@ const AdminUsers = ({ hideHeader = false }) => {
                 )}
 
                 {/* Secondary Company — Battalion cadet members only */}
-                {!['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role) && BATTALION_COMPANIES.includes(formData.company) && (
+                {!isInstructorRecord && BATTALION_COMPANIES.includes(formData.company) && (
                   <div className="md:col-span-2 space-y-1">
                     <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">
                       Class Period Company (Secondary)
@@ -1034,7 +1039,7 @@ const AdminUsers = ({ hideHeader = false }) => {
                 <div className="space-y-1">
                   <label className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 ml-1">Rank</label>
                   <select className="w-full bg-slate-50 dark:bg-black/50 border border-slate-200 dark:border-white/10 p-4 rounded-2xl outline-none text-sm font-bold text-slate-900 dark:text-white appearance-none" value={formData.rank} onChange={e => setFormData({...formData, rank: e.target.value})}>
-                    {['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role)
+                    {isInstructorRecord
                       ? MILITARY_RANKS.map(r => <option key={r} value={r} className="bg-white dark:bg-slate-900">{r}</option>)
                       : (<>
                           {/* A legacy value that predates this dropdown (e.g. free-typed "CDT MAJ")
@@ -1100,7 +1105,7 @@ const AdminUsers = ({ hideHeader = false }) => {
                       });
                     }}
                   >
-                    {['senior_army_instructor', 'army_instructor', 'district_army_instructor'].includes(formData.role)
+                    {isInstructorRecord
                       ? INSTRUCTOR_POSITIONS.map(p => <option key={p} value={p} className="bg-white dark:bg-slate-900">{p}</option>)
                       : JROTC_POSITIONS.map(p => <option key={p} value={p} className="bg-white dark:bg-slate-900">{p}</option>)
                     }
