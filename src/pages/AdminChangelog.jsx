@@ -160,6 +160,7 @@ const AdminChangelog = () => {
           <C type="feat">Cadet Portal — dismissible "What's New" banner surfaces the three most recently added cadet-facing features (Service Hours, Scholarship Board, Achievement Wall) with direct links; version-keyed via PORTAL_VERSION constant so it auto-resets for returning users when the version bumps</C>
           <C type="feat">Cadet Portal — empty states in Ribbon Rack, Cadet Challenge Scores, Service Hours, Upcoming Events, and Announcements now explain what each section is and how data gets added, so cadets understand the feature exists rather than assuming nothing is there</C>
           <C type="feat">constants — PORTAL_VERSION export ties banner localStorage keys and version badge to the same source of truth</C>
+          <C type="sec">Firestore — conversations collection and messages subcollection: participants-only read/create/update; senderUid must match auth.uid on create; only the sender may update their own messages (edit/soft-delete); no hard deletes</C>
         </>}
         />
         <Release versions="v1.8.157" date="Nov 9" title="API — Welcome Notification Rank Check Bypass" isCurrent={false} changes={<>
