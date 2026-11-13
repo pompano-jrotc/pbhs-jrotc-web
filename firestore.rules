@@ -116,7 +116,12 @@ service cloud.firestore {
         request.resource.data.role == 'cadet' &&
         request.resource.data.approved == false;
 
-      allow create, delete: if isSignedIn() && isUserManager();
+      // User managers may create accounts but cannot set a role >= their own level.
+      // Mirrors the same constraint on the update path — an S1 adjutant (70) cannot
+      // create a battalion_commander (90) account any more than they can promote one.
+      allow create: if isSignedIn() && isUserManager() &&
+        roleLevel(request.resource.data.role) < myLevel();
+      allow delete: if isSignedIn() && isUserManager();
       allow update: if isSignedIn() && (
         // Admins and user managers (S1 adjutant, S6 technology) may update any
         // field, but cannot elevate a role to their own level or above —

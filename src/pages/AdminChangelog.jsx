@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="374"    label="Patches"     />
-        <Stat value="713"    label="Commits"     />
+        <Stat value="375"    label="Patches"     />
+        <Stat value="714"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.185" label="Current"     />
+        <Stat value="v1.8.186" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.185" date="Nov 13" title="Security — roster company command update path allows moving cadets across companies" isCurrent changes={<>
+        <Release versions="v1.8.186" date="Nov 13" title="Security — users create path missing role-level cap allows user managers to create accounts above their own level" isCurrent changes={<>
+          <C type="sec">firestore.rules: the isUserManager() create path on /users had no role-level cap — an S1 adjutant (level 70) could directly create a battalion_commander (level 90) account with approved:true, bypassing the same constraint already enforced on the update path (which blocks setting role &gt;= caller&apos;s own level); split the combined allow create, delete into separate rules so create now carries roleLevel(request.resource.data.role) &lt; myLevel() while delete retains the plain isUserManager() check</C>
+        </>} />
+        <Release versions="v1.8.185" date="Nov 13" title="Security — roster company command update path allows moving cadets across companies" isCurrent={false} changes={<>
           <C type="sec">firestore.rules: the roster update rule for company command (level 45–69) locked linkedUid and secondaryCompany but forgot to lock the company field itself; a Company Commander could send a direct SDK updateDoc changing company from &apos;Alpha&apos; to &apos;Bravo&apos; on any roster entry in their company, moving cadets to a different company without S1/staff involvement and corrupting the other company&apos;s data — same cross-company injection class as v1.8.180 (aarLogs); s1_assistant and s3_assistant paths already had request.resource.data.company == resource.data.company locked, now consistently applied to the command path too</C>
         </>} />
         <Release versions="v1.8.184" date="Nov 13" title="Security — ribbonRecommendations create rule missing isSignedIn() allows unauthenticated writes" isCurrent={false} changes={<>
