@@ -308,7 +308,7 @@ const AdminChangelog = () => {
           <C type="feat">Fallen Heroes honor roll section added to the Cadet Portal — displays PBHS alumni who served and fell; visible to all signed-in users; staff (70+) can add/update/delete records via Firestore</C>
           <C type="feat">Promotion Board Scores section shows the cadet's own scores from every board they participated in — categories, per-item scores (green=100, yellow=partial, red=0), extra credit, notes, board title and date</C>
           <C type="feat">Chain of Command now shows a full contextual chain for company-assigned cadets: Battalion Commander → XO → CSM then Company CC → Platoon Leader → Squad Leader down to their own squad leader</C>
-          <C type="feat">Leadership collection extended to include Platoon Leader and Squad Leader positions — when a roster entry is saved with PL or SL position, the name/rank is mirrored to leadership docs pl_{company}_{platoon} and sl_{company}_{platoon}_{squad} so squad-level cadets can read them without elevated Firestore access</C>
+          <C type="feat">Leadership collection extended to include Platoon Leader and Squad Leader positions — when a roster entry is saved with PL or SL position, the name/rank is mirrored to leadership docs pl_[company]_[platoon] and sl_[company]_[platoon]_[squad] so squad-level cadets can read them without elevated Firestore access</C>
           <C type="sec">Firestore: promotionBoards now readable by all signed-in users (was myLevel ≥ 35); promotionScores now also readable by the cadet whose linkedUid matches; fallenHeroes collection added (read: signed-in; write: staff 70+)</C>
         </>} />
         <Release versions="v1.8.124" date="Nov 3" title="Cadet Portal — My Record" isCurrent={false} changes={<>
