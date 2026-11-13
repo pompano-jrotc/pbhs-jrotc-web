@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="372"    label="Patches"     />
-        <Stat value="711"    label="Commits"     />
+        <Stat value="373"    label="Patches"     />
+        <Stat value="712"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.183" label="Current"     />
+        <Stat value="v1.8.184" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.183" date="Nov 13" title="Security — cloudinary-sign missing role gate allows any cadet to upload files" isCurrent changes={<>
+        <Release versions="v1.8.184" date="Nov 13" title="Security — ribbonRecommendations create rule missing isSignedIn() allows unauthenticated writes" isCurrent changes={<>
+          <C type="sec">firestore.rules: ribbonRecommendations create rule was missing isSignedIn() entirely — any unauthenticated caller could POST directly to Firestore and create fake ribbon recommendations by satisfying the field validation alone; added isSignedIn() and myLevel() &gt;= 45 guard so only authenticated command-tier users can submit recommendations, matching the read gate on the same collection; the existing comment even stated intent to block unauthenticated spam but the check was never written</C>
+        </>} />
+        <Release versions="v1.8.183" date="Nov 13" title="Security — cloudinary-sign missing role gate allows any cadet to upload files" isCurrent={false} changes={<>
           <C type="sec">cloudinary-sign: upload signature path had no role check — any authenticated user (level 1) could obtain a valid Cloudinary upload signature, letting them write arbitrary files to the battalion&apos;s Cloudinary storage and exhaust quota; added service-account Firestore lookup and enforced command-tier minimum (level 45) for upload signatures; download redirect remains accessible to any authenticated user since it only proxies existing files</C>
         </>} />
         <Release versions="v1.8.182" date="Nov 13" title="Security — notify-supply actor name/role spoofing + missing role check" isCurrent={false} changes={<>
