@@ -364,10 +364,13 @@ service cloud.firestore {
       allow update: if isSignedIn() && (
         // ── Access tier ────────────────────────────────────────────────────────
         myLevel() >= 70 ||
-        // Company command (45–69): own company, cannot change linkedUid or
-        // secondaryCompany (prevents cross-company exposure via that field).
+        // Company command (45–69): own company, cannot change company, linkedUid or
+        // secondaryCompany. Locking company prevents moving a cadet to a different
+        // company without staff (70+) involvement — same restriction already enforced
+        // on the s1_assistant and s3_assistant paths below.
         (myLevel() >= 45 && myLevel() < 70 &&
           resource.data.company == userDoc().company &&
+          request.resource.data.company == resource.data.company &&
           request.resource.data.linkedUid == resource.data.linkedUid &&
           request.resource.data.secondaryCompany == resource.data.secondaryCompany) ||
         // company_s1_assistant: may edit all fields except fullName, company,
