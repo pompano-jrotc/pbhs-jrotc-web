@@ -94,7 +94,7 @@ const TermsOfService = () => {
 
         <Section n="8" title="No Warranty">
           <p>This site is provided by an independent, volunteer-built project on an "as is" and "as available" basis. We don't guarantee it will be error-free, uninterrupted, or perfectly accurate, and we're not liable for decisions made based on information found here (like task deadlines or uniform status) - always confirm anything time-sensitive with your chain of command directly.</p>
-          <p>We're also not responsible for outages or issues caused by the third-party services this site depends on (like Firebase, Vercel, Cloudinary, or EmailJS) or other events outside our control.</p>
+          <p>We're also not responsible for outages or issues caused by the third-party services this site depends on (like Firebase, Vercel, Cloudinary, or Resend) or other events outside our control.</p>
         </Section>
 
         <Section n="9" title="Limitation of Liability">

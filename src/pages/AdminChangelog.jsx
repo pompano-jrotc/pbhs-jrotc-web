@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="345"    label="Patches"     />
-        <Stat value="683"    label="Commits"     />
+        <Stat value="347"    label="Patches"     />
+        <Stat value="685"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.158" label="Current"     />
+        <Stat value="v1.8.159" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,13 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.158" date="Nov 12" title="Cadet Portal — Discoverability: Tour, What's New Banner, Empty States" isCurrent changes={<>
+        <Release versions="v1.8.159" date="Nov 12" title="Privacy Policy &amp; Legal — EmailJS → Resend; Changelog JSX fix" isCurrent changes={<>
+          <C type="fix">Privacy Policy — updated third-party services section: EmailJS replaced with Resend as the transactional email provider; description updated to note server-side delivery via Vercel API routes with no client-side exposure</C>
+          <C type="fix">Terms of Service — updated third-party dependency list: EmailJS replaced with Resend</C>
+          <C type="fix">AdminChangelog — Firestore doc ID example in v1.8.126 entry used JSX expression syntax (pl_&#123;company&#125;_&#123;platoon&#125;) which crashed the changelog page with ReferenceError; replaced with bracket notation</C>
+        </>}
+        />
+        <Release versions="v1.8.158" date="Nov 12" title="Cadet Portal — Discoverability: Tour, What's New Banner, Empty States" isCurrent={false} changes={<>
           <C type="feat">CadetTour — 4-step first-login walkthrough modal for cadet-level users (below Staff level); covers My Record, Events &amp; Announcements, sidebar sections, and profile setup; shown once per device via localStorage, dismissible, replayable from "Portal guide" link at bottom of My Record page</C>
           <C type="feat">Cadet Portal — dismissible "What's New" banner surfaces the three most recently added cadet-facing features (Service Hours, Scholarship Board, Achievement Wall) with direct links; version-keyed via PORTAL_VERSION constant so it auto-resets for returning users when the version bumps</C>
           <C type="feat">Cadet Portal — empty states in Ribbon Rack, Cadet Challenge Scores, Service Hours, Upcoming Events, and Announcements now explain what each section is and how data gets added, so cadets understand the feature exists rather than assuming nothing is there</C>
