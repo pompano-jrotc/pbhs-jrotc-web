@@ -15,7 +15,13 @@
 //   priority      "Low" | "Medium" | "Urgent"
 
 import { jwtVerify, createRemoteJWKSet, SignJWT, importPKCS8 } from 'jose';
-import { checkRateLimit } from '../lib/rateLimit.js';
+import { checkRateLimit, getClientIp } from '../lib/rateLimit.js';
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 // ── Firebase auth helpers (shared pattern across notify-* files) ──────────────
 
@@ -67,6 +73,30 @@ async function verifyIdToken(idToken) {
   });
   return { uid: payload.sub, projectId: getServiceAccount().project_id };
 }
+
+async function getUserByUid(accessToken, projectId, uid) {
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`;
+  const res = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+  if (!res.ok) return null;
+  const doc = await res.json();
+  if (!doc.fields) return null;
+  return {
+    fullName: doc.fields.fullName?.stringValue || '',
+    role:     doc.fields.role?.stringValue     || '',
+    company:  doc.fields.company?.stringValue  || '',
+  };
+}
+
+// Minimum level required to send supply notifications — matches the Firestore
+// supplyRequests create gate so a cadet below command tier cannot trigger emails.
+const ROLE_LEVELS = {
+  district_army_instructor: 105, senior_army_instructor: 100, army_instructor: 95,
+  battalion_commander: 90, battalion_xo: 85, battalion_csm: 85, sergeant_major: 80,
+  s1_adjutant: 70, s2_intelligence: 70, s3_operations: 70, s4_logistics: 70,
+  s5_public_affairs: 70, s6_technology: 70, s7_special_projects: 70,
+  company_commander: 55, company_xo: 50, company_1sg: 45, company_master_sergeant: 45,
+};
+const MIN_LEVEL = 45;
 
 async function getUsersByRole(accessToken, projectId, role) {
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:runQuery`;
@@ -138,23 +168,35 @@ function buildEmail({ heading, message }) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  try { await checkRateLimit(req, 'notify-supply', 10, 60); }
-  catch { return res.status(429).json({ error: 'Too many requests' }); }
+  const rl = await checkRateLimit(`notify-supply:${getClientIp(req)}`, 10, 60);
+  if (!rl.allowed) return res.status(429).json({ error: 'Too many requests' });
 
-  const { idToken, requesterName, company, category, item, quantity, unit, reason, priority } = req.body || {};
+  const { idToken, category, item, quantity, unit, reason, priority } = req.body || {};
 
-  if (!idToken || !requesterName || !item || !quantity) {
+  if (!idToken || !item || !quantity) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  let projectId;
+  let uid, projectId;
   try {
-    ({ projectId } = await verifyIdToken(idToken));
+    ({ uid, projectId } = await verifyIdToken(idToken));
   } catch {
     return res.status(401).json({ error: 'Invalid token' });
   }
 
   const accessToken = await getAccessToken();
+
+  // Look up caller's actual name, role, and company from Firestore.
+  // Enforce minimum level (45) so a basic cadet cannot spam supply notification emails,
+  // and prevent impersonation by overriding body-supplied requesterName/company.
+  const caller = await getUserByUid(accessToken, projectId, uid);
+  if (!caller) return res.status(403).json({ error: 'User not found' });
+  const callerLevel = ROLE_LEVELS[caller.role] ?? 0;
+  if (callerLevel < MIN_LEVEL) {
+    return res.status(403).json({ error: 'Insufficient role to send supply notifications' });
+  }
+  const requesterName = caller.fullName || uid;
+  const company       = caller.company  || '';
 
   // Send to all instructors (SAI + AI)
   const [saiUsers, aiUsers] = await Promise.all([
@@ -166,8 +208,10 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true, sent: 0, message: 'No instructor recipients found' });
   }
 
-  const priorityColor = priority === 'Urgent' ? '#ef4444' : priority === 'Medium' ? '#eab308' : '#64748b';
-  const subject = `${priority === 'Urgent' ? '🔴 URGENT — ' : ''}Supply Request: ${item} (${requesterName})`;
+  const SAFE_PRIORITIES = ['Low', 'Medium', 'Urgent'];
+  const safePriority  = SAFE_PRIORITIES.includes(priority) ? priority : 'Low';
+  const priorityColor = safePriority === 'Urgent' ? '#ef4444' : safePriority === 'Medium' ? '#eab308' : '#64748b';
+  const subject = `${safePriority === 'Urgent' ? '🔴 URGENT — ' : ''}Supply Request: ${escapeHtml(item)} (${escapeHtml(requesterName)})`;
 
   const message = `
     <p style="margin:0 0 20px;color:#475569;font-size:14px;line-height:1.6;">
@@ -176,27 +220,27 @@ export default async function handler(req, res) {
     <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
       <tr style="background:#f8fafc;">
         <td style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;width:40%;">Requested By</td>
-        <td style="padding:10px 12px;font-size:14px;font-weight:600;color:#0f172a;">${requesterName}${company ? ` · ${company} Co.` : ''}</td>
+        <td style="padding:10px 12px;font-size:14px;font-weight:600;color:#0f172a;">${escapeHtml(requesterName)}${company ? ` · ${escapeHtml(company)} Co.` : ''}</td>
       </tr>
       <tr>
         <td style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Category</td>
-        <td style="padding:10px 12px;font-size:14px;color:#0f172a;">${category || '—'}</td>
+        <td style="padding:10px 12px;font-size:14px;color:#0f172a;">${escapeHtml(category || '—')}</td>
       </tr>
       <tr style="background:#f8fafc;">
         <td style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Item</td>
-        <td style="padding:10px 12px;font-size:14px;font-weight:600;color:#0f172a;">${item}</td>
+        <td style="padding:10px 12px;font-size:14px;font-weight:600;color:#0f172a;">${escapeHtml(item)}</td>
       </tr>
       <tr>
         <td style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Quantity</td>
-        <td style="padding:10px 12px;font-size:14px;color:#0f172a;">${quantity} ${unit || ''}</td>
+        <td style="padding:10px 12px;font-size:14px;color:#0f172a;">${escapeHtml(String(quantity))} ${escapeHtml(unit || '')}</td>
       </tr>
       <tr style="background:#f8fafc;">
         <td style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Priority</td>
-        <td style="padding:10px 12px;"><span style="font-size:11px;font-weight:900;text-transform:uppercase;color:${priorityColor};letter-spacing:1px;">${priority}</span></td>
+        <td style="padding:10px 12px;"><span style="font-size:11px;font-weight:900;text-transform:uppercase;color:${priorityColor};letter-spacing:1px;">${safePriority}</span></td>
       </tr>
       <tr>
         <td style="padding:10px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#64748b;">Reason</td>
-        <td style="padding:10px 12px;font-size:14px;color:#475569;font-style:italic;">"${reason || '—'}"</td>
+        <td style="padding:10px 12px;font-size:14px;color:#475569;font-style:italic;">"${escapeHtml(reason || '—')}"</td>
       </tr>
     </table>
     <p style="margin:0;font-size:13px;color:#64748b;">Log in to the Command Portal to approve, deny, or request more information.</p>

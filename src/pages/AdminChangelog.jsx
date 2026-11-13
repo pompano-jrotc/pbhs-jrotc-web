@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="348"    label="Patches"     />
-        <Stat value="686"    label="Commits"     />
+        <Stat value="372"    label="Patches"     />
+        <Stat value="711"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.160" label="Current"     />
+        <Stat value="v1.8.183" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,101 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.160" date="Nov 12" title="Privacy Policy — Data Retention Policy (BCPS IT audit)" isCurrent changes={<>
+        <Release versions="v1.8.183" date="Nov 13" title="Security — cloudinary-sign missing role gate allows any cadet to upload files" isCurrent changes={<>
+          <C type="sec">cloudinary-sign: upload signature path had no role check — any authenticated user (level 1) could obtain a valid Cloudinary upload signature, letting them write arbitrary files to the battalion&apos;s Cloudinary storage and exhaust quota; added service-account Firestore lookup and enforced command-tier minimum (level 45) for upload signatures; download redirect remains accessible to any authenticated user since it only proxies existing files</C>
+        </>} />
+        <Release versions="v1.8.182" date="Nov 13" title="Security — notify-supply actor name/role spoofing + missing role check" isCurrent={false} changes={<>
+          <C type="sec">notify-supply: idToken was verified but no Firestore role lookup was performed; requesterName and company came from the request body, allowing any authenticated user (even level 1) to send fabricated supply request emails to instructors claiming to be any person; added getUserByUid Firestore lookup, ROLE_LEVELS map, and MIN_LEVEL=45 enforcement; requesterName and company are now derived from the caller&apos;s verified Firestore record — same fix pattern as v1.8.181 for notify-security</C>
+        </>} />
+        <Release versions="v1.8.181" date="Nov 13" title="Security — notify-security missing role check and actor name/role spoofing" isCurrent={false} changes={<>
+          <C type="sec">notify-security.js verified the Firebase ID token but never checked the caller's role — any level-1 cadet could POST with a valid token and trigger real security alert emails to all instructors and BC, using fabricated actorName/actorRole fields to frame other users (e.g., defaming the Battalion Commander with a fake mass_changes alert); fixed by looking up caller from Firestore, enforcing minimum level 45, and overriding actorName/actorRole from Firestore rather than the request body; also added event-type allowlist to reject unknown event strings</C>
+        </>} />
+        <Release versions="v1.8.180" date="Nov 13" title="Security — aarLogs cross-company data injection via company field manipulation" isCurrent={false} changes={<>
+          <C type="sec">Firestore rule for <code>aarLogs</code> creator update path lacked field restriction — a level-45 cadet could <code>updateDoc</code> their own AAR's <code>company</code> field to any other company name, injecting content into that company's read subscription (company command reads own-company AARs); fixed by restricting creator updates to content fields only, excluding <code>company</code>, <code>createdBy</code>, <code>createdByCompany</code>, and <code>createdAt</code></C>
+        </>} />
+        <Release versions="v1.8.179" date="Nov 12" title="Security — leadershipTasks creator update path allows isAssigned privilege escalation" isCurrent={false} changes={<>
+          <C type="sec">Firestore rule for <code>leadershipTasks</code> creator update path lacked field restriction — a level-45 cadet could <code>updateDoc</code> their own personal task to flip <code>isAssigned: true</code> and add <code>assignedCompanies</code>/<code>assignedPositions</code>, broadcasting to all cadets without the level-70 permission required at creation; fixed with <code>hasOnly(['completed', 'completedAt', 'title', 'dueDate', 'description', 'priority'])</code></C>
+        </>} />
+        <Release versions="v1.8.178" date="Nov 12" title="Security — signup secret code hash compiled into client bundle" isCurrent={false} changes={<>
+          <C type="sec">SignUp: FALLBACK_SECRET_HASH was a hardcoded SHA-256 hash of the battalion secret code compiled into the client JS bundle — attackers could extract it from the bundle and mount an offline dictionary/brute-force attack to discover the secret enrollment code; removed the fallback constant entirely; the hash now loads only from Firestore (settings/signupCode) and signup blocks with a user-visible error when the fetch fails rather than falling back to a known hash</C>
+        </>}
+        />
+        <Release versions="v1.8.175–177" date="Nov 12" title="Security — email relay via caller-supplied address, unauthenticated notification spam, Sheets formula injection" isCurrent={false} changes={<>
+          <C type="sec">notify-cycle/s6-reminder: assistantEmail was taken directly from the POST body — any authenticated user could call this path with any arbitrary email address and send official-looking PBHS JROTC reminder emails to arbitrary recipients via our Resend account; fixed by requiring assistantUid and looking up the email from Firestore server-side; also added role whitelist blocking users below company command from triggering any notify-cycle path</C>
+          <C type="sec">notify-uniform: no role check — any authenticated cadet could POST any type (submit/pending/item-request) and trigger real email notifications to S4 logistics and battalion leadership; role whitelist added requiring caller to be company command tier or above (company_s4_assistant, company commanders through instructors)</C>
+          <C type="sec">sync-meeting-logs: Google Sheets write used valueInputOption=USER_ENTERED — any field value starting with = would be executed as a spreadsheet formula by Google Sheets, allowing data exfiltration via IMPORTRANGE or REQUEST injection by any battalion command user who can write meeting logs; changed to RAW to disable formula evaluation</C>
+        </>}
+        />
+        <Release versions="v1.8.172–174" date="Nov 12" title="Security — fundraiserEntries financial data exposure, attendance field restriction, leadershipTasks assignee over-permissive update" isCurrent={false} changes={<>
+          <C type="sec">firestore.rules/fundraiserEntries: allow read: if isSignedIn() let any authenticated cadet enumerate all fundraiser documents including paymentType, orderNumber, notes, submittedByUid, and submittedByName via the Firestore REST API; restricted to staff (70+) full access, company command (45+) own-company only, and cadets reading their own entry via linkedUid; lower-level cadets on the public leaderboard continue to receive the field-whitelisted API response from /api/leaderboard.json (v1.8.170)</C>
+          <C type="sec">firestore.rules/attendance: allow update: if isSignedIn() &amp;&amp; myLevel() &gt;= 45 had no field restriction — command tier could overwrite session title, date, type, notes, and createdBy in addition to recording cadet marks; restricted to affectedKeys().hasOnly(['records']) for levels 45–69; staff (70+) retain full update access</C>
+          <C type="sec">firestore.rules/leadershipTasks: assignee update path allowed any in-scope level-45+ user to overwrite any field on an assigned task including title, description, dueDate, assignedScope, and assignedCompanies; intent is completion toggling only; added affectedKeys().hasOnly(['completedByCompany']) constraint on the assignee path; staff (70+) and task creator retain full update access</C>
+        </>}
+        />
+        <Release versions="v1.8.171" date="Nov 12" title="Security — formResponses privacy, ribbonRecommendations over-permissive update" isCurrent={false} changes={<>
+          <C type="sec">firestore.rules/formResponses: allow read: if isSignedIn() let any authenticated cadet enumerate all form responses for any form via the Firestore REST API — anonymous forms store a userId field that breaks anonymity (since UIDs appear in roster linkedUid and other documents); changed to allow read only if the document belongs to the requesting user (resource.data.userId == request.auth.uid) or the caller is command-tier or above (myLevel() >= 45)</C>
+          <C type="sec">firestore.rules/ribbonRecommendations: allow update: if isSignedIn() &amp;&amp; myLevel() >= 45 let company command tier (45–69) modify any field on ribbon recommendations including staffNotes, ribbonTypeId, and approvedBy — command tier has no legitimate need to update recommendation documents; tightened to myLevel() >= 70 (battalion staff) matching the intent of the create/delete gates</C>
+        </>}
+        />
+        <Release versions="v1.8.170" date="Nov 12" title="Security — public leaderboard PII and financial data exposure" isCurrent={false} changes={<>
+          <C type="sec">leaderboard.json: the public unauthenticated endpoint dumped complete roster documents (including gender, notes, linkedUid, syncMaster, position, platoon, squad) and complete fundraiserEntries documents (including amount, paymentType, orderNumber, notes, linkedUid, submittedByUid, submittedByName) to any caller without authentication; roster documents expose cadet PII (gender, internal admin notes, Firebase UIDs); fundraiserEntries expose financial data (dollar amounts, payment methods, e-store order numbers); fixed by whitelisting only the fields the leaderboard display actually requires — roster: company and gender only; fundraiserEntries: cadetId, cadetName, company, amount, voided only; cadetChallengeRecords: fitness event fields plus cadetId, cadetName, company, letLevel, cycleLabel, cycleId, medicalExempt only</C>
+        </>}
+        />
+        <Release versions="v1.8.169" date="Nov 12" title="Security — send-push cross-company announcement bypass" isCurrent={false} changes={<>
+          <C type="sec">send-push: company commanders (45–69) could call POST /api/send-push with announcementType='company' and supply any company name — the server checked level ≥45 but never verified the caller's own company matched the requested target; a rogue Alpha Company commander could send official-looking 'Bravo Company Announcement' emails to Bravo cadets; fixed by reading callerCompany from the verified user doc in verifyAndGetLevel and rejecting mismatches for sub-staff callers</C>
+        </>}
+        />
+        <Release versions="v1.8.168" date="Nov 12" title="Security — Firestore field-level gaps (s5Shop, promotionScores, specialTeams)" isCurrent={false} changes={<>
+          <C type="sec">firestore.rules/s5Shop: company_s5_assistant update path had no field restriction — an assistant could overwrite any field including published (taking S5 shop items offline) or task content; rule now restricts assistant updates to affectedKeys().hasOnly(['completions', 'taskCompletions', 'subtaskCompletions']) matching the documented intent</C>
+          <C type="sec">firestore.rules/promotionScores: company command (45+) could update any field on their company's score documents including cadetName and rank (this was the XSS source field fixed in v1.8.167); defense-in-depth: rule now restricts company-tier updates to affectedKeys().hasOnly(['scores', 'extraCredit'])</C>
+          <C type="sec">firestore.rules/specialTeams: allow read: if true exposed commanderEmails array to unauthenticated callers — web crawlers or unauthenticated visitors could enumerate all team commander email addresses via the Firestore REST API; changed to require authentication (isSignedIn())</C>
+        </>}
+        />
+        <Release versions="v1.8.167" date="Nov 12" title="Security — stored XSS in promotion board print preview" isCurrent={false} changes={<>
+          <C type="sec">S1PromotionBoard: print HTML builder interpolated Firestore values (cadetName, rank, score fields, nomination position/originalPos, company, boardTitle, boardDate) directly into a document.write() string with no HTML escaping — a company commander (level 45+) could store a payload in promotionScores.cadetName for their own company, and when any staff member opened the print preview the script would execute in a window.open blank page on the same origin with window.opener access to the portal; fixed by adding escHtml() (HTML entity escape of &amp; &lt; &gt; &quot; &#39;) and applying it to every Firestore-sourced interpolation in the template literal before document.write</C>
+        </>}
+        />
+        <Release versions="v1.8.166" date="Nov 12" title="Security — unauthenticated recommendation spam, field-level escalation" isCurrent={false} changes={<>
+          <C type="sec">firestore.rules/ribbonRecommendations: allow create: if true permitted unauthenticated callers to write documents with arbitrary or empty fields to the recommendations queue; rule now requires non-empty rosterDocId, recommenderName (≥2 chars), and reason (≥10 chars) — blocks empty-document flood attacks while preserving public community submission workflow</C>
+          <C type="sec">firestore.rules/afiSessions: command tier (45–69) could call updateDoc() directly to set finalized:true or overwrite title/date/inspector/notes — fields only staff (70+) should control; rule now restricts command-tier updates to the ratings field only via affectedKeys().hasOnly(['ratings'])</C>
+          <C type="sec">firestore.rules/orders: create rule used isCommandTier() (45+) with no targets field validation — a company commander could bypass the client's restricted audience list and write orders targeting 'All Battalion'; rule tightened to require myLevel() &gt;= 70 (staff) matching the page's design intent</C>
+        </>}
+        />
+        <Release versions="v1.8.164" date="Nov 12" title="Security — email HTML injection, timing-safe secrets, digest rate limiting" isCurrent={false} changes={<>
+          <C type="sec">activity-digest: added escHtml() to formatEntryRow and hazard message rendering — userFullName and description from adminLog are written by portal users (level 35+) and were interpolated directly into the email HTML template, allowing HTML injection into instructor digest emails; email clients render HTML markup but do not execute scripts, so the vector was malformed layout and tracking-pixel injection, not XSS</C>
+          <C type="sec">activity-digest: replaced plain !== comparison with crypto.timingSafeEqual for CRON_SECRET on both GET path (Authorization: Bearer header) and POST path (body.secret) — closes timing side-channel on the shared secret</C>
+          <C type="sec">activity-digest: added per-IP rate limiting (10 req / 5 min) — no rate limit previously allowed repeated digest triggers to burn Resend email credits and generate email spam for recipients; also defends against CRON_SECRET brute-force</C>
+          <C type="sec">uniform-form-webhook: replaced plain !== with crypto.timingSafeEqual for FORM_WEBHOOK_SECRET comparison — same timing side-channel pattern as the other webhook endpoints</C>
+        </>}
+        />
+        <Release versions="v1.8.163" date="Nov 12" title="Security — calendar rate limiting, timing-safe token, token bundle exposure" isCurrent={false} changes={<>
+          <C type="sec">leadership-cal-token: new /api/leadership-cal-token endpoint returns the subscription URL only after verifying Firebase ID token and confirming caller is command-tier (L45+) — previously VITE_LEADERSHIP_CAL_TOKEN was embedded in the client JS bundle at build time, making the secret readable by any authenticated user via browser DevTools</C>
+          <C type="sec">AdminLeadershipCalendar: removed import.meta.env.VITE_LEADERSHIP_CAL_TOKEN; ExportModal now fetches the URL from /api/leadership-cal-token using the user&apos;s Firebase ID token; token never ships client-side</C>
+          <C type="sec">leadership-calendar.ics: added per-IP rate limiting (20 req/min via Redis) — no limit previously allowed rapid brute-force of LEADERSHIP_CAL_TOKEN; also replaced plain !== comparison with crypto.timingSafeEqual to close timing side-channel</C>
+          <C type="sec">calendar.ics: added per-IP rate limiting (30 req/min) — public unauthenticated endpoint had no limit; a bot could hammer it and burn Firestore reads at zero cost</C>
+          <C type="sec">Both calendar endpoints converted from Vercel Edge runtime to Node.js serverless to enable use of the shared Redis rate limiter in lib/rateLimit.js</C>
+          <C type="fix">constants.js: PORTAL_VERSION updated to v1.8.163 (was stale at v1.8.158 — the What&apos;s New banner version-key hadn&apos;t bumped across four releases, so returning users never saw the new cadet features banner)</C>
+        </>}
+        />
+        <Release versions="v1.8.162" date="Nov 12" title="Security — API hardening (auth, rate-limit, HTML injection, CORS, role-check)" isCurrent={false} changes={<>
+          <C type="sec">cloudinary-sign: added Firebase ID token verification (JWKS from Google securetoken endpoint) — unauthenticated callers now receive 401; previously any party with the URL could obtain a valid upload signature bypassing the signed-upload migration</C>
+          <C type="sec">cloudinary-sign: fixed broken rate-limit calls that passed the Request object as key (became [object Object]) and a string as the numeric limit (NaN comparison always passed) — now keyed by IP for download mode and by UID for upload mode</C>
+          <C type="sec">admin-update-account: removed welcome-notification exemption from rank check — any authenticated user could previously reset any cadet's onboardingComplete flag and trigger welcome emails without staff rank</C>
+          <C type="sec">admin-update-account: update-user-fields no longer stamps approved:true on self-calls — a pending cadet could previously call the endpoint with their own UID via the service account path and bypass the staff vetting workflow to gain portal access</C>
+          <C type="sec">send-push: fixed broken rate-limit call (same Request-object-as-key bug) and added HTML escaping (escHtml) on all user-controlled fields in buildAnnouncementEmail — prevents staff-level HTML injection into battalion-wide transactional emails</C>
+          <C type="sec">leaderboard.json: narrowed CORS from wildcard (*) to https://pbhsjrotc.com — prevents third-party sites from silently fetching all cadet fitness scores and roster data cross-origin</C>
+          <C type="sec">notify-cycle, notify-forms, notify-supply, notify-uniform: fixed broken checkRateLimit calls (Request object passed as key coerced to [object Object], string passed as numeric limit — NaN comparison disabled limiting entirely) — now keyed by IP via getClientIp(); also added escapeHtml() to all user-supplied fields interpolated into HTML email templates, preventing authenticated users from injecting markup into instructor notification emails</C>
+          <C type="sec">sync-meeting-logs: added role check (battalion command and staff only) — any authenticated user could previously call the endpoint and wipe the battalion Google Sheet, replacing all meeting log data with attacker-controlled content; also fixed broken checkRateLimit call (same Request-object-as-key bug)</C>
+          <C type="sec">admin-update-account update-user-fields: reject unrecognized role slugs — the role-ceiling check used (ROLE_HIERARCHY[slug] || 0) which silently passed 0 for unknown slugs, allowing any authenticated user to store arbitrary strings as their own role</C>
+          <C type="fix">leaderboard.json: added CORS header to error response path (was present on success path only; error path returned CORS-less 200 that browsers rejected)</C>
+        </>}
+        />
+        <Release versions="v1.8.161" date="Nov 12" title="Security — Cloudinary signed upload (all image paths)" isCurrent={false} changes={<>
+          <C type="sec">uploadToCloudinary() migrated from unsigned preset (ml_default) to server-signed upload — /api/cloudinary-sign issues a short-lived SHA-256 signature per upload; API secret never ships in client code; all 6 image-upload pages (AdminPhotos, AdminContent, AdminTeams, AdminLeadership, AdminCadetProfile, MyProfile) use the signed flow with no call-site changes</C>
+          <C type="sec">Removed CLOUDINARY_CLOUD_NAME and CLOUDINARY_UPLOAD_PRESET exports — these constants are no longer needed now that the upload preset is replaced by server-side signing</C>
+        </>}
+        />
+        <Release versions="v1.8.160" date="Nov 12" title="Privacy Policy — Data Retention Policy (BCPS IT audit)" isCurrent={false} changes={<>
           <C type="fix">Privacy Policy §7 — data retention policy now specifies: education records retained per Broward County School Board Series 2 schedule (academic year + 5 years minimum); uniform measurements deleted within 30 days of account termination; Cloudinary photos removed on account deletion</C>
         </>}
         />

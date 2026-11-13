@@ -15,13 +15,94 @@
 //   CLOUDINARY_API_SECRET — same location (click the eye icon to reveal)
 
 import crypto from 'node:crypto';
-import { checkRateLimit } from '../lib/rateLimit.js';
+import { jwtVerify, createRemoteJWKSet, SignJWT, importPKCS8 } from 'jose';
+import { checkRateLimit, getClientIp } from '../lib/rateLimit.js';
 
 const CLOUD_NAME = 'q77zogcy';
+
+const JWKS = createRemoteJWKSet(
+  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
+);
+
+const PROJECT_ID = 'pbhs-jrotc-web';
+
+// ── Service-account helpers (role lookup for upload gate) ─────────────────────
+
+let _sa = null;
+function getServiceAccount() {
+  if (_sa) return _sa;
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT not set.');
+  let p;
+  try { p = JSON.parse(raw); } catch { throw new Error('FIREBASE_SERVICE_ACCOUNT is not valid JSON.'); }
+  if (p.private_key?.includes('\\n')) p.private_key = p.private_key.replace(/\\n/g, '\n');
+  _sa = p;
+  return _sa;
+}
+
+let _cachedToken = null;
+async function getAccessToken() {
+  if (_cachedToken && _cachedToken.expiresAt > Date.now() + 30_000) return _cachedToken.value;
+  const sa  = getServiceAccount();
+  const key = await importPKCS8(sa.private_key, 'RS256');
+  const now = Math.floor(Date.now() / 1000);
+  const assertion = await new SignJWT({ scope: 'https://www.googleapis.com/auth/datastore' })
+    .setProtectedHeader({ alg: 'RS256' })
+    .setIssuedAt(now).setExpirationTime(now + 3600)
+    .setIssuer(sa.client_email).setSubject(sa.client_email)
+    .setAudience('https://oauth2.googleapis.com/token')
+    .sign(key);
+  const r = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(`Token exchange failed: ${data.error_description || data.error}`);
+  _cachedToken = { value: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
+  return _cachedToken.value;
+}
+
+async function getCallerLevel(uid) {
+  const accessToken = await getAccessToken();
+  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${uid}`;
+  const res = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+  if (!res.ok) return 0;
+  const doc = await res.json();
+  if (!doc.fields) return 0;
+  const role = doc.fields.role?.stringValue || '';
+  const ROLE_LEVELS = {
+    district_army_instructor: 105, senior_army_instructor: 100, army_instructor: 95,
+    battalion_commander: 90, battalion_xo: 85, battalion_csm: 85, sergeant_major: 80,
+    s1_adjutant: 70, s2_intelligence: 70, s3_operations: 70, s4_logistics: 70,
+    s5_public_affairs: 70, s6_technology: 70, s7_special_projects: 70,
+    company_commander: 55, company_xo: 50, company_1sg: 45, company_master_sergeant: 45,
+  };
+  return ROLE_LEVELS[role] ?? 0;
+}
+
+async function verifyFirebaseToken(req) {
+  const authHeader = req.headers.authorization || '';
+  const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!idToken) throw new Error('Missing auth token');
+  const { payload } = await jwtVerify(idToken, JWKS, {
+    issuer:   `https://securetoken.google.com/${PROJECT_ID}`,
+    audience: PROJECT_ID,
+  });
+  return payload.sub;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Every mode requires a valid Firebase session — no unauthenticated signing.
+  let callerUid;
+  try {
+    callerUid = await verifyFirebaseToken(req);
+  } catch {
+    return res.status(401).json({ error: 'Valid Firebase session required' });
   }
 
   const apiKey    = process.env.CLOUDINARY_API_KEY;
@@ -32,7 +113,9 @@ export default async function handler(req, res) {
 
   // ── Download redirect mode ────────────────────────────────────────────────
   if (req.query.download === '1') {
-    try { await checkRateLimit(req, 'cloudinary-download', 60, 60); } catch {
+    const ip = getClientIp(req);
+    const rl = await checkRateLimit(`cloudinary-download:${ip}`, 60, 60);
+    if (!rl.allowed) {
       return res.status(429).json({ error: 'Too many requests' });
     }
 
@@ -82,8 +165,17 @@ export default async function handler(req, res) {
   }
 
   // ── Upload signature mode (default) ──────────────────────────────────────
-  try { await checkRateLimit(req, 'cloudinary-sign', 20, 60); } catch {
+  const uploadRl = await checkRateLimit(`cloudinary-sign:${callerUid}`, 20, 60);
+  if (!uploadRl.allowed) {
     return res.status(429).json({ error: 'Too many requests' });
+  }
+
+  // Enforce command-tier minimum (45) for uploads — cadets below this level have
+  // no pages in the portal that upload documents, so an upload from them is unexpected.
+  // Download signatures (above) stay available to any authenticated user.
+  const level = await getCallerLevel(callerUid);
+  if (level < 45) {
+    return res.status(403).json({ error: 'Command-tier role required for uploads' });
   }
 
   const folder    = (req.query.folder || 'documents').replace(/[^a-zA-Z0-9/_-]/g, '');
