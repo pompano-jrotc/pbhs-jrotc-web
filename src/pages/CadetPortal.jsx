@@ -15,9 +15,10 @@ import {
   Award, Dumbbell, Calendar, Megaphone, UserCircle,
   ChevronRight, Shield, Star, Flag,
 } from 'lucide-react';
-import { ROLE_LABELS } from '../constants';
+import { ROLE_LABELS, ROLE_HIERARCHY, STAFF_LEVEL, PORTAL_VERSION } from '../constants';
 import { getInitials } from '../utils/getInitials';
 import { usePageMeta } from '../hooks/usePageMeta';
+import CadetTour from '../components/CadetTour';
 
 const _slug = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
 
@@ -227,6 +228,14 @@ const CadetPortal = () => {
     return () => unsub();
   }, [user]);
 
+  const [bannerDismissed, setBannerDismissed] = useState(() => {
+    try { return !!localStorage.getItem(`whatsNewSeen_${PORTAL_VERSION}`); } catch { return false; }
+  });
+  const dismissBanner = () => {
+    setBannerDismissed(true);
+    try { localStorage.setItem(`whatsNewSeen_${PORTAL_VERSION}`, '1'); } catch {}
+  };
+
   if (loading || !rosterLoaded) {
     return (
       <div className="flex-1 flex items-center justify-center min-h-[60vh]">
@@ -260,6 +269,62 @@ const CadetPortal = () => {
   return (
     <div className="flex-1 text-slate-900 dark:text-slate-100">
       <main className="p-6 md:p-10">
+
+        {/* ── What's New banner ────────────────────────────────────────────── */}
+        {!bannerDismissed && (
+          <div className="bg-white dark:bg-slate-900 border border-yellow-400/40 dark:border-yellow-500/30 rounded-3xl p-6 mb-8 shadow-sm">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-yellow-500 flex items-center justify-center shrink-0">
+                  <Star size={15} className="text-slate-950" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-sm font-black uppercase italic tracking-tight text-slate-900 dark:text-white">What's New</h2>
+                    <span className="text-[9px] font-black uppercase tracking-wider bg-yellow-500 text-slate-950 px-1.5 py-0.5 rounded">{PORTAL_VERSION}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Recent additions to your portal</p>
+                </div>
+              </div>
+              <button
+                onClick={dismissBanner}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-all shrink-0 text-lg leading-none"
+                aria-label="Dismiss What's New"
+              >
+                ×
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                {
+                  title: 'Service Hours',
+                  desc: 'Log community service directly from this page — your progress toward FL Graduation (40h) and Bright Futures (100h) is tracked automatically.',
+                  link: '/admin/service-hours',
+                },
+                {
+                  title: 'Scholarship Board',
+                  desc: 'Instructors post scholarships, internships, and programs here. Browse and bookmark the ones that interest you.',
+                  link: '/admin/scholarships',
+                },
+                {
+                  title: 'Achievement Wall',
+                  desc: 'Promotions, competition wins, and other accomplishments posted by staff — your achievements are now on the record.',
+                  link: '/admin/achievements',
+                },
+              ].map(item => (
+                <Link
+                  key={item.title}
+                  to={item.link}
+                  className="group block bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-white/5 rounded-2xl p-4 hover:border-yellow-500/40 transition-all"
+                >
+                  <p className="text-xs font-black text-slate-800 dark:text-white mb-1 group-hover:text-yellow-500 transition-colors">{item.title}</p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">{item.desc}</p>
+                  <p className="text-[10px] font-black text-yellow-500/70 uppercase tracking-widest mt-2 group-hover:text-yellow-500 transition-colors">Open →</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── Profile header ───────────────────────────────────────────────── */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-3xl p-8 mb-8 shadow-sm">
@@ -336,8 +401,9 @@ const CadetPortal = () => {
               </div>
 
               {ribbons.length === 0 ? (
-                <div className="py-8 text-center text-sm text-slate-400 italic">
-                  No ribbons on record yet.
+                <div className="py-8 text-center space-y-1.5">
+                  <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No ribbons on record yet.</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">Ribbons are awarded by instructors and staff for achievements, service, and proficiency. They'll appear here once one is added to your record.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -470,7 +536,10 @@ const CadetPortal = () => {
                     ))}
                   </div>
                   {serviceHours.length === 0 ? (
-                    <p className="text-sm text-slate-400 italic text-center py-2">No hours submitted yet.</p>
+                    <div className="text-center py-2 space-y-1">
+                      <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No hours logged yet.</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">Use the <strong className="font-bold text-slate-500">Log Hours</strong> button above to submit community service entries — your instructor will approve them and they'll count toward both thresholds.</p>
+                    </div>
                   ) : (
                     <div className="space-y-2">
                       {serviceHours.slice(0,5).map(h => (
@@ -580,8 +649,9 @@ const CadetPortal = () => {
               </div>
 
               {ptRecords.length === 0 ? (
-                <div className="py-8 text-center text-sm text-slate-400 italic">
-                  No PT records on file yet.
+                <div className="py-8 text-center space-y-1.5">
+                  <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No Cadet Challenge scores on file yet.</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">After each testing cycle, your push-ups, sit-ups, shuttle run, one-mile run, and sit-and-reach scores will appear here, grouped by cycle.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -700,7 +770,10 @@ const CadetPortal = () => {
                     )}
                   </div>
                 )) : (
-                  <p className="text-xs text-slate-400 italic text-center py-3">No upcoming events.</p>
+                  <div className="text-center py-3 space-y-1">
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">No upcoming events.</p>
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500">Formations, field trips, and activities posted by staff will show up here as they're scheduled.</p>
+                  </div>
                 )}
               </div>
             </section>
@@ -716,7 +789,10 @@ const CadetPortal = () => {
                 </Link>
               </div>
               {announcements.length === 0 ? (
-                <p className="text-xs text-slate-400 italic text-center py-3">No recent announcements.</p>
+                <div className="text-center py-3 space-y-1">
+                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400">No recent announcements.</p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">Updates and messages from instructors or battalion staff will appear here when posted.</p>
+                </div>
               ) : (
                 <div className="space-y-3">
                   {announcements.map(a => {
@@ -745,7 +821,21 @@ const CadetPortal = () => {
         </div>
 
 
+        {/* ── Portal tour replay ───────────────────────────────────────────── */}
+        {(ROLE_HIERARCHY[role] || 0) < STAFF_LEVEL && (
+          <div className="mt-4 pb-2 text-center">
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('replay-cadet-tour'))}
+              className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+            >
+              Portal guide →
+            </button>
+          </div>
+        )}
+
       </main>
+
+      {(ROLE_HIERARCHY[role] || 0) < STAFF_LEVEL && <CadetTour />}
     </div>
   );
 };

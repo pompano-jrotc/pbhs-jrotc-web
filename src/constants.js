@@ -92,6 +92,8 @@ export const STAFF_LEVEL = 70;
 // Company First Sergeant and above: baseline leadership/admin-nav visibility.
 export const COMMAND_LEVEL = 45;
 
+export const PORTAL_VERSION = 'v1.8.158';
+
 export const EVENT_TYPES = [
   'Inspection', 'Service', 'Drill', 'PT', 'Meeting',
   'Ceremony', 'Raiders', 'JLAB', 'Drones', 'Gameday', 'Private Practice'

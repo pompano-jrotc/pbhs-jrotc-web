@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="343"    label="Patches"     />
-        <Stat value="681"    label="Commits"     />
+        <Stat value="345"    label="Patches"     />
+        <Stat value="683"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.157" label="Current"     />
+        <Stat value="v1.8.158" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,14 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.157" date="Nov 9" title="API — Welcome Notification Rank Check Bypass" isCurrent changes={<>
+        <Release versions="v1.8.158" date="Nov 12" title="Cadet Portal — Discoverability: Tour, What's New Banner, Empty States" isCurrent changes={<>
+          <C type="feat">CadetTour — 4-step first-login walkthrough modal for cadet-level users (below Staff level); covers My Record, Events &amp; Announcements, sidebar sections, and profile setup; shown once per device via localStorage, dismissible, replayable from "Portal guide" link at bottom of My Record page</C>
+          <C type="feat">Cadet Portal — dismissible "What's New" banner surfaces the three most recently added cadet-facing features (Service Hours, Scholarship Board, Achievement Wall) with direct links; version-keyed via PORTAL_VERSION constant so it auto-resets for returning users when the version bumps</C>
+          <C type="feat">Cadet Portal — empty states in Ribbon Rack, Cadet Challenge Scores, Service Hours, Upcoming Events, and Announcements now explain what each section is and how data gets added, so cadets understand the feature exists rather than assuming nothing is there</C>
+          <C type="feat">constants — PORTAL_VERSION export ties banner localStorage keys and version badge to the same source of truth</C>
+        </>}
+        />
+        <Release versions="v1.8.157" date="Nov 9" title="API — Welcome Notification Rank Check Bypass" isCurrent={false} changes={<>
           <C type="fix">admin-update-account — welcome-notification is now exempt from the canManageAccount rank check; after an approval save writes approved:true the pending-account bypass no longer applies, causing the follow-up welcome-notification to 403 and leaving onboardingComplete unset and the welcome email unsent</C>
         </>}
         />
