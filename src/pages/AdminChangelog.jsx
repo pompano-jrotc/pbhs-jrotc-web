@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="347"    label="Patches"     />
-        <Stat value="685"    label="Commits"     />
+        <Stat value="348"    label="Patches"     />
+        <Stat value="686"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.159" label="Current"     />
+        <Stat value="v1.8.160" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.159" date="Nov 12" title="Privacy Policy &amp; Legal — EmailJS → Resend; Changelog JSX fix" isCurrent changes={<>
+        <Release versions="v1.8.160" date="Nov 12" title="Privacy Policy — Data Retention Policy (BCPS IT audit)" isCurrent changes={<>
+          <C type="fix">Privacy Policy §7 — data retention policy now specifies: education records retained per Broward County School Board Series 2 schedule (academic year + 5 years minimum); uniform measurements deleted within 30 days of account termination; Cloudinary photos removed on account deletion</C>
+        </>}
+        />
+        <Release versions="v1.8.159" date="Nov 12" title="Privacy Policy &amp; Legal — EmailJS → Resend; Changelog JSX fix" isCurrent={false} changes={<>
           <C type="fix">Privacy Policy — updated third-party services section: EmailJS replaced with Resend as the transactional email provider; description updated to note server-side delivery via Vercel API routes with no client-side exposure</C>
           <C type="fix">Terms of Service — updated third-party dependency list: EmailJS replaced with Resend</C>
           <C type="fix">AdminChangelog — Firestore doc ID example in v1.8.126 entry used JSX expression syntax (pl_&#123;company&#125;_&#123;platoon&#125;) which crashed the changelog page with ReferenceError; replaced with bracket notation</C>
