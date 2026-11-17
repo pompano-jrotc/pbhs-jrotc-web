@@ -1058,6 +1058,10 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
       ...(opts.showPct   ? ['<th>%</th>']     : []),
     ].join('');
 
+    const escHtml = s => String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
     const rowHtml = r => {
       const total    = calcTotal(r.scores, r.extraCredit, cats);
       const possible = calcPossible(r.scores, cats);
@@ -1069,18 +1073,18 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
         ] : []),
         ...(opts.showCategories ? cats.map(c => {
           const v = r.scores?.[c.id];
-          const display = v == null || v === '' ? '—' : v === 'na' ? 'N/A' : v;
+          const display = v == null || v === '' ? '—' : v === 'na' ? 'N/A' : escHtml(v);
           return `<td style="text-align:center">${display}</td>`;
         }) : []),
-        ...(opts.showEC    ? [`<td style="text-align:center">${r.extraCredit || 0}</td>`] : []),
+        ...(opts.showEC    ? [`<td style="text-align:center">${Number(r.extraCredit) || 0}</td>`] : []),
         ...(opts.showTotal ? [`<td style="text-align:center">${total} / ${possible}</td>`] : []),
         ...(opts.showPct   ? [`<td style="text-align:center;color:${pctColor(pct)};font-weight:900">${pct}%</td>`] : []),
       ].join('');
-      return `<tr><td><strong>${r.rank || ''} ${r.cadetName || '—'}</strong></td>${cells}</tr>`;
+      return `<tr><td><strong>${escHtml(r.rank || '')} ${escHtml(r.cadetName || '—')}</strong></td>${cells}</tr>`;
     };
 
     const tableHtml = sections.map(({ heading, rows: sRows }) => `
-      ${heading ? `<tr class="let-header"><td colspan="99">${heading}</td></tr>` : ''}
+      ${heading ? `<tr class="let-header"><td colspan="99">${escHtml(heading)}</td></tr>` : ''}
       ${sRows.map(rowHtml).join('')}
     `).join('');
 
@@ -1095,15 +1099,15 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
           <h3>Battalion Board Nominations</h3>
           ${companyNoms.map(({ company, nominees }) => `
             <div class="nom-company">
-              ${isBattalionLevel ? `<p class="nom-company-name">${company} Company</p>` : ''}
+              ${isBattalionLevel ? `<p class="nom-company-name">${escHtml(company)} Company</p>` : ''}
               <table class="nom-table">
                 <thead><tr><th>Position</th><th>Cadet</th><th>%</th><th>Score</th></tr></thead>
                 <tbody>
                   ${nominees.map(({ position, cadetName, rank, pct, total, possible, originalPos }) => {
-                    const label = position === 'Staff Assistant' && originalPos ? `Staff Asst (${originalPos})` : position;
+                    const label = position === 'Staff Assistant' && originalPos ? `Staff Asst (${escHtml(originalPos)})` : escHtml(position);
                     return `<tr>
                       <td>${label}</td>
-                      <td><strong>${rank || ''} ${cadetName}</strong></td>
+                      <td><strong>${escHtml(rank || '')} ${escHtml(cadetName)}</strong></td>
                       <td style="color:${pctColor(pct)};font-weight:900">${pct}%</td>
                       <td>${total} / ${possible}</td>
                     </tr>`;
@@ -1119,7 +1123,7 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
 <html>
 <head>
 <meta charset="utf-8">
-<title>${boardTitle} — Roster</title>
+<title>${escHtml(boardTitle)} — Roster</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; font-size: 9pt; color: #000; padding: 16px; }
@@ -1141,8 +1145,8 @@ const S1PromotionBoard = ({ userData, role, userLevel, myCompany, isBattalionLev
 </style>
 </head>
 <body>
-<h1>${boardTitle}</h1>
-<p class="meta">Board Date: ${boardDate} · Printed: ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · ${visibleScores.length} cadet${visibleScores.length !== 1 ? 's' : ''}</p>
+<h1>${escHtml(boardTitle)}</h1>
+<p class="meta">Board Date: ${escHtml(boardDate)} · Printed: ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · ${visibleScores.length} cadet${visibleScores.length !== 1 ? 's' : ''}</p>
 <table>
   <thead>
     <tr>

@@ -499,12 +499,7 @@ export default async function handler(req, res) {
     // reset, email change, or account deletion). Acting on someone else's -
     // for any action type here - is restricted to the email-manager roles,
     // and only for personnel strictly below your own rank.
-    //
-    // welcome-notification is exempt from the rank check: it only sets
-    // onboardingComplete:false and sends a welcome email, so the approver
-    // must be able to call it immediately after writing approved:true (at
-    // which point the pending-account bypass no longer applies).
-    if (targetUid !== callerUid && type !== 'welcome-notification') {
+    if (targetUid !== callerUid) {
       const [callerRole, targetRole, targetApproved] = await Promise.all([
         getUserField(accessToken, projectId, callerUid, 'role'),
         getUserField(accessToken, projectId, targetUid, 'role'),
@@ -949,8 +944,13 @@ export default async function handler(req, res) {
       ]);
       const callerLevel = ROLE_HIERARCHY[callerRole] || 0;
       const newRoleSlug = updateFields.role;
-      if (newRoleSlug && newRoleSlug !== existingRole && (ROLE_HIERARCHY[newRoleSlug] || 0) >= callerLevel) {
-        return res.status(403).json({ error: 'Cannot assign a role at or above your own permission level.' });
+      if (newRoleSlug && newRoleSlug !== existingRole) {
+        if (!ROLE_HIERARCHY[newRoleSlug]) {
+          return res.status(400).json({ error: 'Invalid role.' });
+        }
+        if ((ROLE_HIERARCHY[newRoleSlug] || 0) >= callerLevel) {
+          return res.status(403).json({ error: 'Cannot assign a role at or above your own permission level.' });
+        }
       }
 
       // Only these form fields may be written — everything else (uid, createdAt,
@@ -972,8 +972,12 @@ export default async function handler(req, res) {
           fields[key] = { stringValue: String(val) };
         }
       }
-      // Always stamp approval and updated-at regardless of what was passed in.
-      fields.approved  = { booleanValue: true };
+      // Only stamp approval when a staff member is acting on someone else's account.
+      // A self-call must never auto-approve — that would let pending cadets bypass the
+      // staff vetting workflow by calling this endpoint directly with their own UID.
+      if (targetUid !== callerUid) {
+        fields.approved = { booleanValue: true };
+      }
       fields.updatedAt = { timestampValue: new Date().toISOString() };
 
       // Use updateMask so we only overwrite the form fields + approval stamp —

@@ -19,7 +19,13 @@
 //   pendingCadets  Array of { name, company, rank } — cadets who haven't turned in
 
 import { jwtVerify, createRemoteJWKSet, SignJWT, importPKCS8 } from 'jose';
-import { checkRateLimit } from '../lib/rateLimit.js';
+import { checkRateLimit, getClientIp } from '../lib/rateLimit.js';
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 // ── Firebase auth / Firestore REST helpers (reused from other notify-* files) ──
 
@@ -167,8 +173,8 @@ function buildEmail({ heading, message }) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  try { await checkRateLimit(req, 'notify-forms', 10, 60); }
-  catch { return res.status(429).json({ error: 'Too many requests' }); }
+  const rl = await checkRateLimit(`notify-forms:${getClientIp(req)}`, 10, 60);
+  if (!rl.allowed) return res.status(429).json({ error: 'Too many requests' });
 
   const {
     idToken,
@@ -230,14 +236,17 @@ export default async function handler(req, res) {
   // Emails intentionally omit individual cadet names for privacy.
   // Recipients log in to the Command Portal to see who specifically is pending.
 
+  const safeEventTitle = escapeHtml(eventTitle);
+  const safeDueDate    = escapeHtml(dueDate);
+
   function buildMessage(count, scopeLabel) {
     return `
     <div style="background:#fef2f2;border-left:4px solid #ef4444;padding:12px 16px;border-radius:4px;margin:0 0 24px;">
       <p style="margin:0;font-size:13px;color:#991b1b;font-weight:700;">Form Past Due</p>
       <p style="margin:6px 0 0;font-size:14px;color:#7f1d1d;">
         <strong>${count} cadet${count !== 1 ? 's have' : ' has'} not yet turned in</strong>
-        the <strong>${eventTitle}</strong> form (${scopeLabel}).
-        The due date was <strong>${dueDate}</strong>.
+        the <strong>${safeEventTitle}</strong> form (${escapeHtml(scopeLabel)}).
+        The due date was <strong>${safeDueDate}</strong>.
       </p>
     </div>
 
@@ -264,7 +273,7 @@ export default async function handler(req, res) {
 
   for (const u of s1s) {
     const count   = pendingCadets.length;
-    const subject = `Overdue Form Reminder — ${eventTitle} (${count} cadet${count !== 1 ? 's' : ''} pending)`;
+    const subject = `Overdue Form Reminder — ${safeEventTitle} (${count} cadet${count !== 1 ? 's' : ''} pending)`;
     emailTasks.push(resendSend(u.email, subject, buildEmail({ heading: subject, message: buildMessage(count, scopeLabel) })));
   }
 
@@ -274,7 +283,7 @@ export default async function handler(req, res) {
     const companyCadets = byCompany[xo.company] || [];
     if (companyCadets.length === 0) continue;
     const count   = companyCadets.length;
-    const subject = `Overdue Form Reminder — ${eventTitle} (${count} cadet${count !== 1 ? 's' : ''} pending in ${xo.company} Co.)`;
+    const subject = `Overdue Form Reminder — ${safeEventTitle} (${count} cadet${count !== 1 ? 's' : ''} pending in ${escapeHtml(xo.company)} Co.)`;
     emailTasks.push(resendSend(xo.email, subject, buildEmail({ heading: subject, message: buildMessage(count, `${xo.company} Company`) })));
   }
 

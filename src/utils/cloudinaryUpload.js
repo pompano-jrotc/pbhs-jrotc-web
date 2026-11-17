@@ -2,23 +2,18 @@ import { withRetry } from './withRetry';
 import { validateUpload } from './validateUpload';
 import { convertToWebp } from './convertToWebp';
 
-export const CLOUDINARY_CLOUD_NAME = 'q77zogcy';
-export const CLOUDINARY_UPLOAD_PRESET = 'ml_default';
-
 /**
- * The single upload path for every file this app accepts, whether it's a
- * document, a portrait, or a team photo: validate the real file bytes
- * (validateUpload), convert images to WebP so storage stays one consistent
- * format regardless of what the uploader's phone/camera produced
- * (convertToWebp), then POST to Cloudinary with automatic retry on a
- * dropped connection (withRetry). Throws with a user-facing message on
- * anything that fails validation or the upload itself.
+ * Upload a file to Cloudinary using a server-signed upload token so the
+ * API secret never ships in client code. Validates the file bytes, converts
+ * images to WebP, fetches a short-lived signature from /api/cloudinary-sign,
+ * then POSTs the file directly to Cloudinary (nothing routes through Vercel).
  *
- * @param {File} file
+ * @param {File}   file
  * @param {'image' | 'document'} kind
+ * @param {string} [folder='photos']  Cloudinary media library subfolder
  * @returns {Promise<{secure_url: string, bytes: number, fileName: string}>}
  */
-export async function uploadToCloudinary(file, kind) {
+export async function uploadToCloudinary(file, kind, folder = 'photos') {
   const { valid, error, detectedType } = await validateUpload(file, kind);
   if (!valid) throw new Error(error);
 
@@ -26,24 +21,38 @@ export async function uploadToCloudinary(file, kind) {
     ? await convertToWebp(file)
     : file;
 
-  const body = new FormData();
-  body.append('file', uploadFile);
-  body.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  const signRes = await fetch(`/api/cloudinary-sign?folder=${encodeURIComponent(folder)}`);
+  if (!signRes.ok) {
+    const { error: msg } = await signRes.json().catch(() => ({}));
+    throw new Error(msg || 'Failed to get upload credentials');
+  }
+  const { signature, timestamp, api_key, cloud_name } = await signRes.json();
 
-  // 'raw/upload' accepts any file type (PDFs, docs) without processing.
-  // 'auto/upload' tries to detect image/video/raw but the ml_default
-  // unsigned preset typically only permits image uploads, so PDFs get
-  // rejected. Use raw explicitly for documents.
   const endpoint = kind === 'document' ? 'raw' : 'image';
 
+  const body = new FormData();
+  body.append('file',        uploadFile);
+  body.append('timestamp',   String(timestamp));
+  body.append('api_key',     api_key);
+  body.append('signature',   signature);
+  body.append('folder',      folder);
+  body.append('access_mode', 'public');
+
   const data = await withRetry(async () => {
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/${endpoint}/upload`, {
-      method: 'POST',
-      body,
-    });
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloud_name}/${endpoint}/upload`,
+      { method: 'POST', body },
+    );
     const json = await res.json();
     if (!res.ok || !json.secure_url) {
-      throw new Error(json.error?.message || 'Upload failed');
+      const raw = json.error?.message || 'Upload failed';
+      const sizeMatch = raw.match(/Got\s+(\d+).*?Maximum\s+is\s+(\d+)/i);
+      if (sizeMatch) {
+        const got = (Number(sizeMatch[1]) / 1024 / 1024).toFixed(1);
+        const max = (Number(sizeMatch[2]) / 1024 / 1024).toFixed(0);
+        throw new Error(`File is too large (${got} MB). Maximum is ${max} MB.`);
+      }
+      throw new Error(raw);
     }
     return json;
   });

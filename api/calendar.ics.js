@@ -4,11 +4,12 @@
 // Clients (iPhone Calendar, Google Calendar, Outlook) can subscribe via:
 //   webcal://www.pbhsjrotc.com/api/calendar.ics
 //
-// Runs as a Vercel Edge Function (doesn't count against the 12 serverless limit).
+// Runs as a Vercel Serverless Function (Node.js runtime) so it can use
+// the Redis rate limiter in lib/rateLimit.js.
 // The events collection has allow read: if true so no auth is needed.
 // Reads via the Firestore REST API.
 
-export const config = { runtime: 'edge' };
+import { checkRateLimit, getClientIp } from '../lib/rateLimit.js';
 
 const PROJECT_ID = 'pbhs-jrotc-web';
 const EVENTS_PATH = `projects/${PROJECT_ID}/databases/(default)/documents/events`;
@@ -98,17 +99,23 @@ function parseDoc(doc) {
   };
 }
 
-export default async function handler(request) {
+export default async function handler(req, res) {
+  if (req.method !== 'GET') return res.status(405).send('Method Not Allowed');
+
+  // Rate limit per IP — 30 req/min; calendar clients cache for 6h so this is very generous
+  const rl = await checkRateLimit(`calendar-ics:${getClientIp(req)}`, 30, 60);
+  if (!rl.allowed) return res.status(429).send('Too Many Requests');
+
   try {
     // Try unauthenticated first; fall back to service-account auth if rules require it
     let rawDocs = await fetchEventDocs(null);
     if (rawDocs === null) {
       const saJson = process.env.FIREBASE_SERVICE_ACCOUNT;
-      if (!saJson) return new Response('Service account not configured', { status: 503 });
+      if (!saJson) return res.status(503).send('Service account not configured');
       const sa = JSON.parse(saJson);
       const token = await getAccessToken(sa);
       rawDocs = await fetchEventDocs(`Bearer ${token}`);
-      if (rawDocs === null) return new Response('Upstream Firestore error', { status: 502 });
+      if (rawDocs === null) return res.status(502).send('Upstream Firestore error');
     }
     const docs = rawDocs.map(parseDoc).filter(e => e.date);
 
@@ -154,16 +161,13 @@ export default async function handler(request) {
 
     const body = lines.join('\r\n') + '\r\n';
 
-    return new Response(body, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/calendar; charset=utf-8',
-        'Content-Disposition': 'inline; filename="pbhs-jrotc.ics"',
-        'Cache-Control': 'public, max-age=21600',
-      },
-    });
+    return res.status(200).set({
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': 'inline; filename="pbhs-jrotc.ics"',
+      'Cache-Control': 'public, max-age=21600',
+    }).send(body);
   } catch (err) {
     console.error('calendar.ics error:', err);
-    return new Response('Internal error', { status: 500 });
+    return res.status(500).send('Internal error');
   }
 }

@@ -15,7 +15,13 @@
 //   editorName    string  (person who made the edit)
 
 import { jwtVerify, createRemoteJWKSet, SignJWT, importPKCS8 } from 'jose';
-import { checkRateLimit } from '../lib/rateLimit.js';
+import { checkRateLimit, getClientIp } from '../lib/rateLimit.js';
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 // ── Firebase auth / Firestore REST helpers ────────────────────────────────────
 
@@ -162,8 +168,8 @@ function buildEmail({ heading, message }) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  try { await checkRateLimit(req, 'notify-uniform', 10, 60); }
-  catch { return res.status(429).json({ error: 'Too many requests' }); }
+  const rl = await checkRateLimit(`notify-uniform:${getClientIp(req)}`, 10, 60);
+  if (!rl.allowed) return res.status(429).json({ error: 'Too many requests' });
 
   const { type, idToken, company, submitterName, recordCount, cadetName, editorName, item, detail, requesterName } = req.body || {};
 
@@ -180,6 +186,17 @@ export default async function handler(req, res) {
   const caller = await getUserByUid(accessToken, projectId, uid);
   if (!caller) return res.status(403).json({ error: 'User not found' });
 
+  const NOTIFY_UNIFORM_ROLES = new Set([
+    'district_army_instructor', 'senior_army_instructor', 'army_instructor',
+    'battalion_commander', 'battalion_xo', 'battalion_csm', 'sergeant_major',
+    's4_logistics',
+    'company_commander', 'company_xo', 'company_1sg', 'company_master_sergeant',
+    'company_s4_assistant',
+  ]);
+  if (!NOTIFY_UNIFORM_ROLES.has(caller.role)) {
+    return res.status(403).json({ error: 'Insufficient role to send uniform notifications' });
+  }
+
   if (!company) return res.status(400).json({ error: 'Missing company' });
 
   // ── SUBMIT: Company S4 finalizes uniform sizes ────────────────────────────
@@ -194,12 +211,12 @@ export default async function handler(req, res) {
     const recipients = [...s4Logistics, ...bnXOs, ...bnCdrs, { email: caller.email, fullName: caller.fullName }];
     const unique = [...new Map(recipients.map(u => [u.email, u])).values()];
 
-    const subject = `Uniform Sizes Submitted — ${company} Company`;
+    const subject = `Uniform Sizes Submitted — ${escapeHtml(company)} Company`;
     const message = `
       <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;">
-        <strong style="color:#0f172a;">${submitterName || caller.fullName}</strong> has submitted
-        uniform size records for <strong style="color:#0f172a;">${company} Company</strong>
-        (${recordCount || 0} cadet${recordCount !== 1 ? 's' : ''}).
+        <strong style="color:#0f172a;">${escapeHtml(submitterName || caller.fullName)}</strong> has submitted
+        uniform size records for <strong style="color:#0f172a;">${escapeHtml(company)} Company</strong>
+        (${Number(recordCount) || 0} cadet${recordCount !== 1 ? 's' : ''}).
       </p>
       <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#475569;">
         Log in to the Command Portal → Uniform Sizes to review the submitted records.
@@ -215,18 +232,18 @@ export default async function handler(req, res) {
   if (type === 'pending') {
     const s4Logistics = await getUsersByRole(accessToken, projectId, 's4_logistics');
 
-    const subject = `Uniform Sizes Updated — ${company} Company (Pending Review)`;
+    const subject = `Uniform Sizes Updated — ${escapeHtml(company)} Company (Pending Review)`;
     const message = `
       <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;">
-        <strong style="color:#0f172a;">${editorName || caller.fullName}</strong> has updated
-        the uniform sizes for <strong style="color:#0f172a;">${cadetName || 'a cadet'}</strong>
-        in <strong style="color:#0f172a;">${company} Company</strong> after the records were
+        <strong style="color:#0f172a;">${escapeHtml(editorName || caller.fullName)}</strong> has updated
+        the uniform sizes for <strong style="color:#0f172a;">${escapeHtml(cadetName || 'a cadet')}</strong>
+        in <strong style="color:#0f172a;">${escapeHtml(company)} Company</strong> after the records were
         already submitted.
       </p>
       <div style="background:#fff7ed;border-left:4px solid #f97316;padding:12px 16px;border-radius:4px;margin:0 0 24px;">
         <p style="margin:0;font-size:13px;color:#9a3412;font-weight:600;">Action Required</p>
         <p style="margin:8px 0 0;font-size:14px;color:#7c2d12;">
-          Log in to the Command Portal → Uniform Sizes, select <strong>${company} Company</strong>,
+          Log in to the Command Portal → Uniform Sizes, select <strong>${escapeHtml(company)} Company</strong>,
           and click <strong>Acknowledge</strong> to confirm you have reviewed the changes.
         </p>
       </div>`;
@@ -239,16 +256,16 @@ export default async function handler(req, res) {
   if (type === 'item-request') {
     const s4Logistics = await getUsersByRole(accessToken, projectId, 's4_logistics');
 
-    const subject = `New Uniform Request — ${cadetName || 'Unknown Cadet'} (${company} Company)`;
+    const subject = `New Uniform Request — ${escapeHtml(cadetName || 'Unknown Cadet')} (${escapeHtml(company)} Company)`;
     const message = `
       <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;">
-        <strong style="color:#0f172a;">${requesterName || caller.fullName}</strong> has logged a
+        <strong style="color:#0f172a;">${escapeHtml(requesterName || caller.fullName)}</strong> has logged a
         new uniform item request that requires your review.
       </p>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin:0 0 24px;">
-        <p style="margin:0 0 8px;font-size:13px;color:#64748b;"><strong style="color:#0f172a;">Cadet:</strong> ${cadetName || '—'}</p>
-        <p style="margin:0 0 8px;font-size:13px;color:#64748b;"><strong style="color:#0f172a;">Company:</strong> ${company}</p>
-        <p style="margin:0;font-size:13px;color:#64748b;"><strong style="color:#0f172a;">Item:</strong> ${item || '—'}${detail ? ` — ${detail}` : ''}</p>
+        <p style="margin:0 0 8px;font-size:13px;color:#64748b;"><strong style="color:#0f172a;">Cadet:</strong> ${escapeHtml(cadetName || '—')}</p>
+        <p style="margin:0 0 8px;font-size:13px;color:#64748b;"><strong style="color:#0f172a;">Company:</strong> ${escapeHtml(company)}</p>
+        <p style="margin:0;font-size:13px;color:#64748b;"><strong style="color:#0f172a;">Item:</strong> ${escapeHtml(item || '—')}${detail ? ` — ${escapeHtml(detail)}` : ''}</p>
       </div>
       <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#475569;">
         Log in to the Command Portal → Uniform Items to review and approve or deny this request.

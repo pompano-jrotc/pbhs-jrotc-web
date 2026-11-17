@@ -60,9 +60,10 @@ const AdminLeaderboard = () => {
   const isAdmin = pathname.startsWith('/admin');
   // Admin route (/admin/leaderboard) uses live Firestore for L70+ who can read
   // all collections (records, roster, fundraiser).
-  // Public route (/leaderboard) uses the API for fitness/roster data (roster is
-  // restricted), but uses a live Firestore subscription for fundraiserEntries
-  // which is now readable by any signed-in cadet.
+  // Other users use the API endpoint (/api/leaderboard.json) which applies
+  // field whitelisting. The live fundraiser subscription below only succeeds
+  // for L70+ and L45+ (own company); lower levels get a silent Firestore
+  // permission error (empty error handler) and fall back to the API data.
   const useFirestore = pathname.startsWith('/admin') && userLevel >= 70;
   const useLiveFundraiser = !!user && !authLoading;
 

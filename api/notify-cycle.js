@@ -20,7 +20,13 @@
 //   cartName    string
 
 import { jwtVerify, createRemoteJWKSet, SignJWT, importPKCS8 } from 'jose';
-import { checkRateLimit } from '../lib/rateLimit.js';
+import { checkRateLimit, getClientIp } from '../lib/rateLimit.js';
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 // ── Firebase auth / Firestore REST helpers ────────────────────────────────────
 
@@ -173,8 +179,8 @@ function buildEmail({ heading, message, footnote = '' }) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  try { await checkRateLimit(req, 'notify-cycle', 10, 60); }
-  catch { return res.status(429).json({ error: 'Too many requests' }); }
+  const rl = await checkRateLimit(`notify-cycle:${getClientIp(req)}`, 10, 60);
+  if (!rl.allowed) return res.status(429).json({ error: 'Too many requests' });
 
   const { type, idToken, cycleNumber, company, submitterName, note,
           assistantUid, assistantName, assistantEmail, cartName } = req.body || {};
@@ -192,6 +198,17 @@ export default async function handler(req, res) {
   const caller = await getUserByUid(accessToken, projectId, uid);
   if (!caller) return res.status(403).json({ error: 'User not found' });
 
+  const NOTIFY_CYCLE_ROLES = new Set([
+    'district_army_instructor', 'senior_army_instructor', 'army_instructor',
+    'battalion_commander', 'battalion_xo', 'battalion_csm', 'sergeant_major',
+    's1_adjutant', 's3_operations', 's6_technology',
+    'company_commander', 'company_xo', 'company_1sg', 'company_master_sergeant',
+    'company_s1_assistant', 'company_s3_assistant', 'company_s6_assistant',
+  ]);
+  if (!NOTIFY_CYCLE_ROLES.has(caller.role)) {
+    return res.status(403).json({ error: 'Insufficient role to send cycle notifications' });
+  }
+
   // ── FINALIZE: company S1/command finalizes a cycle ────────────────────────
   if (type === 'finalize') {
     if (!cycleNumber || !company) return res.status(400).json({ error: 'Missing cycleNumber or company' });
@@ -208,12 +225,12 @@ export default async function handler(req, res) {
     const recipients = [...s1s, ...s3s, ...xos, ...bns, { email: caller.email, fullName: caller.fullName }];
     const unique     = [...new Map(recipients.map(u => [u.email, u])).values()];
 
-    const subject = `Cadet Challenge #${cycleNumber} Submitted — ${company} Company`;
+    const subject = `Cadet Challenge #${escapeHtml(cycleNumber)} Submitted — ${escapeHtml(company)} Company`;
     const message = `
       <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;">
-        <strong style="color:#0f172a;">${submitterName || caller.fullName}</strong> has finalized and submitted
-        <strong style="color:#0f172a;">Cadet Challenge #${cycleNumber}</strong> records for
-        <strong style="color:#0f172a;">${company} Company</strong>.
+        <strong style="color:#0f172a;">${escapeHtml(submitterName || caller.fullName)}</strong> has finalized and submitted
+        <strong style="color:#0f172a;">Cadet Challenge #${escapeHtml(cycleNumber)}</strong> records for
+        <strong style="color:#0f172a;">${escapeHtml(company)} Company</strong>.
       </p>
       <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#475569;">
         Log in to the Command Portal to review the records. If corrections are needed,
@@ -232,16 +249,16 @@ export default async function handler(req, res) {
     const s1Assistants = await getUsersByRole(accessToken, projectId, 'company_s1_assistant');
     const targets = s1Assistants.filter(u => u.company === company);
 
-    const subject = `Action Required: Cadet Challenge #${cycleNumber} Sent Back — ${company} Company`;
+    const subject = `Action Required: Cadet Challenge #${escapeHtml(cycleNumber)} Sent Back — ${escapeHtml(company)} Company`;
     const message = `
       <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;">
         <strong style="color:#0f172a;">Battalion S1</strong> has returned
-        <strong style="color:#0f172a;">Cadet Challenge #${cycleNumber}</strong> for
-        <strong style="color:#0f172a;">${company} Company</strong> for corrections.
+        <strong style="color:#0f172a;">Cadet Challenge #${escapeHtml(cycleNumber)}</strong> for
+        <strong style="color:#0f172a;">${escapeHtml(company)} Company</strong> for corrections.
       </p>
       ${note ? `<div style="background:#fef9c3;border-left:4px solid #eab308;padding:12px 16px;border-radius:4px;margin:0 0 24px;">
         <p style="margin:0;font-size:13px;color:#92400e;font-weight:600;">Note from Battalion S1:</p>
-        <p style="margin:8px 0 0;font-size:14px;color:#78350f;">${note}</p>
+        <p style="margin:8px 0 0;font-size:14px;color:#78350f;">${escapeHtml(note)}</p>
       </div>` : ''}
       <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#475569;">
         Please log in to the Command Portal, make the necessary corrections, and re-submit the cycle.
@@ -253,20 +270,28 @@ export default async function handler(req, res) {
 
   // ── S6-REMINDER: S6 sends reminder to an S6 assistant ───────────────────
   if (type === 's6-reminder') {
-    if (!assistantEmail) return res.status(400).json({ error: 'Missing assistantEmail' });
+    // assistantUid is required; email is read from Firestore — never from request body.
+    if (!assistantUid) return res.status(400).json({ error: 'Missing assistantUid' });
 
-    const subject = `Reminder: S6 Checklist Incomplete — ${cartName || 'Cart'}`;
+    const assistant = await getUserByUid(accessToken, projectId, assistantUid);
+    if (!assistant || !assistant.email) return res.status(404).json({ error: 'Assistant not found' });
+    // Only send to the target if they're actually a company_s6_assistant.
+    if (assistant.role !== 'company_s6_assistant') {
+      return res.status(403).json({ error: 'Target is not an S6 assistant' });
+    }
+
+    const subject = `Reminder: S6 Checklist Incomplete — ${escapeHtml(cartName || 'Cart')}`;
     const message = `
       <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;">
         This is a reminder that the end-of-class checklist for
-        <strong style="color:#0f172a;">${cartName || 'your assigned cart'}</strong>
+        <strong style="color:#0f172a;">${escapeHtml(cartName || 'your assigned cart')}</strong>
         has not been submitted yet for today.
       </p>
       <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#475569;">
         Please log in to the Command Portal and complete the S6 checklist as soon as possible.
       </p>`;
 
-    await resendSend(assistantEmail, subject, buildEmail({ heading: subject, message }));
+    await resendSend(assistant.email, subject, buildEmail({ heading: subject, message }));
     return res.status(200).json({ ok: true });
   }
 

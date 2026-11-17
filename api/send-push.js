@@ -24,7 +24,7 @@
 //   company announcement email:      command 45+ required
 
 import { jwtVerify, createRemoteJWKSet, SignJWT, importPKCS8 } from 'jose';
-import { checkRateLimit, checkRateLimitWithTTL } from '../lib/rateLimit.js';
+import { checkRateLimit, checkRateLimitWithTTL, getClientIp } from '../lib/rateLimit.js';
 
 // ── Firebase auth / service-account helpers ───────────────────────────────────
 
@@ -130,7 +130,8 @@ async function verifyAndGetLevel(idToken) {
   if (!docRes.ok) throw new Error('Caller user doc not found');
   const doc         = await docRes.json();
   const role        = doc.fields?.role?.stringValue || 'cadet';
-  return { uid, role, userLevel: HIERARCHY[role] || 0 };
+  const callerCo    = doc.fields?.company?.stringValue || '';
+  return { uid, role, userLevel: HIERARCHY[role] || 0, callerCompany: callerCo };
 }
 
 // ── Push helpers ──────────────────────────────────────────────────────────────
@@ -309,9 +310,15 @@ async function resendSendBatch(emails) {
   return { sent, failed };
 }
 
+function escHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function buildAnnouncementEmail({ type, company, issuer, content, pdfUrl, pdfFileName }) {
   const isCompany  = type === 'company';
-  const headerLabel = isCompany ? `${company} Company Announcement` : 'Battalion-Wide Broadcast';
+  const headerLabel = isCompany ? `${escHtml(company)} Company Announcement` : 'Battalion-Wide Broadcast';
   const tagColor    = isCompany ? '#3b82f6' : '#eab308';
   const tagBg       = isCompany ? '#1e3a5f' : '#422006';
 
@@ -320,7 +327,7 @@ function buildAnnouncementEmail({ type, company, issuer, content, pdfUrl, pdfFil
       <tr><td style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;">
         <a href="https://www.pbhsjrotc.com/announcements" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:#0f172a;">
           <span style="font-size:20px;">📎</span>
-          <span style="font-size:13px;font-weight:700;color:#0f172a;">${pdfFileName || 'Attached PDF'}</span>
+          <span style="font-size:13px;font-weight:700;color:#0f172a;">${escHtml(pdfFileName) || 'Attached PDF'}</span>
           <span style="font-size:11px;color:#94a3b8;font-weight:700;margin-left:4px;">View on portal ↗</span>
         </a>
       </td></tr>
@@ -342,7 +349,7 @@ function buildAnnouncementEmail({ type, company, issuer, content, pdfUrl, pdfFil
         </td>
         <td align="right">
           <span style="display:inline-block;background:${tagBg};color:${tagColor};font-size:9px;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;padding:4px 10px;border-radius:6px;border:1px solid ${tagColor}40;">
-            ${isCompany ? company + ' Co.' : 'Global Broadcast'}
+            ${isCompany ? escHtml(company) + ' Co.' : 'Global Broadcast'}
           </span>
         </td>
       </tr>
@@ -360,12 +367,12 @@ function buildAnnouncementEmail({ type, company, issuer, content, pdfUrl, pdfFil
     <!-- Message bubble -->
     <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 24px;">
       <tr><td style="background:#f8fafc;border-left:4px solid #eab308;border-radius:0 12px 12px 0;padding:20px 24px;">
-        <p style="margin:0;font-size:15px;line-height:1.7;color:#1e293b;font-style:italic;">"${content.replace(/\n/g, '<br>')}"</p>
+        <p style="margin:0;font-size:15px;line-height:1.7;color:#1e293b;font-style:italic;">"${escHtml(content).replace(/\n/g, '<br>')}"</p>
       </td></tr>
     </table>
 
     <p style="margin:0;font-size:12px;color:#64748b;">
-      Posted by <strong style="color:#0f172a;">${issuer}</strong>
+      Posted by <strong style="color:#0f172a;">${escHtml(issuer)}</strong>
     </p>
     ${pdfBlock}
 
@@ -395,8 +402,9 @@ function buildAnnouncementEmail({ type, company, issuer, content, pdfUrl, pdfFil
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  try { await checkRateLimit(req, 'send-push', 10, 60); }
-  catch { return res.status(429).json({ error: 'Too many requests' }); }
+  // Burst guard by IP before token verification — prevents token-grinding DoS.
+  const burstRl = await checkRateLimit(`send-push:${getClientIp(req)}`, 10, 60);
+  if (!burstRl.allowed) return res.status(429).json({ error: 'Too many requests' });
 
   const {
     idToken,
@@ -419,9 +427,9 @@ export default async function handler(req, res) {
   if (doEmail && announcementType === 'company' && !company)
                                                return res.status(400).json({ error: 'Missing company for company announcement' });
 
-  let uid, userLevel;
+  let uid, userLevel, callerCompany;
   try {
-    ({ uid, userLevel } = await verifyAndGetLevel(idToken));
+    ({ uid, userLevel, callerCompany } = await verifyAndGetLevel(idToken));
   } catch {
     return res.status(401).json({ error: 'Invalid token' });
   }
@@ -432,6 +440,10 @@ export default async function handler(req, res) {
                                                return res.status(403).json({ error: 'Staff level (70+) required for global email' });
   if (doEmail && announcementType === 'company' && userLevel < 45)
                                                return res.status(403).json({ error: 'Command level (45+) required for company email' });
+  // Company commanders (45–69) may only send to their own company; staff (70+) may send to any.
+  if (doEmail && announcementType === 'company' && userLevel < 70 &&
+      (callerCompany || '').toLowerCase() !== (company || '').toLowerCase())
+                                               return res.status(403).json({ error: 'You can only send company announcements to your own company.' });
 
   // Per-user cooldown: 1 email announcement per 10 minutes.
   // This prevents accidental double-sends and protects the Resend daily quota.

@@ -121,13 +121,23 @@ const expandEventDates = (ev) => {
 
 // ── Subscribe modal ───────────────────────────────────────────────────────────
 const ExportModal = ({ events, onClose }) => {
+  const { user } = useAuth();
   const [copied,   setCopied]   = useState(false);
   const [dlDone,   setDlDone]   = useState(false);
+  const [icsUrl,   setIcsUrl]   = useState(null);
+  const [urlErr,   setUrlErr]   = useState(false);
 
-  const token    = import.meta.env.VITE_LEADERSHIP_CAL_TOKEN || '';
-  const icsUrl   = token
-    ? `https://www.pbhsjrotc.com/api/leadership-calendar.ics?t=${token}`
-    : null;
+  useEffect(() => {
+    if (!user) return;
+    user.getIdToken()
+      .then(idToken => fetch('/api/leadership-cal-token', {
+        headers: { Authorization: `Bearer ${idToken}` },
+      }))
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('fetch failed')))
+      .then(data => setIcsUrl(data.url))
+      .catch(() => setUrlErr(true));
+  }, [user]);
+
   const webcalUrl = icsUrl ? icsUrl.replace('https://', 'webcal://') : null;
   const googleUrl = icsUrl
     ? `https://calendar.google.com/calendar/r/settings/addbyurl?url=${encodeURIComponent(icsUrl)}`
@@ -178,7 +188,7 @@ const ExportModal = ({ events, onClose }) => {
         </div>
 
         <div className="px-7 py-6 space-y-5">
-          {token ? (
+          {icsUrl ? (
             <>
               {/* iPhone / Apple Calendar */}
               <div>
@@ -235,10 +245,14 @@ const ExportModal = ({ events, onClose }) => {
               </div>
             </>
           ) : (
-            /* Fallback if env var not configured — offer download */
+            /* Loading / error / download fallback */
             <div className="text-center space-y-3">
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Live subscription not configured yet. Download the current events as a file.
+                {urlErr
+                  ? 'Could not load subscription URL. Download the current events as a file.'
+                  : !icsUrl
+                    ? 'Loading subscription link…'
+                    : 'Live subscription not configured yet. Download the current events as a file.'}
               </p>
               <button
                 onClick={download}

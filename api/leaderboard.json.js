@@ -52,10 +52,11 @@ async function fetchCol(name, token, pageSize = 1000) {
   return data.documents || [];
 }
 
-function docToObj(doc) {
+function docToObj(doc, allowedKeys) {
   const f = doc.fields || {};
   const out = { id: doc.name.split('/').pop() };
   for (const [k, v] of Object.entries(f)) {
+    if (allowedKeys && !allowedKeys.has(k)) continue;
     if      ('stringValue'    in v) out[k] = v.stringValue;
     else if ('integerValue'   in v) out[k] = Number(v.integerValue);
     else if ('doubleValue'    in v) out[k] = Number(v.doubleValue);
@@ -66,6 +67,15 @@ function docToObj(doc) {
   }
   return out;
 }
+
+// Fields whitelisted for the public leaderboard response.
+// Never include notes, linkedUid, submittedByUid, paymentType, orderNumber, etc.
+const ROSTER_PUBLIC_FIELDS       = new Set(['company', 'gender']);
+const FUNDRAISER_PUBLIC_FIELDS   = new Set(['cadetId', 'cadetName', 'company', 'amount', 'voided']);
+const CHALLENGE_PUBLIC_FIELDS    = new Set([
+  'cadetId', 'cadetName', 'company', 'letLevel', 'cycleLabel', 'cycleId',
+  'pushUps', 'sitUps', 'shuttleRun', 'oneMile', 'sitNReach', 'medicalExempt',
+]);
 
 export default async function handler(request) {
   try {
@@ -83,26 +93,29 @@ export default async function handler(request) {
       fetchCol('fundraiserEntries', token),
     ]);
 
-    const records = recDocs.map(docToObj);
+    const records = recDocs.map(d => docToObj(d, CHALLENGE_PUBLIC_FIELDS));
     const roster  = Object.fromEntries(rosterDocs.map(d => {
-      const obj = docToObj(d);
+      const obj = docToObj(d, ROSTER_PUBLIC_FIELDS);
       return [obj.id, obj];
     }));
-    const fundraiserEntries = fundraiserDocs.map(docToObj);
+    const fundraiserEntries = fundraiserDocs.map(d => docToObj(d, FUNDRAISER_PUBLIC_FIELDS));
 
     return new Response(JSON.stringify({ records, roster, fundraiserEntries }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': 'https://pbhsjrotc.com',
       },
     });
   } catch (err) {
     console.error('leaderboard.json error:', err);
     return new Response(JSON.stringify({ records:[], roster:{}, fundraiserEntries:[] }), {
       status: 200, // return empty gracefully rather than 500
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': 'https://pbhsjrotc.com',
+      },
     });
   }
 }

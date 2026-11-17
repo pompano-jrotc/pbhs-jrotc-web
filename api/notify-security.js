@@ -68,6 +68,29 @@ async function verifyIdToken(idToken) {
   return { uid: payload.sub, projectId: getServiceAccount().project_id };
 }
 
+async function getUserByUid(accessToken, projectId, uid) {
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`;
+  const res = await fetch(url, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+  if (!res.ok) return null;
+  const doc = await res.json();
+  if (!doc.fields) return null;
+  return {
+    fullName: doc.fields.fullName?.stringValue || '',
+    role:     doc.fields.role?.stringValue     || '',
+    level:    Number(doc.fields.level?.integerValue || doc.fields.level?.doubleValue || 0),
+  };
+}
+
+// Role-to-level map for the roles that can trigger security events (command tier 45+).
+const ROLE_LEVELS = {
+  district_army_instructor: 105, senior_army_instructor: 100, army_instructor: 95,
+  battalion_commander: 90, battalion_xo: 85, battalion_csm: 85, sergeant_major: 80,
+  s1_adjutant: 70, s2_intelligence: 70, s3_operations: 70, s4_logistics: 70,
+  s5_public_affairs: 70, s6_technology: 70, s7_special_projects: 70,
+  company_commander: 55, company_xo: 50, company_1sg: 45, company_master_sergeant: 45,
+};
+const MIN_LEVEL = 45;
+
 // Fetch all instructors + BC emails from Firestore
 async function getAlertRecipients(accessToken, projectId) {
   const alertRoles = [
@@ -198,9 +221,14 @@ function buildAlertEmail({ event, actorName, actorRole, targetName, targetId, no
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { idToken, event, actorName, actorRole, targetName, targetId, notes } = req.body || {};
-  if (!idToken || !event || !actorName) {
+  const { idToken, event, targetName, targetId, notes } = req.body || {};
+  if (!idToken || !event) {
     return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const VALID_EVENTS = new Set(['self_edit_attempt', 'duplicate_role', 'mass_changes']);
+  if (!VALID_EVENTS.has(event)) {
+    return res.status(400).json({ error: 'Invalid event type' });
   }
 
   try {
@@ -211,6 +239,20 @@ export default async function handler(req, res) {
     if (!rl.allowed) return res.status(429).json({ error: 'Rate limited' });
 
     const accessToken = await getAccessToken();
+
+    // Look up caller's actual name and role from Firestore — never trust request body for these.
+    // Also enforces minimum level (45+) so a basic cadet cannot spam security alert emails.
+    const caller = await getUserByUid(accessToken, projectId, uid);
+    if (!caller) return res.status(403).json({ error: 'User not found' });
+    const callerLevel = ROLE_LEVELS[caller.role] ?? 0;
+    if (callerLevel < MIN_LEVEL) {
+      return res.status(403).json({ error: 'Insufficient role to send security alerts' });
+    }
+
+    // Use caller's verified name/role — not the values from the request body.
+    const actorName = caller.fullName || uid;
+    const actorRole = caller.role     || '';
+
     const recipients  = await getAlertRecipients(accessToken, projectId);
 
     // Build de-duped recipient list (role-based + fixed)

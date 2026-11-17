@@ -27,7 +27,7 @@
 // The function overwrites rows A1:F(n) of the first sheet tab.
 
 import { jwtVerify, createRemoteJWKSet, SignJWT, importPKCS8 } from 'jose';
-import { checkRateLimit } from '../lib/rateLimit.js';
+import { checkRateLimit, getClientIp } from '../lib/rateLimit.js';
 
 // ── Service account & token helpers (same pattern as notify-forms.js) ─────────
 
@@ -89,6 +89,46 @@ async function verifyIdToken(idToken) {
   return payload.sub;
 }
 
+let _fsToken = null;
+async function getFirestoreToken() {
+  if (_fsToken && _fsToken.expiresAt > Date.now() + 30_000) return _fsToken.value;
+  const sa  = getSA();
+  const key = await importPKCS8(sa.private_key, 'RS256');
+  const now = Math.floor(Date.now() / 1000);
+  const assertion = await new SignJWT({ scope: 'https://www.googleapis.com/auth/datastore' })
+    .setProtectedHeader({ alg: 'RS256' })
+    .setIssuedAt(now)
+    .setExpirationTime(now + 3600)
+    .setIssuer(sa.client_email)
+    .setSubject(sa.client_email)
+    .setAudience('https://oauth2.googleapis.com/token')
+    .sign(key);
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Firestore token failed: ${data.error_description || data.error}`);
+  _fsToken = { value: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
+  return _fsToken.value;
+}
+
+async function getCallerRole(uid, projectId) {
+  const token = await getFirestoreToken();
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return null;
+  const doc = await res.json();
+  return doc.fields?.role?.stringValue || null;
+}
+
+const SYNC_ALLOWED_ROLES = new Set([
+  'senior_army_instructor', 'army_instructor', 'district_army_instructor',
+  'battalion_commander', 'battalion_xo', 'battalion_csm', 'sergeant_major',
+  's3_operations', 's6_technology',
+]);
+
 // ── Sheets API helpers ─────────────────────────────────────────────────────────
 
 const SHEET_HEADERS = ['Date', 'Meeting #', 'Meeting Name', 'Attendance', 'Agenda', 'Notes'];
@@ -122,7 +162,7 @@ async function writeSheetsData(token, sheetId, rows) {
   const allRows   = [SHEET_HEADERS, ...rows];
   const range     = `A1:F${allRows.length}`;
   const writeRes  = await fetch(
-    `${base}/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+    `${base}/${sheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
     {
       method: 'PUT',
       headers,
@@ -141,8 +181,8 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   // Rate limit: max 30 req/min per IP (saves happen frequently)
-  try { await checkRateLimit(req, 'sync-meeting-logs', 30, 60); }
-  catch { return res.status(429).json({ error: 'Too many requests' }); }
+  const rl = await checkRateLimit(`sync-meeting-logs:${getClientIp(req)}`, 30, 60);
+  if (!rl.allowed) return res.status(429).json({ error: 'Too many requests' });
 
   const { idToken, logs = [] } = req.body || {};
   if (!idToken) return res.status(400).json({ error: 'Missing idToken' });
@@ -156,11 +196,18 @@ export default async function handler(req, res) {
     });
   }
 
-  // Verify caller
+  // Verify caller and enforce role check — only command/staff may overwrite the sheet
+  let callerUid;
   try {
-    await verifyIdToken(idToken);
+    callerUid = await verifyIdToken(idToken);
   } catch {
     return res.status(401).json({ error: 'Invalid or expired ID token' });
+  }
+
+  const sa = getSA();
+  const callerRole = await getCallerRole(callerUid, sa.project_id);
+  if (!SYNC_ALLOWED_ROLES.has(callerRole)) {
+    return res.status(403).json({ error: 'Only battalion command and staff can sync meeting logs.' });
   }
 
   // Sync

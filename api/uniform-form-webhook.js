@@ -41,8 +41,17 @@
 // can link the submission to the cadet record even if they have no portal
 // account.
 
+import crypto from 'node:crypto';
 import { SignJWT, importPKCS8 } from 'jose';
 import { checkRateLimit } from '../lib/rateLimit.js';
+
+function secretEqual(provided, expected) {
+  if (!expected || typeof provided !== 'string') return false;
+  const a = Buffer.from(provided, 'utf8');
+  const b = Buffer.from(expected,  'utf8');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
 
 // ── Service-account helpers (same pattern as notify-uniform.js) ───────────────
 
@@ -306,7 +315,7 @@ export default async function handler(req, res) {
 
   const { secret: suppliedSecret, responses, submittedAt } = req.body || {};
 
-  if (!suppliedSecret || suppliedSecret !== secret) {
+  if (!secretEqual(suppliedSecret || '', secret)) {
     return res.status(401).json({ error: 'Invalid secret' });
   }
 

@@ -52,20 +52,19 @@ const RECAPTCHA_SITE_KEY = '6Ld3tXwtAAAAAP7tu9bJa3fpwpju6LLDe9T2ujWO';
 // Fallback hash used when Firestore is unreachable or no custom code is set.
 // Change the code via the admin portal (Content → Access Code tab) — it writes
 // the SHA-256 hash to settings/signupCode so this value is only a last resort.
-const FALLBACK_SECRET_HASH = "587059e56cc6592a6054a0606758a821cc9eb7657635eb13f4b7c88a17e7ad7a";
-
 const SignUp = () => {
   usePageMeta({ title: 'Create Account' });
 
-  // Active secret-code hash — loaded from Firestore on mount; falls back to the
-  // compile-time constant if the doc is missing or the read fails.
-  const [activeSecretHash, setActiveSecretHash] = useState(FALLBACK_SECRET_HASH);
+  // Active secret-code hash — loaded from Firestore on mount.
+  // null = still loading; '' = load failed (signup blocked until retry).
+  // The hash is never compiled into the bundle — it lives only in Firestore.
+  const [activeSecretHash, setActiveSecretHash] = useState(null);
   useEffect(() => {
     getDoc(doc(db, 'settings', 'signupCode'))
       .then(snap => {
-        if (snap.exists() && snap.data().hash) setActiveSecretHash(snap.data().hash);
+        setActiveSecretHash((snap.exists() && snap.data().hash) ? snap.data().hash : '');
       })
-      .catch(() => { /* network error — stay on fallback */ });
+      .catch(() => { setActiveSecretHash(''); });
   }, []);
 
   // Load the reCAPTCHA Enterprise script lazily so it's only present while the
@@ -156,6 +155,14 @@ const SignUp = () => {
       return;
     }
 
+    if (activeSecretHash === null) {
+      setError("LOADING AUTHORIZATION CODE — PLEASE WAIT.");
+      return;
+    }
+    if (!activeSecretHash) {
+      setError("AUTHORIZATION SERVICE TEMPORARILY UNAVAILABLE. PLEASE TRY AGAIN IN A MOMENT.");
+      return;
+    }
     const enteredHash = await sha256Hex(formData.secretCode.trim());
     if (enteredHash !== activeSecretHash) {
       setError("INVALID SECRET CODE: ACCESS DENIED.");

@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="378"    label="Patches"     />
-        <Stat value="717"    label="Commits"     />
+        <Stat value="395"    label="Patches"     />
+        <Stat value="718"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.189" label="Current"     />
+        <Stat value="v1.8.190" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,20 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.189" date="Nov 17" title="FBI FLASH advisory banner — staff notified of active ARTEX cyberattack campaign" isCurrent changes={<>
+        <Release versions="v1.8.190" date="Nov 17" title="Security — API-layer rate limiting, HTML escaping, role gates, secrets off client bundle" isCurrent changes={<>
+          <C type="sec">Rate limiter applied to all public/semi-public API routes (calendar.ics, leaderboard, notify-*, send-push, sync-meeting-logs, activity-digest) — blocks brute-force and enumeration.</C>
+          <C type="sec">Leadership calendar token moved from VITE_ env var (client bundle) to server-side /api/leadership-cal-token — requires Firebase ID token + L45+ role to retrieve.</C>
+          <C type="sec">Signup secret code hash moved from Firestore-at-build to live Firestore read — hash never compiled into the JS bundle.</C>
+          <C type="sec">Fixed admin-update-account self-approval bypass — a pending cadet calling the endpoint with their own UID could auto-approve themselves; self-calls no longer stamp approved:true.</C>
+          <C type="sec">Removed welcome-notification type bypass from rank check in admin-update-account — all cross-user actions now require rank gate regardless of type.</C>
+          <C type="sec">Invalid role slug now rejected with 400 before role-level check in admin-update-account.</C>
+          <C type="sec">Timing-safe constant-time comparison (crypto.timingSafeEqual) for CRON_SECRET and FORM_WEBHOOK_SECRET across activity-digest, uniform-form-webhook, and leadership-calendar endpoints.</C>
+          <C type="sec">HTML output escaping added to notify-cycle, notify-forms, notify-uniform, send-push, and S1PromotionBoard printed output — prevents XSS via cadet name or role data in emails and print views.</C>
+          <C type="sec">notify-security actor spoofing hardened — event type allowlisted, caller role verified against Firestore before logging, minimum L45 required.</C>
+          <C type="sec">Cloudinary upload refactored to server-signed tokens — API secret never ships to client.</C>
+          <C type="fix">leaderboard.json API field-whitelists response — strips private fields (notes, linkedUid, paymentType, orderNumber) from public leaderboard JSON.</C>
+        </>} />
+        <Release versions="v1.8.189" date="Nov 17" title="FBI FLASH advisory banner — staff notified of active ARTEX cyberattack campaign" isCurrent={false} changes={<>
           <C type="sec">Added dismissable FBI FLASH advisory banner (staff L70+ only) referencing the ARTEX AI-powered attack campaign and linking to the activity log.</C>
           <C type="fix">Banner stored per-session in sessionStorage so it reappears on new logins but can be cleared mid-session without disruption.</C>
         </>} />

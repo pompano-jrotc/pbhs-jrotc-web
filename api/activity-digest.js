@@ -14,9 +14,26 @@
 //   ⚠️  role_change, approve (high-attention)
 //   📋  roster create/update/delete, form, uniform events (standard)
 
+import crypto from 'node:crypto';
 import { SignJWT, importPKCS8 } from 'jose';
+import { checkRateLimit, getClientIp } from '../lib/rateLimit.js';
 
 const FIXED_RECIPIENTS = ['arthuro.pbhs@gmail.com'];
+
+function secretEqual(provided, expected) {
+  if (!expected || typeof provided !== 'string') return false;
+  const a = Buffer.from(provided, 'utf8');
+  const b = Buffer.from(expected,  'utf8');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+const escHtml = (s) => String(s ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
 
 let _serviceAccount = null;
 function getServiceAccount() {
@@ -200,9 +217,9 @@ function formatEntryRow(e) {
     hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York',
   }) : '';
   return `<tr style="border-bottom:1px solid #1e2d40;">
-    <td style="padding:6px 8px;font-size:11px;color:#64748b;white-space:nowrap;">${time}</td>
-    <td style="padding:6px 8px;font-size:11px;color:#94a3b8;">${e.userFullName || ''}</td>
-    <td style="padding:6px 8px;font-size:12px;color:#cbd5e0;">${e.description || ''}</td>
+    <td style="padding:6px 8px;font-size:11px;color:#64748b;white-space:nowrap;">${escHtml(time)}</td>
+    <td style="padding:6px 8px;font-size:11px;color:#94a3b8;">${escHtml(e.userFullName)}</td>
+    <td style="padding:6px 8px;font-size:12px;color:#cbd5e0;">${escHtml(e.description)}</td>
   </tr>`;
 }
 
@@ -217,7 +234,7 @@ function buildDigestEmail({ period, dateRange, hazards, groups, totalCount }) {
       ${hazards.map(h => `
         <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">
           <span style="color:${h.level === 'critical' ? '#e53e3e' : '#f59e0b'};font-size:12px;flex-shrink:0;">${h.level === 'critical' ? '🚨' : '⚠️'}</span>
-          <span style="font-size:12px;color:#e2e8f0;">${h.message}</span>
+          <span style="font-size:12px;color:#e2e8f0;">${escHtml(h.message)}</span>
         </div>
       `).join('')}
     </div>
@@ -292,17 +309,23 @@ export default async function handler(req, res) {
   const isPost = req.method === 'POST';
   if (!isGet && !isPost) return res.status(405).json({ error: 'Method not allowed' });
 
+  // Rate limit: max 10 calls per 5 minutes to guard against CRON_SECRET brute-force
+  // and to prevent Resend credit exhaustion via repeated triggers.
+  const rl = await checkRateLimit(`activity-digest:${getClientIp(req)}`, 10, 300);
+  if (!rl.allowed) return res.status(429).json({ error: 'Too many requests' });
+
   // Authenticate: Vercel Cron sends Authorization: Bearer <CRON_SECRET>
   // Manual POST must include { secret: process.env.CRON_SECRET }
   const cronSecret = process.env.CRON_SECRET;
   if (isGet) {
     const authHeader = req.headers['authorization'] || '';
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!secretEqual(provided, cronSecret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
   } else {
     const { secret } = req.body || {};
-    if (!cronSecret || secret !== cronSecret) {
+    if (!secretEqual(secret || '', cronSecret)) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
   }

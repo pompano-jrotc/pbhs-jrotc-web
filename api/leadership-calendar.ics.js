@@ -4,11 +4,13 @@
 // and private leadership events (leadershipCalendar collection).
 // Only accessible with the correct LEADERSHIP_CAL_TOKEN query parameter.
 //
-// Runs as a Vercel Edge Function.
+// Runs as a Vercel Serverless Function (Node.js runtime) so it can use
+// the Redis rate limiter in lib/rateLimit.js.
 // Uses a Firebase service account (FIREBASE_SERVICE_ACCOUNT env var) to bypass
 // Firestore security rules for the private leadershipCalendar collection.
 
-export const config = { runtime: 'edge' };
+import crypto from 'node:crypto';
+import { checkRateLimit, getClientIp } from '../lib/rateLimit.js';
 
 const PROJECT_ID = 'pbhs-jrotc-web';
 
@@ -90,19 +92,33 @@ async function fetchCol(name, accessToken) {
   return (data.documents || []).map(parseDoc).filter(e => e.date);
 }
 
-export default async function handler(request) {
-  // Require secret token in ?t= query param
-  const url      = new URL(request.url);
-  const provided = url.searchParams.get('t') || '';
+function tokenEqual(provided, expected) {
+  if (!expected || typeof provided !== 'string') return false;
+  const a = Buffer.from(provided, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'GET') return res.status(405).send('Method Not Allowed');
+
+  // Rate limit per IP — prevents brute-force of the secret token
+  const ip = getClientIp(req);
+  const rl = await checkRateLimit(`leadership-cal:${ip}`, 20, 60);
+  if (!rl.allowed) return res.status(429).send('Too Many Requests');
+
+  // Require secret token in ?t= query param (constant-time comparison)
+  const provided = req.query.t || '';
   const expected = process.env.LEADERSHIP_CAL_TOKEN || '';
-  if (!expected || provided !== expected) {
-    return new Response('Unauthorized', { status: 401 });
+  if (!tokenEqual(provided, expected)) {
+    return res.status(401).send('Unauthorized');
   }
 
   try {
     const saJson = process.env.FIREBASE_SERVICE_ACCOUNT;
     if (!saJson) {
-      return new Response('Calendar feed not configured — set FIREBASE_SERVICE_ACCOUNT', { status: 503 });
+      return res.status(503).send('Calendar feed not configured — set FIREBASE_SERVICE_ACCOUNT');
     }
     const sa = JSON.parse(saJson);
     const accessToken = await getAccessToken(sa);
@@ -157,16 +173,13 @@ export default async function handler(request) {
 
     lines.push('END:VCALENDAR');
 
-    return new Response(lines.join('\r\n') + '\r\n', {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/calendar; charset=utf-8',
-        'Content-Disposition': 'inline; filename="pbhs-jrotc-leadership.ics"',
-        'Cache-Control': 'private, max-age=21600',
-      },
-    });
+    return res.status(200).set({
+      'Content-Type': 'text/calendar; charset=utf-8',
+      'Content-Disposition': 'inline; filename="pbhs-jrotc-leadership.ics"',
+      'Cache-Control': 'private, max-age=21600',
+    }).send(lines.join('\r\n') + '\r\n');
   } catch (err) {
     console.error('leadership-calendar.ics error:', err);
-    return new Response('Internal error', { status: 500 });
+    return res.status(500).send('Internal error');
   }
 }
