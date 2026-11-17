@@ -499,20 +499,21 @@ const AdminFundraiser = () => {
 
   const activeEntries = useMemo(() => displayEntries.filter(e => !e.voided), [displayEntries]);
   const totalAmount   = useMemo(() => activeEntries.reduce((s, e) => s + (e.amount || 0), 0), [activeEntries]);
-  const totalFlags    = useMemo(() => activeEntries.reduce((s, e) => s + (e.flags  || 0), 0), [activeEntries]);
+  const totalFlags    = useMemo(() => Math.floor(totalAmount / 2), [totalAmount]);
 
   const rosterAggregated = useMemo(() => {
     const byId = {};
     activeEntries.forEach(e => {
       const key = e.cadetId === 'manual' ? `manual_${e.cadetName}` : e.cadetId;
-      if (!byId[key]) byId[key] = { cadetId: e.cadetId, cadetName: e.cadetName, company: e.company, total: 0, flags: 0, count: 0, lastAt: null };
+      if (!byId[key]) byId[key] = { cadetId: e.cadetId, cadetName: e.cadetName, company: e.company, total: 0, count: 0, lastAt: null };
       byId[key].total += e.amount || 0;
-      byId[key].flags += e.flags  || 0;
       byId[key].count += 1;
       if (!byId[key].lastAt || (e.submittedAt?.seconds > byId[key].lastAt?.seconds)) {
         byId[key].lastAt = e.submittedAt;
       }
     });
+    // Flags derived from cadet total — never summed from per-entry floors
+    Object.values(byId).forEach(agg => { agg.flags = Math.floor(agg.total / 2); });
     const viewingAll = canViewAll && !filterCompany;
     const rosterSource = viewingAll
       ? allRoster.filter(r => !r.graduated).map(r => ({ uid: r.id, fullName: r.fullName, company: r.company, rank: r.rank, letLevel: r.letLevel }))
@@ -552,7 +553,7 @@ const AdminFundraiser = () => {
 
   // ── Personal-view computed ────────────────────────────────────────────────────
   const myTotal = useMemo(() => myEntries.reduce((s, e) => s + (e.amount || 0), 0), [myEntries]);
-  const myFlags = useMemo(() => myEntries.reduce((s, e) => s + (e.flags  || 0), 0), [myEntries]);
+  const myFlags = useMemo(() => Math.floor(myTotal / 2), [myTotal]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const showToast = useCallback(msg => {
@@ -582,14 +583,14 @@ const AdminFundraiser = () => {
       const byId = {};
       bnEntriesList.forEach(e => {
         const key = e.cadetId === 'manual' ? `manual_${e.cadetName}` : e.cadetId;
-        if (!byId[key]) byId[key] = { cadetId: e.cadetId, cadetName: e.cadetName, company: e.company, total: 0, flags: 0, count: 0, lastAt: null };
+        if (!byId[key]) byId[key] = { cadetId: e.cadetId, cadetName: e.cadetName, company: e.company, total: 0, count: 0, lastAt: null };
         byId[key].total += e.amount || 0;
-        byId[key].flags += e.flags  || 0;
         byId[key].count += 1;
         if (!byId[key].lastAt || (e.submittedAt?.seconds > byId[key].lastAt?.seconds)) {
           byId[key].lastAt = e.submittedAt;
         }
       });
+      Object.values(byId).forEach(agg => { agg.flags = Math.floor(agg.total / 2); });
       const bnRows = bnCadetsList.map(c => ({
         uid: c.uid || c.id, fullName: c.fullName, company: c.company, rank: c.rank, letLevel: c.letLevel || '',
         ...(byId[c.uid || c.id] || { total: 0, flags: 0, count: 0, lastAt: null }),

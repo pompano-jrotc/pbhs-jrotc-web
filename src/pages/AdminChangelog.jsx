@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="375"    label="Patches"     />
-        <Stat value="714"    label="Commits"     />
+        <Stat value="378"    label="Patches"     />
+        <Stat value="717"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.186" label="Current"     />
+        <Stat value="v1.8.189" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,19 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.186" date="Nov 13" title="Security — users create path missing role-level cap allows user managers to create accounts above their own level" isCurrent changes={<>
+        <Release versions="v1.8.189" date="Nov 17" title="FBI FLASH advisory banner — staff notified of active ARTEX cyberattack campaign" isCurrent changes={<>
+          <C type="sec">Added dismissable FBI FLASH advisory banner (staff L70+ only) referencing the ARTEX AI-powered attack campaign and linking to the activity log.</C>
+          <C type="fix">Banner stored per-session in sessionStorage so it reappears on new logins but can be cleared mid-session without disruption.</C>
+        </>} />
+        <Release versions="v1.8.188" date="Nov 17" title="Fix — fundraiser total flags miscalculate when a cadet has multiple small entries" isCurrent={false} changes={<>
+          <C type="fix">Flags now derived from each cadet's running total (Math.floor(total / 2)) instead of being summed from per-transaction floors — eliminates flag undercounting when a cadet has many entries under $2.</C>
+          <C type="fix">Applied same fix to company summary card, personal view, and print-roster battalion merge path.</C>
+        </>} />
+        <Release versions="v1.8.187" date="Nov 13" title="Security — cadetChallengeRecords missing field restriction allows assistants to falsify scores and inject cross-company data" isCurrent={false} changes={<>
+          <C type="sec">Added hasOnly field restriction to cadetChallengeRecords L35 update paths — blocks changes to company, cadetId, linkedUid, cycleNumber; allows only score fields and audit metadata.</C>
+          <C type="sec">Locked cadetChallengeCycles L35 update path against company field mutation — prevents assistants from re-pointing a cycle document to another company.</C>
+        </>} />
+        <Release versions="v1.8.186" date="Nov 13" title="Security — users create path missing role-level cap allows user managers to create accounts above their own level" isCurrent={false} changes={<>
           <C type="sec">firestore.rules: the isUserManager() create path on /users had no role-level cap — an S1 adjutant (level 70) could directly create a battalion_commander (level 90) account with approved:true, bypassing the same constraint already enforced on the update path (which blocks setting role &gt;= caller&apos;s own level); split the combined allow create, delete into separate rules so create now carries roleLevel(request.resource.data.role) &lt; myLevel() while delete retains the plain isUserManager() check</C>
         </>} />
         <Release versions="v1.8.185" date="Nov 13" title="Security — roster company command update path allows moving cadets across companies" isCurrent={false} changes={<>

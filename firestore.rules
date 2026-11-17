@@ -451,7 +451,8 @@ service cloud.firestore {
       );
       allow update: if isSignedIn() && (
         myLevel() >= 70 ||
-        (myLevel() >= 35 && resource.data.company == userDoc().company)
+        (myLevel() >= 35 && resource.data.company == userDoc().company &&
+          request.resource.data.company == resource.data.company)
       );
       allow delete: if isSignedIn() && myLevel() >= 70;
     }
@@ -475,8 +476,16 @@ service cloud.firestore {
       );
       allow update: if isSignedIn() && (
         myLevel() >= 70 ||
-        (myLevel() >= 35 && resource.data.company == userDoc().company) ||
-        (myLevel() >= 35 && resource.data.secondaryCompany == userDoc().company)
+        (myLevel() >= 35 && resource.data.company == userDoc().company &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+            ['pushUps', 'sitUps', 'shuttleRun', 'oneMile', 'sitNReach',
+             'medicalExempt', 'exemptEvents', 'enteredByUid', 'enteredByName',
+             'cadetName', 'updatedAt'])) ||
+        (myLevel() >= 35 && resource.data.secondaryCompany == userDoc().company &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+            ['pushUps', 'sitUps', 'shuttleRun', 'oneMile', 'sitNReach',
+             'medicalExempt', 'exemptEvents', 'enteredByUid', 'enteredByName',
+             'cadetName', 'updatedAt']))
       );
       // Company-level users (35+) may delete records from their own company;
       // staff (70+) may delete any record.

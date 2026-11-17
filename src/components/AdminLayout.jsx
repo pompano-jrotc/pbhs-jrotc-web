@@ -11,13 +11,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Menu, MessageSquare, Bug, Lightbulb, MessageCircle, X, Send, Loader2 } from 'lucide-react';
+import { Menu, MessageSquare, Bug, Lightbulb, MessageCircle, X, Send, Loader2, ShieldAlert } from 'lucide-react';
 import AdminSidebar from './AdminSidebar';
 import SessionLockScreen from './SessionLockScreen';
 import Footer from './Footer';
 import { db } from '../firebase';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
+import { ROLE_HIERARCHY } from '../constants';
 
 // ── Feedback widget (floating button + modal) ─────────────────────────────────
 const BLANK_FEEDBACK = { type: 'Bug', title: '', description: '', priority: 'Medium' };
@@ -172,6 +173,44 @@ const FeedbackWidget = () => {
   );
 };
 
+// ── FBI FLASH security advisory banner (staff 70+ only, dismissable per session) ─
+const ADVISORY_KEY = 'secAdvisory_ARTEX_v1';
+
+const SecurityAdvisoryBanner = () => {
+  const { userData } = useAuth();
+  const [dismissed, setDismissed] = useState(() => {
+    try { return sessionStorage.getItem(ADVISORY_KEY) === '1'; } catch { return false; }
+  });
+
+  const level = ROLE_HIERARCHY[userData?.role] || 0;
+  if (level < 70 || dismissed) return null;
+
+  const handleDismiss = () => {
+    try { sessionStorage.setItem(ADVISORY_KEY, '1'); } catch {}
+    setDismissed(true);
+  };
+
+  return (
+    <div className="bg-red-950/90 border-b border-red-800/60 px-4 py-2.5 flex items-center gap-3 backdrop-blur-sm">
+      <ShieldAlert size={14} className="text-red-400 shrink-0" />
+      <p className="text-xs text-red-200 flex-1 leading-relaxed">
+        <span className="font-black uppercase tracking-widest text-red-400 mr-2 text-[10px]">FBI FLASH Advisory</span>
+        AI-powered cyberattack tool (ARTEX) actively targeting organizations — review portal activity and report anything unusual to your SAI.{' '}
+        <a href="/admin/logs" className="underline text-red-300 hover:text-white transition-colors font-bold">
+          Activity Log →
+        </a>
+      </p>
+      <button
+        onClick={handleDismiss}
+        aria-label="Dismiss advisory"
+        className="text-red-600 hover:text-red-300 transition-colors shrink-0 ml-2"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 const AdminLayout = () => {
   // Initialise from sessionStorage so a page refresh while locked stays locked.
@@ -236,6 +275,7 @@ const AdminLayout = () => {
           </span>
         </div>
 
+        <SecurityAdvisoryBanner />
         <Outlet />
         <Footer />
       </div>
