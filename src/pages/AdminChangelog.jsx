@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.199" date="Nov 17" title="Security — unapproved accounts bypass API role gates in send-push, notify, cloudinary-sign (K-01)" isCurrent changes={<>
+        <Release versions="v1.8.200" date="Nov 17" title="Security — unapproved accounts bypass role gate in notify-security.js (L-01)" isCurrent changes={<>
+          <C type="sec">notify-security.js: getUserByUid did not check approved field — an unapproved company command account (approved:false, role:company_commander+, level 45+) could call the endpoint and send security alert emails (self_edit_attempt, duplicate_role, mass_changes) to instructors and the BC, enabling social-engineering alerts; fixed getUserByUid to return null when approved === false, which causes the main handler to return 403.</C>
+        </>} />
+        <Release versions="v1.8.199" date="Nov 17" title="Security — unapproved accounts bypass API role gates in send-push, notify, cloudinary-sign (K-01)" isCurrent={false} changes={<>
           <C type="sec">send-push.js: verifyAndGetLevel read role without checking approved field — an unapproved instructor (approved:false, role:army_instructor+) would get userLevel 95-105 and pass the staff 70+ gate, able to send push notifications and global email broadcasts to all approved battalion members before any admin reviewed their account; fixed to return userLevel 0 when approved === false.</C>
           <C type="sec">notify.js: getUserByUid did not return or check approved field — same unapproved-account bypass; unapproved instructors could send cycle/forms/supply/uniform email notifications; fixed getUserByUid to return approved field and added 403 guard in the main handler.</C>
           <C type="sec">cloudinary-sign.js: getCallerLevel did not check approved field — unapproved instructors could generate Cloudinary upload signatures (command-tier 45+ required) before account approval; fixed to return 0 when approved === false.</C>

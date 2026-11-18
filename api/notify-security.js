@@ -77,6 +77,9 @@ async function getUserByUid(accessToken, projectId, uid) {
   if (!res.ok) return null;
   const doc = await res.json();
   if (!doc.fields) return null;
+  const approved = doc.fields.approved?.booleanValue;
+  // approved === false → pending approval; absent → legacy (treat as approved).
+  if (approved === false) return null;
   return {
     fullName: doc.fields.fullName?.stringValue || '',
     role:     doc.fields.role?.stringValue     || '',
