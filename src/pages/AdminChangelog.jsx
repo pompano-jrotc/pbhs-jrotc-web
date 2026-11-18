@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="395"    label="Patches"     />
-        <Stat value="718"    label="Commits"     />
+        <Stat value="396"    label="Patches"     />
+        <Stat value="719"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.190" label="Current"     />
+        <Stat value="v1.8.191" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,12 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.190" date="Nov 17" title="Security — API-layer rate limiting, HTML escaping, role gates, secrets off client bundle" isCurrent changes={<>
+        <Release versions="v1.8.191" date="Nov 17" title="Infra — consolidate 5 API routes into 2 to stay within Vercel Hobby 12-function limit" isCurrent changes={<>
+          <C type="fix">notify-cycle, notify-forms, notify-supply, notify-uniform merged into a single /api/notify dispatcher — handler field selects the sub-handler; reduces function count by 4.</C>
+          <C type="fix">leadership-cal-token merged into leadership-calendar.ics as ?action=token branch — reduces function count by 1 (net: 16 → 12 functions).</C>
+          <C type="sec">s6-reminder target now validated via Firestore role lookup (email → company_s6_assistant check) instead of trusting caller-supplied email.</C>
+        </>} />
+        <Release versions="v1.8.190" date="Nov 17" title="Security — API-layer rate limiting, HTML escaping, role gates, secrets off client bundle" isCurrent={false} changes={<>
           <C type="sec">Rate limiter applied to all public/semi-public API routes (calendar.ics, leaderboard, notify-*, send-push, sync-meeting-logs, activity-digest) — blocks brute-force and enumeration.</C>
           <C type="sec">Leadership calendar token moved from VITE_ env var (client bundle) to server-side /api/leadership-cal-token — requires Firebase ID token + L45+ role to retrieve.</C>
           <C type="sec">Signup secret code hash moved from Firestore-at-build to live Firestore read — hash never compiled into the JS bundle.</C>

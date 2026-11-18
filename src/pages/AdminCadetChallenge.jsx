@@ -889,11 +889,11 @@ const AdminCadetChallenge = ({ hideHeader = false }) => {
 
       // Email notification
       const idToken = await getIdToken(auth.currentUser);
-      const res = await fetch('/api/notify-cycle', {
+      const res = await fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'finalize', idToken,
+          handler: 'cycle', type: 'finalize', idToken,
           cycleNumber: selectedCycle,
           company: activeCompany,
           submitterName: userData?.fullName || '',
@@ -1030,11 +1030,11 @@ const AdminCadetChallenge = ({ hideHeader = false }) => {
       }, { merge: true });
 
       const idToken = await getIdToken(auth.currentUser);
-      await fetch('/api/notify-cycle', {
+      await fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 'send-back', idToken,
+          handler: 'cycle', type: 'send-back', idToken,
           cycleNumber: selectedCycle,
           company: sendBackConf.company,
           note: sendBackNote.trim(),

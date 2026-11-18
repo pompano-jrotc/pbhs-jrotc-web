@@ -533,11 +533,11 @@ const AdminUniformSizes = ({ hideHeader = false }) => {
           // Notify S4 logistics
           try {
             const idToken = await getIdToken(auth.currentUser);
-            await fetch('/api/notify-uniform', {
+            await fetch('/api/notify', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                type: 'pending',
+                handler: 'uniform', type: 'pending',
                 idToken,
                 company: activeCompany,
                 cadetName: form.cadetName,
@@ -620,11 +620,11 @@ const AdminUniformSizes = ({ hideHeader = false }) => {
       // Notify S4 logistics + battalion XO
       try {
         const idToken = await getIdToken(auth.currentUser);
-        await fetch('/api/notify-uniform', {
+        await fetch('/api/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            type:          'submit',
+            handler: 'uniform', type: 'submit',
             idToken,
             company:       activeCompany,
             submitterName: userData?.fullName || '',

@@ -874,10 +874,11 @@ const AdminS1 = ({ hideHeader = false, forceTab = null }) => {
         .filter(s => s.status === 'pending')
         .map(s => ({ name: s.cadetName, company: s.company, rank: s.rank }));
 
-      const res = await fetch('/api/notify-forms', {
+      const res = await fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          handler: 'forms',
           idToken,
           eventId:     selectedEvent.id,
           eventTitle:  selectedEvent.title,

@@ -287,11 +287,11 @@ const UniformRequests = () => {
       // Best-effort notification — notify Battalion S4 of the new request
       try {
         const idToken = await auth.currentUser.getIdToken();
-        await fetch('/api/notify-uniform', {
+        await fetch('/api/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            type: 'item-request',
+            handler: 'uniform', type: 'item-request',
             idToken,
             company: formData.company,
             cadetName: formData.cadetName,

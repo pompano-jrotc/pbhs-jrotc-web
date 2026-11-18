@@ -130,7 +130,7 @@ const ExportModal = ({ events, onClose }) => {
   useEffect(() => {
     if (!user) return;
     user.getIdToken()
-      .then(idToken => fetch('/api/leadership-cal-token', {
+      .then(idToken => fetch('/api/leadership-calendar.ics?action=token', {
         headers: { Authorization: `Bearer ${idToken}` },
       }))
       .then(r => r.ok ? r.json() : Promise.reject(new Error('fetch failed')))

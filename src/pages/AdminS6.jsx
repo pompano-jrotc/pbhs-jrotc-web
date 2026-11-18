@@ -520,11 +520,11 @@ const TodayTab = ({ user, userData, showToast }) => {
       const targets = checklist?.completedByEmail
         ? [{ email: checklist.completedByEmail, name: checklist.completedByName }]
         : assistants;
-      await Promise.all(targets.map(a => fetch('/api/notify-cycle', {
+      await Promise.all(targets.map(a => fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: 's6-reminder', idToken,
+          handler: 'cycle', type: 's6-reminder', idToken,
           assistantEmail: a.email, assistantName: a.fullName || a.name || '',
           cartName: cart.name,
         }),

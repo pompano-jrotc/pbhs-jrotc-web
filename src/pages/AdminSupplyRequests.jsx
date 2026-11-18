@@ -183,10 +183,11 @@ function SubmitForm({ userProfile }) {
       // Fire-and-forget email notification
       const auth = getAuth();
       auth.currentUser?.getIdToken().then(idToken => {
-        fetch('/api/notify-supply', {
+        fetch('/api/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            handler: 'supply',
             idToken,
             requesterName: userProfile.fullName || 'Unknown',
             company:       userProfile.company  || '',
