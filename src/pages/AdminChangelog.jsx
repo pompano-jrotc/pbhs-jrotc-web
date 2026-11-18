@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="397"    label="Patches"     />
+        <Stat value="402"    label="Patches"     />
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.203" label="Current"     />
+        <Stat value="v1.8.204" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,14 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.203" date="Nov 18" title="Security hardening — pen test phase 2: timingSafeEqual, session lock, private events, Firestore rules (Q-01/Q-06/Q-08/Q-10–13/S-01–03/C-01)" isCurrent changes={<>
+        <Release versions="v1.8.204" date="Nov 18" title="Security hardening — pen test phase 2 cont.: leaderboard removed, 13 Firestore read rules tightened, Storage deletes locked to API route (P-01/Q-02/T-01/T-03/R-02/Q-07/U-01)" isCurrent changes={<>
+          <C type="sec">Deleted api/leaderboard.json.js and src/pages/AdminLeaderboard.jsx — public API enumerated all cadet Firebase Auth UIDs without authentication; removed all nav, route, and visibility references (P-01, Q-02)</C>
+          <C type="sec">firestore.rules: 13 collections (companyAnnouncements, camps, cadetChallengeRecords, s2Items, s6Carts, s6Tasks, fallenHeroes, scholarshipBoard, achievementWall, afiSessions, pollVotes, specialTeams, specialTeams/results) changed allow read from isSignedIn() to isSignedIn() &amp;&amp; myLevel() &gt;= 1 — unapproved accounts (myLevel()=0) could read protected data; also closes Q-07 (pollVotes) (T-01)</C>
+          <C type="sec">firestore.rules/specialTeams: allow update email fallback removed — UID-only gate now that all docs have commanderUids from P-02 migration; eliminates email-based authorization (T-03)</C>
+          <C type="sec">firestore.rules/supplyRequests: create rule did not enforce requestedByUid == request.auth.uid — any company command (45+) could submit with forged requestedByUid; added field enforcement (R-02)</C>
+          <C type="sec">storage.rules: direct deletes on form-submissions/ and meeting-attachments/ changed to allow delete: if false; new api/storage-delete.js verifies Firebase ID token and checks caller level &gt;= 70 before deleting; AdminS1.jsx and AdminMeetingLogs.jsx updated to call the route (U-01)</C>
+        </>} />
+        <Release versions="v1.8.203" date="Nov 18" title="Security hardening — pen test phase 2: timingSafeEqual, session lock, private events, Firestore rules (Q-01/Q-06/Q-08/Q-10–13/S-01–03/C-01)" isCurrent={false} changes={<>
           <C type="sec">api/uniform-form-webhook.js, activity-digest.js, leadership-calendar.ics.js: pre-length check before timingSafeEqual leaked shared-secret byte-length via timing side-channel; replaced with SHA-256 hash of both values before compare so digests are always equal length (Q-01)</C>
           <C type="sec">firestore.rules/conversations: unapproved accounts (myLevel()=0, T-01 bypass) could create DM conversations; added myLevel() &gt;= 1 to create rule (Q-06); also blocked participantUids mutations on update so no participant can remove another member (C-01)</C>
           <C type="sec">AdminStaff.jsx: Meeting Logs tab was shown to any cadet (userLevel &gt;= 5) but Firestore meetingLogs rule requires level 45+; changed canSeeMeetingLogs threshold to 45 to match server-side rule (Q-08)</C>

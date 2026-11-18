@@ -22,7 +22,6 @@ export const DEFAULT_VISIBILITY = {
   photos:            true,
   events:            true,
   quizzes:           true,
-  leaderboard:       true,
 };
 
 export function usePageVisibility() {

@@ -30,12 +30,11 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { writeLog } from '../lib/writeLog';
-import { db, auth, storage } from '../firebase';
+import { db, auth } from '../firebase';
 import {
   collection, query, where, onSnapshot,
   writeBatch, doc, getDocs, Timestamp, updateDoc, deleteDoc, increment,
 } from 'firebase/firestore';
-import { ref as storageRef, deleteObject } from 'firebase/storage';
 import { validateCadetDocument } from '../utils/validateUpload';
 import { uploadFileToPath } from '../utils/storageUploadPhoto';
 import {
@@ -831,7 +830,10 @@ const AdminS1 = ({ hideHeader = false, forceTab = null }) => {
 
       // Clean up old file if there was one, then update the submission record.
       if (sub.fileStoragePath) {
-        try { await deleteObject(storageRef(storage, sub.fileStoragePath)); } catch { /* non-fatal */ }
+        try {
+          const idToken = await auth.currentUser?.getIdToken();
+          if (idToken) await fetch('/api/storage-delete', { method: 'POST', headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ storagePath: sub.fileStoragePath }) });
+        } catch { /* non-fatal */ }
       }
       await updateDoc(doc(db, 'formSubmissions', sub.id), {
         fileUrl:         url,

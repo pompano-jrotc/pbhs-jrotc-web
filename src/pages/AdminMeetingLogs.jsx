@@ -39,12 +39,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { writeLog } from '../lib/writeLog';
-import { db, auth, storage } from '../firebase';
+import { db, auth } from '../firebase';
 import {
   collection, query, where, onSnapshot,
   doc, addDoc, updateDoc, deleteDoc, Timestamp,
 } from 'firebase/firestore';
-import { ref as storageRef, deleteObject } from 'firebase/storage';
 import { uploadFileToPath } from '../utils/storageUploadPhoto';
 import {
   NotepadText, Plus, X, Pencil, Trash2,
@@ -365,7 +364,10 @@ const AdminMeetingLogs = ({ hideHeader = false }) => {
         const result = await uploadFileToPath(attachFile, path);
         // Delete old attachment from Storage if replacing
         if (activeLog?.attachmentStoragePath) {
-          try { await deleteObject(storageRef(storage, activeLog.attachmentStoragePath)); } catch { /* best-effort */ }
+          try {
+            const idToken = await auth.currentUser?.getIdToken();
+            if (idToken) await fetch('/api/storage-delete', { method: 'POST', headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ storagePath: activeLog.attachmentStoragePath }) });
+          } catch { /* best-effort */ }
         }
         attachmentUrl         = result.url;
         attachmentName        = attachFile.name;
@@ -373,7 +375,10 @@ const AdminMeetingLogs = ({ hideHeader = false }) => {
       } else if (clearAttach) {
         // User removed the attachment
         if (activeLog?.attachmentStoragePath) {
-          try { await deleteObject(storageRef(storage, activeLog.attachmentStoragePath)); } catch { /* best-effort */ }
+          try {
+            const idToken = await auth.currentUser?.getIdToken();
+            if (idToken) await fetch('/api/storage-delete', { method: 'POST', headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ storagePath: activeLog.attachmentStoragePath }) });
+          } catch { /* best-effort */ }
         }
         attachmentUrl = null; attachmentName = null; attachmentStoragePath = null;
       }
@@ -452,7 +457,10 @@ const AdminMeetingLogs = ({ hideHeader = false }) => {
     setDeleting(log.id);
     try {
       if (log.attachmentStoragePath) {
-        try { await deleteObject(storageRef(storage, log.attachmentStoragePath)); } catch { /* best-effort */ }
+        try {
+          const idToken = await auth.currentUser?.getIdToken();
+          if (idToken) await fetch('/api/storage-delete', { method: 'POST', headers: { Authorization: `Bearer ${idToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ storagePath: log.attachmentStoragePath }) });
+        } catch { /* best-effort */ }
       }
       await deleteDoc(doc(db, 'meetingLogs', log.id));
       const updatedLogs = logs.filter(l => l.id !== log.id);

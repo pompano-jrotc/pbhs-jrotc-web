@@ -61,7 +61,6 @@ const AdminWelcome = lazy(() => import('./pages/AdminWelcome'));
 const Newsletters = lazy(() => import('./pages/Newsletters'));
 const AdminNewsletters = lazy(() => import('./pages/AdminNewsletters'));
 const AdminCadetChallenge = lazy(() => import('./pages/AdminCadetChallenge'));
-const AdminLeaderboard    = lazy(() => import('./pages/AdminLeaderboard'));
 const AdminRoster         = lazy(() => import('./pages/AdminRoster'));
 const AdminS2             = lazy(() => import('./pages/AdminS2'));
 const AdminS6             = lazy(() => import('./pages/AdminS6'));
@@ -243,7 +242,6 @@ const AppContent = () => {
           {/* Welcome/onboarding wizard — no sidebar, accessible to any signed-in user */}
           <Route path="/admin/welcome" element={<ProtectedRoute><AdminWelcome /></ProtectedRoute>} />
           <Route path="/about" element={<AboutPage />} />
-          <Route path="/leaderboard" element={<AdminLeaderboard />} />
           {/* Safety-net redirect: Home.jsx hero used "/About" (capital A) which
               React Router v6 treats as a distinct path — this catches any
               bookmarks or links still using the old casing. */}
@@ -339,8 +337,6 @@ const AppContent = () => {
             <Route path="/admin/participation" element={<Navigate to="/admin/staff?tab=s1" replace />} />
 
             <Route path="/admin/stats" element={<Navigate to="/admin/staff?tab=s6" replace />} />
-
-            <Route path="/admin/leaderboard" element={<ProtectedRoute><AdminLeaderboard /></ProtectedRoute>} />
 
             {/* Legacy routes → Personnel Hub */}
             <Route path="/admin/cadet-challenge" element={<Navigate to="/admin/personnel?tab=challenge" replace />} />

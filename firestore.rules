@@ -175,12 +175,11 @@ service cloud.firestore {
     }
 
     match /specialTeams/{teamId} {
-      allow read: if isSignedIn();
-      // UID-first gate (new saves); email fallback for legacy docs without commanderUids.
+      allow read: if isSignedIn() && myLevel() >= 1;
+      // UID-based gate only; email fallback removed — all docs migrated to commanderUids via P-02.
       allow update: if isSignedIn() && (
         isAdmin() ||
-        (resource.data.commanderUids != null && request.auth.uid in resource.data.commanderUids) ||
-        (resource.data.commanderUids == null && request.auth.token.email.lower() in resource.data.commanderEmails)
+        (resource.data.commanderUids != null && request.auth.uid in resource.data.commanderUids)
       );
       allow create, delete: if isSignedIn() && isAdmin();
     }
@@ -212,7 +211,7 @@ service cloud.firestore {
     // filters by company; a per-document rule on an unfiltered query is
     // rejected by Firestore before it reaches the client.
     match /companyAnnouncements/{id} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && myLevel() >= 1;
       allow create: if isSignedIn() && (
         // Battalion staff (70+) may post to any company
         myLevel() >= 70 ||
@@ -313,7 +312,7 @@ service cloud.firestore {
     }
 
     match /camps/{id} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && myLevel() >= 1;
       allow write: if isSignedIn() && myLevel() >= 70;
     }
 
@@ -497,9 +496,8 @@ service cloud.firestore {
     // Their records are stored under company='Zulu' but must also be readable
     // and writable by Alpha's S1 assistant (via secondaryCompany match).
     match /cadetChallengeRecords/{docId} {
-      // Any signed-in portal member can read records — powers the public
-      // Battalion Leaderboard page visible to all cadets.
-      allow read: if isSignedIn();
+      // Approved portal members (myLevel() >= 1) can read cadet challenge records.
+      allow read: if isSignedIn() && myLevel() >= 1;
       allow create: if isSignedIn() && (
         myLevel() >= 70 ||
         (myLevel() >= 35 && request.resource.data.company == userDoc().company) ||
@@ -530,7 +528,7 @@ service cloud.firestore {
     // Managed by s2_intelligence (70+). Readable by all authenticated users
     // (assistants need the item list when completing their assignment).
     match /s2Items/{itemId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && myLevel() >= 1;
       allow write: if isSignedIn() && (
         userDoc().role == 's2_intelligence' || myLevel() >= 85
       );
@@ -560,7 +558,7 @@ service cloud.firestore {
     // Managed by s6_technology. Readable by all authenticated users
     // (assistants and S5 need the cart list).
     match /s6Carts/{cartId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && myLevel() >= 1;
       allow write: if isSignedIn() && (
         userDoc().role == 's6_technology' || myLevel() >= 85
       );
@@ -570,7 +568,7 @@ service cloud.firestore {
     // Permanent checklist tasks managed by s6_technology.
     // Readable by all authenticated users (assistants and S5 need the list).
     match /s6Tasks/{taskId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && myLevel() >= 1;
       allow write: if isSignedIn() && (
         userDoc().role == 's6_technology' || myLevel() >= 85
       );
@@ -705,7 +703,7 @@ service cloud.firestore {
     // Approve/fulfill/deny: admin (80+) only.
     // Delete: admin (80+) only.
     match /supplyRequests/{id} {
-      allow create: if isSignedIn() && myLevel() >= 45;
+      allow create: if isSignedIn() && myLevel() >= 45 && request.resource.data.requestedByUid == request.auth.uid;
       allow read: if isSignedIn() && (
         myLevel() >= 80 ||
         resource.data.requestedByUid == request.auth.uid
@@ -764,7 +762,7 @@ service cloud.firestore {
     // ── Fallen Heroes ─────────────────────────────────────────────────────────
     // Honor roll of fallen alumni. All signed-in users can read; staff (70+) can write.
     match /fallenHeroes/{id} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && myLevel() >= 1;
       allow create, update, delete: if isSignedIn() && myLevel() >= 70;
     }
 
@@ -1018,7 +1016,7 @@ service cloud.firestore {
     // Doc ID format: {announcementId}_{userId}
     // create fires only for new documents; update fires on existing ones → prevents vote changes.
     match /pollVotes/{voteId} {
-      allow read:   if isSignedIn();
+      allow read:   if isSignedIn() && myLevel() >= 1;
       allow create: if isSignedIn()
                     && request.resource.data.userId == request.auth.uid;
       allow update, delete: if false;
@@ -1147,7 +1145,7 @@ service cloud.firestore {
     //         staff (70+) may update any field.
     // Delete: staff (70+).
     match /scholarshipBoard/{id} {
-      allow read:   if isSignedIn();
+      allow read:   if isSignedIn() && myLevel() >= 1;
       allow create: if isSignedIn() && myLevel() >= 70;
       allow update: if isSignedIn() && (
         myLevel() >= 70 ||
@@ -1161,7 +1159,7 @@ service cloud.firestore {
     // Read:   any signed-in portal member (visible-flag filtering is client-side).
     // Write:  staff (70+) only.
     match /achievementWall/{id} {
-      allow read:                   if isSignedIn();
+      allow read:                   if isSignedIn() && myLevel() >= 1;
       allow create, update, delete: if isSignedIn() && myLevel() >= 70;
     }
 
@@ -1172,7 +1170,7 @@ service cloud.firestore {
     //         they cannot finalize sessions or modify title/date/inspector/notes.
     // Delete: staff (70+) only.
     match /afiSessions/{id} {
-      allow read:   if isSignedIn();
+      allow read:   if isSignedIn() && myLevel() >= 1;
       allow create: if isSignedIn() && myLevel() >= 70;
       allow update: if isSignedIn() && (
         myLevel() >= 70 ||
@@ -1188,7 +1186,7 @@ service cloud.firestore {
     // Create/Delete: command tier (45+) — matches the canEdit gate in
     //                AdminTeamsPrivate.jsx (COMMAND_L = 45).
     match /specialTeams/{teamId}/results/{resultId} {
-      allow read:          if isSignedIn();
+      allow read:          if isSignedIn() && myLevel() >= 1;
       allow create, delete: if isSignedIn() && myLevel() >= 45;
     }
 

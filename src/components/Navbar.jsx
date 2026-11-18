@@ -144,14 +144,14 @@ const Navbar = () => {
             )}
 
             {/* --- BATTALION DROPDOWN (shows if any sub-item is visible) --- */}
-            {(vis.announcements || vis.newsletter || vis.photos || vis.events || vis.leaderboard) && (
+            {(vis.announcements || vis.newsletter || vis.photos || vis.events) && (
             <div className="relative group py-5">
               <div
                 className="flex items-center gap-1 cursor-pointer text-slate-500 dark:text-slate-400"
                 onClick={() => { setDesktopBattalionOpen(o => !o); setDesktopCadetOpen(false); setDesktopQuizzesOpen(false); }}
               >
                 <span className={`text-[11px] font-black uppercase tracking-[0.3em] transition-colors
-                  ${['/announcements', '/photos', '/events', '/leaderboard'].includes(currentPath) ? 'text-yellow-500' : 'group-hover:text-slate-900 dark:group-hover:text-white'}`}>
+                  ${['/announcements', '/photos', '/events'].includes(currentPath) ? 'text-yellow-500' : 'group-hover:text-slate-900 dark:group-hover:text-white'}`}>
                   Battalion
                 </span>
                 <ChevronDown size={14} />
@@ -170,9 +170,6 @@ const Navbar = () => {
                 )}
                 {vis.photos && !isActive('/photos') && (
                   <Link to="/photos" className="block p-3 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-colors">Photo Gallery</Link>
-                )}
-                {vis.leaderboard && !isActive('/leaderboard') && (
-                  <Link to="/leaderboard" className="block p-3 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-colors">Battalion Board</Link>
                 )}
               </div>
             </div>
@@ -295,7 +292,7 @@ const Navbar = () => {
               )}
 
               {/* Mobile Battalion Accordion Node */}
-              {(vis.announcements || vis.newsletter || vis.photos || vis.events || vis.leaderboard) && (
+              {(vis.announcements || vis.newsletter || vis.photos || vis.events) && (
               <div className="py-2 border-b border-white/5">
                 <button
                   onClick={() => setMobileBattalionOpen(!mobileBattalionOpen)}
@@ -310,7 +307,6 @@ const Navbar = () => {
                     {vis.newsletter && <MobileNavLink to="/newsletter" currentPath={currentPath} onNavigate={closeMenu} indent>Newsletter</MobileNavLink>}
                     {vis.events && <MobileNavLink to="/events" currentPath={currentPath} onNavigate={closeMenu} indent>Calendar</MobileNavLink>}
                     {vis.photos && <MobileNavLink to="/photos" currentPath={currentPath} onNavigate={closeMenu} indent>Photo Gallery</MobileNavLink>}
-                    {vis.leaderboard && <MobileNavLink to="/leaderboard" currentPath={currentPath} onNavigate={closeMenu} indent>Battalion Board</MobileNavLink>}
                   </div>
                 )}
               </div>

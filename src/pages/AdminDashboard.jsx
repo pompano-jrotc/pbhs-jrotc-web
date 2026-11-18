@@ -15,7 +15,6 @@ import {
   ChevronRight,
   ShieldAlert,
   Clock,
-  BarChart3,
   Megaphone,
 } from 'lucide-react';
 import AnimatedNumber from '../components/AnimatedNumber';
@@ -298,23 +297,6 @@ const AdminDashboard = () => {
                 View Full Stats <ChevronRight size={14} />
               </Link>
             </div>
-
-            {/* Battalion Leaderboard button */}
-            <Link
-              to="/admin/leaderboard"
-              className="flex items-center justify-between bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-2xl px-6 py-4 shadow-sm transition-all hover:border-yellow-500/40 group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-yellow-500/10 flex items-center justify-center text-yellow-500 group-hover:bg-yellow-500 group-hover:text-slate-950 transition-all">
-                  <BarChart3 size={16} />
-                </div>
-                <div>
-                  <p className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-slate-200">Battalion Leaderboard</p>
-                  <p className="text-[10px] text-slate-400 font-medium mt-0.5">Top cadets per event by company</p>
-                </div>
-              </div>
-              <ChevronRight size={16} className="text-slate-400 group-hover:text-yellow-500 transition-colors" />
-            </Link>
 
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/5 rounded-3xl p-8 shadow-sm transition-colors">
               <div className="flex justify-between items-center mb-6">
