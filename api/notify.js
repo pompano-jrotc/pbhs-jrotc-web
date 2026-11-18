@@ -252,6 +252,7 @@ async function handleForms(body, caller, accessToken, projectId, res) {
     return res.status(403).json({ error: 'Not authorized to send reminders' });
   }
   if (pendingCadets.length === 0) return res.status(400).json({ error: 'No pending cadets — nothing to send' });
+  if (pendingCadets.length > 500) return res.status(400).json({ error: 'pendingCadets exceeds maximum size (500)' });
 
   const [s1s, allXOs] = await Promise.all([
     getUsersByRole(accessToken, projectId, 's1_adjutant'),
@@ -469,12 +470,87 @@ async function handleUniform(body, caller, accessToken, projectId, res) {
   return res.status(400).json({ error: `Unknown type: ${type}` });
 }
 
+// ── handler: 'recommend-ribbon' (unauthenticated — public community portal) ───
+// Body: cadetDisplayName, recommenderName, reason, ribbonTypeId, ribbonName,
+//       ribbonCode, recommenderEmail, recommenderRelation, rosterDocId, cadetCompany
+// Rate limit: 10 requests/hour per IP (independent of the authenticated notify limit).
+async function handleRecommendRibbon(body, ip, res) {
+  const rl = await checkRateLimit(`ribbon-recommend:${ip}`, 10, 3600);
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', '3600');
+    return res.status(429).json({ error: 'Too many submissions — please try again later.' });
+  }
+
+  const {
+    cadetDisplayName, recommenderName, reason,
+    ribbonTypeId, ribbonName, ribbonCode,
+    recommenderEmail, recommenderRelation,
+    rosterDocId, cadetCompany,
+  } = body;
+
+  if (!cadetDisplayName || typeof cadetDisplayName !== 'string' || cadetDisplayName.trim().length < 2)
+    return res.status(400).json({ error: 'cadetDisplayName required (min 2 chars)' });
+  if (!recommenderName || typeof recommenderName !== 'string' || recommenderName.trim().length < 2)
+    return res.status(400).json({ error: 'recommenderName required (min 2 chars)' });
+  if (!reason || typeof reason !== 'string' || reason.trim().length < 10)
+    return res.status(400).json({ error: 'reason required (min 10 chars)' });
+  if (!ribbonTypeId || typeof ribbonTypeId !== 'string')
+    return res.status(400).json({ error: 'ribbonTypeId required' });
+  if (!ribbonName || typeof ribbonName !== 'string')
+    return res.status(400).json({ error: 'ribbonName required' });
+
+  const accessToken = await getAccessToken();
+  const account = getServiceAccount();
+  const projectId = account.project_id;
+
+  const doc = {
+    fields: {
+      rosterDocId:          { stringValue: String(rosterDocId  || '') },
+      cadetDisplayName:     { stringValue: cadetDisplayName.trim() },
+      cadetCompany:         { stringValue: String(cadetCompany || '') },
+      ribbonTypeId:         { stringValue: String(ribbonTypeId) },
+      ribbonName:           { stringValue: String(ribbonName) },
+      ribbonCode:           { stringValue: String(ribbonCode  || '') },
+      reason:               { stringValue: reason.trim() },
+      recommenderName:      { stringValue: recommenderName.trim() },
+      recommenderEmail:     { stringValue: String(recommenderEmail?.trim() || '') },
+      recommenderRelation:  { stringValue: String(recommenderRelation || '') },
+      submittedByUid:       { nullValue: null },
+      status:               { stringValue: 'pending' },
+      createdAt:            { timestampValue: new Date().toISOString() },
+      reviewedByUid:        { nullValue: null },
+      reviewedByName:       { nullValue: null },
+      reviewedAt:           { nullValue: null },
+      convertedToAwardId:   { nullValue: null },
+    },
+  };
+
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/ribbonRecommendations`;
+  const result = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(doc),
+  });
+
+  if (!result.ok) {
+    const errText = await result.text();
+    console.error('recommend-ribbon Firestore write error:', errText);
+    return res.status(502).json({ error: 'Failed to submit recommendation' });
+  }
+  return res.status(201).json({ success: true });
+}
+
 // ── Main exported handler ─────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { handler: subHandler, idToken } = req.body || {};
+
+  // recommend-ribbon is a public (unauthenticated) sub-handler — handle before auth.
+  if (subHandler === 'recommend-ribbon') {
+    return handleRecommendRibbon(req.body, getClientIp(req), res);
+  }
 
   const VALID_HANDLERS = new Set(['cycle', 'forms', 'supply', 'uniform']);
   if (!subHandler || !VALID_HANDLERS.has(subHandler)) {

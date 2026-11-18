@@ -207,9 +207,10 @@ async function fetchCol(name, accessToken) {
 
 function tokenEqual(provided, expected) {
   if (!expected || typeof provided !== 'string') return false;
-  const a = Buffer.from(provided, 'utf8');
-  const b = Buffer.from(expected, 'utf8');
-  if (a.length !== b.length) return false;
+  // Hash both values to equal-length digests so timingSafeEqual cannot be used
+  // to infer secret length via early exit (Q-01).
+  const a = crypto.createHash('sha256').update(provided).digest();
+  const b = crypto.createHash('sha256').update(expected).digest();
   return crypto.timingSafeEqual(a, b);
 }
 

@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.202" label="Current"     />
+        <Stat value="v1.8.203" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,19 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.202" date="Nov 18" title="Fix O-01 and P-02 — RecommendRibbon portal restored; specialTeams UID-based auth" isCurrent changes={<>
+        <Release versions="v1.8.203" date="Nov 18" title="Security hardening — pen test phase 2: timingSafeEqual, session lock, private events, Firestore rules (Q-01/Q-06/Q-08/Q-10–13/S-01–03/C-01)" isCurrent changes={<>
+          <C type="sec">api/uniform-form-webhook.js, activity-digest.js, leadership-calendar.ics.js: pre-length check before timingSafeEqual leaked shared-secret byte-length via timing side-channel; replaced with SHA-256 hash of both values before compare so digests are always equal length (Q-01)</C>
+          <C type="sec">firestore.rules/conversations: unapproved accounts (myLevel()=0, T-01 bypass) could create DM conversations; added myLevel() &gt;= 1 to create rule (Q-06); also blocked participantUids mutations on update so no participant can remove another member (C-01)</C>
+          <C type="sec">AdminStaff.jsx: Meeting Logs tab was shown to any cadet (userLevel &gt;= 5) but Firestore meetingLogs rule requires level 45+; changed canSeeMeetingLogs threshold to 45 to match server-side rule (Q-08)</C>
+          <C type="sec">firestore.rules/orders + promotionBoards: both had allow read: if isSignedIn() with no level check — T-01 bypass accounts could read operational orders and promotion board data; added myLevel() &gt;= 1 to block unapproved accounts (Q-10)</C>
+          <C type="sec">firestore.rules/ribbonRecommendations: create rule did not enforce submittedByUid == request.auth.uid — any signed-in user could forge recommenderName / submittedByUid; added field enforcement and myLevel() &gt;= 1 gate (Q-11)</C>
+          <C type="sec">firestore.rules/scholarshipBoard: any signed-in user (including unapproved) could overwrite bookmarkedBy field; added myLevel() &gt;= 1 guard on the bookmarkedBy-only update path (Q-12)</C>
+          <C type="sec">api/recommend-ribbon.js (new): public ribbon recommendation portal was broken for unauthenticated community members after v1.8.184 added isSignedIn() to Firestore create rule; added server-side API route with IP rate limiting (10 req/hr) using Admin SDK, restoring the community submission workflow; RecommendRibbon.jsx now routes guest submissions through /api/recommend-ribbon and authenticated users directly via SDK (Q-13)</C>
+          <C type="sec">firestore.rules/events + api/calendar.ics.js: private events (isPrivate:true) were readable unauthenticated via Firestore REST and included in the public calendar.ics feed; added rule allow read: if resource.data.isPrivate != true || isSignedIn() and filtered private events from the .ics response (S-01, S-02)</C>
+          <C type="sec">useIdleLogout.js + AdminLayout.jsx + AdminSidebar.jsx: session lock used sessionStorage (tab-scoped) so opening a new tab bypassed the lock screen while the Firebase session remained live; replaced with BroadcastChannel so all same-origin tabs lock together (S-03)</C>
+          <C type="fix">api/notify.js: pendingCadets array had no size cap — a large payload could cause excessive email sends; added 500-item limit (Q-03)</C>
+        </>} />
+        <Release versions="v1.8.202" date="Nov 18" title="Fix O-01 and P-02 — RecommendRibbon portal restored; specialTeams UID-based auth" isCurrent={false} changes={<>
           <C type="fix">RecommendRibbon.jsx: ribbon recommendation portal was silently broken for all non-command users — Firestore rule required isSignedIn() &amp;&amp; myLevel() &gt;= 45 but the page is designed for any portal member (parents, cadets, community); lowered create rule to isSignedIn() (any authenticated user), swapped field validation from rosterDocId to cadetDisplayName so manual name entry works, added sign-in gate UI for unauthenticated visitors, and added a free-text cadet name input for users whose roster access is insufficient to use the picker.</C>
           <C type="fix">firestore.rules/ribbonTypes: changed read rule from isSignedIn() to if true so unauthenticated visitors can see the available ribbon catalog on the RecommendRibbon page (ribbon names and descriptions contain no PII).</C>
           <C type="sec">AdminTeams.jsx: now stores commanderUids (Firebase UIDs) alongside commanderEmails on every team save — uid is captured from the personnel picker when a leader is selected; accessibleTeams check prefers UID over email for teams with commanderUids populated.</C>

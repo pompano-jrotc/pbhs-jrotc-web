@@ -93,28 +93,55 @@ const RecommendRibbon = () => {
     setSubmitting(true);
     setError(null);
     try {
-      await addDoc(collection(db, 'ribbonRecommendations'), {
-        rosterDocId:      selectedCadet?.id || '',
-        cadetDisplayName: resolvedCadetName,
-        cadetCompany:     selectedCadet?.company || '',
-        ribbonTypeId:     selectedRibbon.id,
-        ribbonName:       selectedRibbon.name,
-        ribbonCode:       selectedRibbon.code || '',
-        reason:           reason.trim(),
-        recommenderName:  recommenderName.trim(),
-        recommenderEmail: recommenderEmail.trim() || null,
-        recommenderRelation: relation,
-        submittedByUid:   user?.uid || null,
-        status:           'pending',
-        createdAt:        serverTimestamp(),
-        reviewedByUid:    null,
-        reviewedByName:   null,
-        reviewedAt:       null,
-        convertedToAwardId: null,
-      });
+      if (user) {
+        // Authenticated cadets write directly via Firestore SDK.
+        await addDoc(collection(db, 'ribbonRecommendations'), {
+          rosterDocId:         selectedCadet?.id || '',
+          cadetDisplayName:    resolvedCadetName,
+          cadetCompany:        selectedCadet?.company || '',
+          ribbonTypeId:        selectedRibbon.id,
+          ribbonName:          selectedRibbon.name,
+          ribbonCode:          selectedRibbon.code || '',
+          reason:              reason.trim(),
+          recommenderName:     recommenderName.trim(),
+          recommenderEmail:    recommenderEmail.trim() || null,
+          recommenderRelation: relation,
+          submittedByUid:      user.uid,
+          status:              'pending',
+          createdAt:           serverTimestamp(),
+          reviewedByUid:       null,
+          reviewedByName:      null,
+          reviewedAt:          null,
+          convertedToAwardId:  null,
+        });
+      } else {
+        // Unauthenticated community members (parents, etc.) go through the
+        // server-side API route which uses Admin SDK and enforces rate limiting.
+        const res = await fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            handler:             'recommend-ribbon',
+            rosterDocId:         selectedCadet?.id || '',
+            cadetDisplayName:    resolvedCadetName,
+            cadetCompany:        selectedCadet?.company || '',
+            ribbonTypeId:        selectedRibbon.id,
+            ribbonName:          selectedRibbon.name,
+            ribbonCode:          selectedRibbon.code || '',
+            reason:              reason.trim(),
+            recommenderName:     recommenderName.trim(),
+            recommenderEmail:    recommenderEmail.trim() || null,
+            recommenderRelation: relation,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Submission failed');
+        }
+      }
       setSubmitted(true);
     } catch (err) {
-      setError('Something went wrong — please try again.');
+      setError(err.message || 'Something went wrong — please try again.');
       console.error(err);
     } finally {
       setSubmitting(false);

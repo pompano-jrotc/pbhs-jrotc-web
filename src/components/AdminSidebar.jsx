@@ -79,6 +79,7 @@ const AdminSidebar = ({
     if (deviceTrusted) {
       sessionStorage.setItem('sessionLocked', '1');
       window.dispatchEvent(new CustomEvent('idle-session-lock'));
+      try { const bc = new BroadcastChannel('jrotc-session-lock'); bc.postMessage({ type: 'idle-session-lock' }); bc.close(); } catch {}
     } else {
       clearDeviceTrust();
       signOut(auth);

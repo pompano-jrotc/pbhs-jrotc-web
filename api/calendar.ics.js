@@ -96,6 +96,7 @@ function parseDoc(doc) {
     location:    get('location',    'stringValue'),
     time:        get('time',        'stringValue'),
     description: get('description', 'stringValue'),
+    isPrivate:   fields.isPrivate?.booleanValue === true,
   };
 }
 
@@ -117,7 +118,7 @@ export default async function handler(req, res) {
       rawDocs = await fetchEventDocs(`Bearer ${token}`);
       if (rawDocs === null) return res.status(502).send('Upstream Firestore error');
     }
-    const docs = rawDocs.map(parseDoc).filter(e => e.date);
+    const docs = rawDocs.map(parseDoc).filter(e => e.date && !e.isPrivate);
 
     const lines = [
       'BEGIN:VCALENDAR',

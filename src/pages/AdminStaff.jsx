@@ -55,7 +55,7 @@ const AdminStaff = () => {
   // ── S1 sub-tab visibility ─────────────────────────────────────────────────────
   const canSeeFormTracker    = ['company_s7_assistant', 'company_s4_assistant', 'company_s2_assistant', 'company_s1_assistant'].includes(role) || userLevel >= 45;
   const canSeePromotionBoard = ['company_1sg', 'company_xo', 'company_commander', 's7_special_projects', 's2_intelligence', 's1_adjutant', 'sergeant_major'].includes(role) || userLevel >= 85;
-  const canSeeMeetingLogs    = userLevel >= 5;
+  const canSeeMeetingLogs    = userLevel >= 45;
   const canSeeCamps          = isBattalionStaff;
   const canSeeParticipation  = isBattalionStaff;
   const canSeeAwardsRegistry   = userLevel >= 45;

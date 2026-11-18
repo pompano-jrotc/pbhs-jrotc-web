@@ -235,7 +235,21 @@ const AdminLayout = () => {
   useEffect(() => {
     const handleLock = () => setLocked(true);
     window.addEventListener('idle-session-lock', handleLock);
-    return () => window.removeEventListener('idle-session-lock', handleLock);
+    // Also listen for lock events broadcast from other tabs (S-03).
+    let bc;
+    try {
+      bc = new BroadcastChannel('jrotc-session-lock');
+      bc.onmessage = (e) => {
+        if (e.data?.type === 'idle-session-lock') {
+          sessionStorage.setItem('sessionLocked', '1');
+          setLocked(true);
+        }
+      };
+    } catch {}
+    return () => {
+      window.removeEventListener('idle-session-lock', handleLock);
+      try { bc?.close(); } catch {}
+    };
   }, []);
 
   // Close sidebar when route changes (user tapped a nav link)

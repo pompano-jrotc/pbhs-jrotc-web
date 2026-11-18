@@ -228,7 +228,7 @@ service cloud.firestore {
     // Public calendar — readable without auth. Staff tier (70+) can create;
     // creators at any level can edit/delete their own events.
     match /events/{id} {
-      allow read: if true;
+      allow read: if resource.data.isPrivate != true || isSignedIn();
       allow create: if isSignedIn() && myLevel() >= 70;
       allow update, delete: if isSignedIn() && (
         myLevel() >= 70 ||
@@ -240,7 +240,7 @@ service cloud.firestore {
     // create: staff (70+) only — design intent; command tier had no server-side
     //         targets enforcement, allowing audience manipulation bypassing client.
     match /orders/{id} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && myLevel() >= 1;
       allow create: if isSignedIn() && myLevel() >= 70 &&
                     request.resource.data.issuerRole == userDoc().role;
       allow update, delete: if isSignedIn() &&
@@ -723,7 +723,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && (
         userDoc().role == 's1_adjutant' || myLevel() >= 85
       );
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && myLevel() >= 1;
       allow update: if isSignedIn() && (
         userDoc().role == 's1_adjutant' || myLevel() >= 85 ||
         // Company top-3 (45+: CC/XO/1SG) may only toggle companyStatus (submit/unlock their company).
@@ -1090,7 +1090,10 @@ service cloud.firestore {
     // to any verified battalion member.
     match /ribbonRecommendations/{id} {
       allow read:   if isSignedIn() && myLevel() >= 45;
-      allow create: if isSignedIn() &&
+      // Authenticated users (level 1+) submit directly; unauthenticated community
+      // members go through /api/recommend-ribbon (server-side, Admin SDK, rate-limited).
+      allow create: if isSignedIn() && myLevel() >= 1 &&
+                       request.resource.data.submittedByUid == request.auth.uid &&
                        request.resource.data.cadetDisplayName is string &&
                        request.resource.data.cadetDisplayName.size() >= 2 &&
                        request.resource.data.recommenderName is string &&
@@ -1148,7 +1151,8 @@ service cloud.firestore {
       allow create: if isSignedIn() && myLevel() >= 70;
       allow update: if isSignedIn() && (
         myLevel() >= 70 ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bookmarkedBy'])
+        // Approved cadets (level 1+) may only toggle bookmarkedBy; unapproved bypass blocked.
+        (myLevel() >= 1 && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bookmarkedBy']))
       );
       allow delete: if isSignedIn() && myLevel() >= 70;
     }
@@ -1193,10 +1197,12 @@ service cloud.firestore {
     // All access is gated on membership in that array.
     match /conversations/{conversationId} {
       allow read:   if isSignedIn() && request.auth.uid in resource.data.participantUids;
-      // Creator must include themselves in participantUids
-      allow create: if isSignedIn() && request.auth.uid in request.resource.data.participantUids;
-      // Participants update last-message metadata and unread counts
-      allow update: if isSignedIn() && request.auth.uid in resource.data.participantUids;
+      // Creator must include themselves; unapproved accounts cannot initiate DMs.
+      allow create: if isSignedIn() && myLevel() >= 1 && request.auth.uid in request.resource.data.participantUids;
+      // Participants update last-message metadata and unread counts only —
+      // participantUids is immutable after creation to prevent removing other members.
+      allow update: if isSignedIn() && request.auth.uid in resource.data.participantUids &&
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['participantUids']);
       allow delete: if false;
 
       match /messages/{messageId} {

@@ -74,6 +74,12 @@ export const useIdleLogout = (isLoggedIn, uid) => {
     const lockSession = () => {
       sessionStorage.setItem('sessionLocked', '1');
       window.dispatchEvent(new CustomEvent('idle-session-lock'));
+      // Broadcast to all other tabs at the same origin so they lock too (S-03).
+      try {
+        const bc = new BroadcastChannel('jrotc-session-lock');
+        bc.postMessage({ type: 'idle-session-lock' });
+        bc.close();
+      } catch {}
     };
 
     const resetTimer = () => {
