@@ -133,14 +133,20 @@ const SYNC_ALLOWED_ROLES = new Set([
 
 const SHEET_HEADERS = ['Date', 'Meeting #', 'Meeting Name', 'Attendance', 'Agenda', 'Notes'];
 
+// Prefix strings that start with spreadsheet formula triggers to prevent injection.
+function sanitizeCell(val) {
+  if (typeof val !== 'string') return val;
+  return /^[=+\-@\t\r]/.test(val) ? "'" + val : val;
+}
+
 function buildRows(logs) {
   return logs.map(l => [
-    l.meetingDate   || '',
+    sanitizeCell(l.meetingDate   || ''),
     l.meetingNumber != null ? l.meetingNumber : '',
-    l.meetingName   || '',
-    l.attendance    || '',
-    (l.agendaItems  || []).join('\n'),
-    (l.noteItems    || []).join('\n'),
+    sanitizeCell(l.meetingName   || ''),
+    sanitizeCell(l.attendance    || ''),
+    sanitizeCell((l.agendaItems  || []).join('\n')),
+    sanitizeCell((l.noteItems    || []).join('\n')),
   ]);
 }
 

@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.192" label="Current"     />
+        <Stat value="v1.8.193" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,15 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.192" date="Nov 17" title="Pen test fixes — calendar.ics 500, leaderboard rate limiting" isCurrent changes={<>
+        <Release versions="v1.8.193" date="Nov 17" title="Security hardening — HSTS preload, Permissions-Policy, storage listing gate, settings PII, formula injection" isCurrent changes={<>
+          <C type="sec">vercel.json: added Strict-Transport-Security with includeSubDomains and preload directives — previously missing, allowing HSTS stripping on first visit.</C>
+          <C type="sec">vercel.json: added Permissions-Policy header disabling camera, microphone, geolocation, payment, and USB — prevents feature-policy fingerprinting and abuse.</C>
+          <C type="sec">storage.rules: split documents/ allow read into allow get (public) and allow list (authenticated) — prevents unauthenticated enumeration of all uploaded document filenames.</C>
+          <C type="sec">firestore.rules: restricted settings/honorCompany and settings/fundraiserGoal to authenticated reads — these documents contain internal program data not needed by the public nav.</C>
+          <C type="sec">sync-meeting-logs: added sanitizeCell() to buildRows() — prefixes strings starting with =, +, -, @, tab, or CR with a single quote to prevent formula injection in Google Sheets exports.</C>
+          <C type="fix">Added /.well-known/security.txt with security contact — standard disclosure target for responsible researchers.</C>
+        </>} />
+        <Release versions="v1.8.192" date="Nov 17" title="Pen test fixes — calendar.ics 500, leaderboard rate limiting" isCurrent={false} changes={<>
           <C type="fix">calendar.ics: replaced res.set() chain with res.setHeader() calls — Vercel's serverless shim does not return this from set(), causing the response to never send and the function to 500 on every request.</C>
           <C type="sec">leaderboard.json: added CDN edge caching (s-maxage=60, stale-while-revalidate=300) — previously had no rate limiting; Vercel edge cache now limits Firestore calls to ~1/min regardless of traffic.</C>
         </>} />

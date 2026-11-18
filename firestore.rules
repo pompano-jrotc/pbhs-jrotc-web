@@ -326,7 +326,9 @@ service cloud.firestore {
     // Write gated to staff tier (70+) — cadets and company leadership cannot
     // vandalize global config like company names or the Blue/Gold anchor date.
     match /settings/{settingId} {
-      allow read: if true;
+      // pageVisibility and company names must be readable pre-auth (public nav).
+      // honorCompany and fundraiserGoal contain internal program details — auth required.
+      allow read: if settingId != 'honorCompany' && settingId != 'fundraiserGoal' || isSignedIn();
       allow write: if isSignedIn() && myLevel() >= 70;
     }
 
