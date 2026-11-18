@@ -80,8 +80,7 @@ service cloud.firestore {
       // Accounts created before the approved field was introduced have no
       // 'approved' key and are treated as approved.
       let d = userDoc();
-      if ('approved' in d && d.approved == false) return 0;
-      return roleLevel(d.role);
+      return ('approved' in d && d.approved == false) ? 0 : roleLevel(d.role);
     }
 
     // Company 1SG and above — matches COMMAND_LEVEL gate in App.jsx.
