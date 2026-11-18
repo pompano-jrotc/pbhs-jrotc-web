@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.193" label="Current"     />
+        <Stat value="v1.8.201" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.200" date="Nov 17" title="Security — unapproved accounts bypass role gate in notify-security.js (L-01)" isCurrent changes={<>
+        <Release versions="v1.8.201" date="Nov 17" title="UX — delete button visible to company command despite Firestore 70+ requirement (N-01)" isCurrent changes={<>
+          <C type="fix">AdminCadetProfile.jsx: delete (Trash2) button was shown to any user with userLevel &gt;= COMMAND_LEVEL (45) — company commanders, XOs, and 1SGs saw the button and got a silent "Failed — try again" error on click because the Firestore roster delete rule requires myLevel() &gt;= 70 (staff tier); wrapped the delete button in its own STAFF_LEVEL (70) guard to match the actual permission, keeping the edit and history buttons visible to level 45+ as before.</C>
+        </>} />
+        <Release versions="v1.8.200" date="Nov 17" title="Security — unapproved accounts bypass role gate in notify-security.js (L-01)" isCurrent={false} changes={<>
           <C type="sec">notify-security.js: getUserByUid did not check approved field — an unapproved company command account (approved:false, role:company_commander+, level 45+) could call the endpoint and send security alert emails (self_edit_attempt, duplicate_role, mass_changes) to instructors and the BC, enabling social-engineering alerts; fixed getUserByUid to return null when approved === false, which causes the main handler to return 403.</C>
         </>} />
         <Release versions="v1.8.199" date="Nov 17" title="Security — unapproved accounts bypass API role gates in send-push, notify, cloudinary-sign (K-01)" isCurrent={false} changes={<>

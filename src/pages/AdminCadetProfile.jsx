@@ -635,13 +635,15 @@ const AdminCadetProfile = () => {
                 >
                   <History size={14} />
                 </button>
-                <button
-                  onClick={() => setShowDeleteConf(true)}
-                  title="Remove from roster"
-                  className="p-2 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-                >
-                  <Trash2 size={14} />
-                </button>
+                {userLevel >= STAFF_LEVEL && (
+                  <button
+                    onClick={() => setShowDeleteConf(true)}
+                    title="Remove from roster"
+                    className="p-2 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
                 {userLevel >= ADMIN_LEVEL && (
                   <button
                     onClick={() => setShowGradConf(true)}
