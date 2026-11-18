@@ -18,7 +18,11 @@ import crypto from 'node:crypto';
 import { SignJWT, importPKCS8 } from 'jose';
 import { checkRateLimit, getClientIp } from '../lib/rateLimit.js';
 
-const FIXED_RECIPIENTS = ['arthuro.pbhs@gmail.com'];
+// Fixed digest recipients loaded from env to keep personal emails out of source.
+// Set DIGEST_ALERT_RECIPIENTS as a comma-separated list in Vercel environment variables.
+const FIXED_RECIPIENTS = process.env.DIGEST_ALERT_RECIPIENTS
+  ? process.env.DIGEST_ALERT_RECIPIENTS.split(',').map(e => e.trim()).filter(Boolean)
+  : [];
 
 function secretEqual(provided, expected) {
   if (!expected || typeof provided !== 'string') return false;

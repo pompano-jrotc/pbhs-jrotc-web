@@ -155,7 +155,16 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.193" date="Nov 17" title="Security hardening — HSTS preload, Permissions-Policy, storage listing gate, settings PII, formula injection" isCurrent changes={<>
+        <Release versions="v1.8.194" date="Nov 17" title="Security hardening — issuer spoofing, email desync, Redis race, hardcoded emails, pdfUrl injection, CORS" isCurrent changes={<>
+          <C type="sec">send-push: issuer (announcement "Posted by" name) was taken from the request body — any staff member could send announcements falsely attributed to any name; now derived from the caller's verified Firestore fullName, making it impossible to spoof.</C>
+          <C type="sec">send-push: pdfUrl was included in announcement emails without validation — any URL (javascript:, file://, internal SSRF targets) was injectable as the PDF link; added https:// protocol gate, rejecting non-https values with 400.</C>
+          <C type="sec">admin-update-account: 'email' was in SAFE_FIELDS for the update-user-fields type — an admin could update Firestore email without touching Firebase Auth, desyncing the two stores and re-routing notification emails; removed 'email' from that list (email changes must go through the update-email type which updates both atomically).</C>
+          <C type="sec">activity-digest + notify-security: personal email address was hardcoded in source code as a fixed digest/alert recipient — exposed in the public GitHub repo; replaced with DIGEST_ALERT_RECIPIENTS env var (comma-separated list in Vercel environment variables).</C>
+          <C type="sec">lib/rateLimit: INCR and EXPIRE were two separate Redis commands — if EXPIRE failed after INCR, the key would never expire and permanently lock the user out of that endpoint; replaced with a Lua script that atomically INCRs and sets TTL in a single round-trip.</C>
+          <C type="fix">admin-update-account delete-account: Firestore delete response was silently discarded — ghost Firestore records (Auth-deleted, Firestore-alive) were undetectable; now logged as an error so admins can manually clean up.</C>
+          <C type="fix">leaderboard.json: CORS Access-Control-Allow-Origin was set to https://pbhsjrotc.com (non-www) — the production site is https://www.pbhsjrotc.com; corrected to match the actual domain.</C>
+        </>} />
+        <Release versions="v1.8.193" date="Nov 17" title="Security hardening — HSTS preload, Permissions-Policy, storage listing gate, settings PII, formula injection" isCurrent={false} changes={<>
           <C type="sec">vercel.json: added Strict-Transport-Security with includeSubDomains and preload directives — previously missing, allowing HSTS stripping on first visit.</C>
           <C type="sec">vercel.json: added Permissions-Policy header disabling camera, microphone, geolocation, payment, and USB — prevents feature-policy fingerprinting and abuse.</C>
           <C type="sec">storage.rules: split documents/ allow read into allow get (public) and allow list (authenticated) — prevents unauthenticated enumeration of all uploaded document filenames.</C>

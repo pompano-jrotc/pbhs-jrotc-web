@@ -105,7 +105,7 @@ export default async function handler(request) {
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
-        'Access-Control-Allow-Origin': 'https://pbhsjrotc.com',
+        'Access-Control-Allow-Origin': 'https://www.pbhsjrotc.com',
       },
     });
   } catch (err) {
@@ -115,7 +115,7 @@ export default async function handler(request) {
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
-        'Access-Control-Allow-Origin': 'https://pbhsjrotc.com',
+        'Access-Control-Allow-Origin': 'https://www.pbhsjrotc.com',
       },
     });
   }

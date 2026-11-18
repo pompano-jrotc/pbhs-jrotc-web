@@ -20,8 +20,11 @@ const JWKS = createRemoteJWKSet(
   new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
 );
 
-// Fixed recipients always included in security alerts
-const FIXED_ALERT_RECIPIENTS = ['arthuro.pbhs@gmail.com'];
+// Fixed recipients always included in security alerts — loaded from env to keep
+// personal emails out of source code. Set DIGEST_ALERT_RECIPIENTS in Vercel env.
+const FIXED_ALERT_RECIPIENTS = process.env.DIGEST_ALERT_RECIPIENTS
+  ? process.env.DIGEST_ALERT_RECIPIENTS.split(',').map(e => e.trim()).filter(Boolean)
+  : [];
 
 let _serviceAccount = null;
 function getServiceAccount() {

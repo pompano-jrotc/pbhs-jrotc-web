@@ -955,8 +955,11 @@ export default async function handler(req, res) {
 
       // Only these form fields may be written — everything else (uid, createdAt,
       // isManual, etc.) is stripped so the client cannot overwrite system fields.
+      // 'email' is intentionally excluded: login-email changes must go through
+      // the 'update-email' type which updates both Firebase Auth and Firestore
+      // atomically. Allowing 'email' here would desync the two stores.
       const SAFE_FIELDS = [
-        'fullName', 'email', 'company', 'platoon', 'squad', 'rank',
+        'fullName', 'company', 'platoon', 'squad', 'rank',
         'position', 'letLevel', 'gender', 'secondaryCompany', 'status', 'role',
       ];
 
@@ -1028,7 +1031,7 @@ export default async function handler(req, res) {
       // Auth user and Firestore record are independent deletes - run them
       // concurrently. Firestore's REST delete is idempotent-ish (404 on an
       // already-missing doc), so only the Auth deletion's failure is fatal.
-      const [identityRes] = await Promise.all([
+      const [identityRes, fsDeleteRes] = await Promise.all([
         fetch(`https://identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:delete`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
@@ -1043,6 +1046,12 @@ export default async function handler(req, res) {
       if (!identityRes.ok) {
         const data = await identityRes.json();
         throw new Error(data.error?.message || 'Failed to delete the account');
+      }
+      // Firestore delete is non-fatal (a ghost Firestore record can't be used without
+      // an Auth account) but log it so admins can manually clean up if needed.
+      if (!fsDeleteRes.ok) {
+        const fsErr = await fsDeleteRes.json().catch(() => ({}));
+        console.error(`delete-account: Firestore delete failed for uid ${targetUid}:`, fsErr.error?.message || fsDeleteRes.status);
       }
 
       // Fire-and-forget: purge physical measurement data (uniformSizes) and

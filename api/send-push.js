@@ -131,7 +131,8 @@ async function verifyAndGetLevel(idToken) {
   const doc         = await docRes.json();
   const role        = doc.fields?.role?.stringValue || 'cadet';
   const callerCo    = doc.fields?.company?.stringValue || '';
-  return { uid, role, userLevel: HIERARCHY[role] || 0, callerCompany: callerCo };
+  const fullName    = doc.fields?.fullName?.stringValue || '';
+  return { uid, role, userLevel: HIERARCHY[role] || 0, callerCompany: callerCo, fullName };
 }
 
 // ── Push helpers ──────────────────────────────────────────────────────────────
@@ -412,9 +413,8 @@ export default async function handler(req, res) {
     body,
     announcementType,
     content,
-    issuer,
     company,
-    pdfUrl,
+    pdfUrl: rawPdfUrl,
     pdfFileName,
   } = req.body || {};
 
@@ -427,9 +427,9 @@ export default async function handler(req, res) {
   if (doEmail && announcementType === 'company' && !company)
                                                return res.status(400).json({ error: 'Missing company for company announcement' });
 
-  let uid, userLevel, callerCompany;
+  let uid, userLevel, callerCompany, callerFullName;
   try {
-    ({ uid, userLevel, callerCompany } = await verifyAndGetLevel(idToken));
+    ({ uid, userLevel, callerCompany, fullName: callerFullName } = await verifyAndGetLevel(idToken));
   } catch {
     return res.status(401).json({ error: 'Invalid token' });
   }
@@ -444,6 +444,21 @@ export default async function handler(req, res) {
   if (doEmail && announcementType === 'company' && userLevel < 70 &&
       (callerCompany || '').toLowerCase() !== (company || '').toLowerCase())
                                                return res.status(403).json({ error: 'You can only send company announcements to your own company.' });
+
+  // issuer is derived from the verified caller — not the request body — so it cannot be spoofed.
+  const issuer = callerFullName || 'Unknown';
+
+  // pdfUrl must be a well-formed https:// URL if provided.
+  let pdfUrl = null;
+  if (rawPdfUrl) {
+    try {
+      const parsed = new URL(rawPdfUrl);
+      if (parsed.protocol !== 'https:') throw new Error('non-https');
+      pdfUrl = rawPdfUrl;
+    } catch {
+      return res.status(400).json({ error: 'pdfUrl must be a valid https:// URL' });
+    }
+  }
 
   // Per-user cooldown: 1 email announcement per 10 minutes.
   // This prevents accidental double-sends and protects the Resend daily quota.
