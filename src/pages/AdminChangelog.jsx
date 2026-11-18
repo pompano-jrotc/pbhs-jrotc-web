@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="402"    label="Patches"     />
+        <Stat value="403"    label="Patches"     />
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.204" label="Current"     />
+        <Stat value="v1.8.205" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.204" date="Nov 18" title="Security hardening — pen test phase 2 cont.: leaderboard removed, 13 Firestore read rules tightened, Storage deletes locked to API route (P-01/Q-02/T-01/T-03/R-02/Q-07/U-01)" isCurrent changes={<>
+        <Release versions="v1.8.205" date="Nov 18" title="Bug fix — leadership-calendar.ics: res.set() not available in Vercel runtime; replaced with res.setHeader() (OPS-02)" isCurrent changes={<>
+          <C type="fix">api/leadership-calendar.ics.js: res.status(200).set({'{'}...{'}'}) threw TypeError: res.status(...).set is not a function in Vercel Node.js runtime — Express .set() not available; replaced with individual res.setHeader() calls to match calendar.ics.js pattern (OPS-02)</C>
+        </>} />
+        <Release versions="v1.8.204" date="Nov 18" title="Security hardening — pen test phase 2 cont.: leaderboard removed, 13 Firestore read rules tightened, Storage deletes locked to API route (P-01/Q-02/T-01/T-03/R-02/Q-07/U-01)" isCurrent={false} changes={<>
           <C type="sec">Deleted api/leaderboard.json.js and src/pages/AdminLeaderboard.jsx — public API enumerated all cadet Firebase Auth UIDs without authentication; removed all nav, route, and visibility references (P-01, Q-02)</C>
           <C type="sec">firestore.rules: 13 collections (companyAnnouncements, camps, cadetChallengeRecords, s2Items, s6Carts, s6Tasks, fallenHeroes, scholarshipBoard, achievementWall, afiSessions, pollVotes, specialTeams, specialTeams/results) changed allow read from isSignedIn() to isSignedIn() &amp;&amp; myLevel() &gt;= 1 — unapproved accounts (myLevel()=0) could read protected data; also closes Q-07 (pollVotes) (T-01)</C>
           <C type="sec">firestore.rules/specialTeams: allow update email fallback removed — UID-only gate now that all docs have commanderUids from P-02 migration; eliminates email-based authorization (T-03)</C>

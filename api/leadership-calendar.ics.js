@@ -290,11 +290,10 @@ export default async function handler(req, res) {
 
     lines.push('END:VCALENDAR');
 
-    return res.status(200).set({
-      'Content-Type': 'text/calendar; charset=utf-8',
-      'Content-Disposition': 'inline; filename="pbhs-jrotc-leadership.ics"',
-      'Cache-Control': 'private, max-age=21600',
-    }).send(lines.join('\r\n') + '\r\n');
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline; filename="pbhs-jrotc-leadership.ics"');
+    res.setHeader('Cache-Control', 'private, max-age=21600');
+    return res.status(200).send(lines.join('\r\n') + '\r\n');
   } catch (err) {
     console.error('leadership-calendar.ics error:', err);
     return res.status(500).send('Internal error');
