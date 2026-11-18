@@ -490,10 +490,16 @@ async function handleRecommendRibbon(body, ip, res) {
 
   if (!cadetDisplayName || typeof cadetDisplayName !== 'string' || cadetDisplayName.trim().length < 2)
     return res.status(400).json({ error: 'cadetDisplayName required (min 2 chars)' });
+  if (cadetDisplayName.trim().length > 200)
+    return res.status(400).json({ error: 'cadetDisplayName too long (max 200 chars)' });
   if (!recommenderName || typeof recommenderName !== 'string' || recommenderName.trim().length < 2)
     return res.status(400).json({ error: 'recommenderName required (min 2 chars)' });
+  if (recommenderName.trim().length > 200)
+    return res.status(400).json({ error: 'recommenderName too long (max 200 chars)' });
   if (!reason || typeof reason !== 'string' || reason.trim().length < 10)
     return res.status(400).json({ error: 'reason required (min 10 chars)' });
+  if (reason.trim().length > 2000)
+    return res.status(400).json({ error: 'reason too long (max 2000 chars)' });
   if (!ribbonTypeId || typeof ribbonTypeId !== 'string')
     return res.status(400).json({ error: 'ribbonTypeId required' });
   if (!ribbonName || typeof ribbonName !== 'string')
@@ -516,6 +522,7 @@ async function handleRecommendRibbon(body, ip, res) {
       recommenderEmail:     { stringValue: String(recommenderEmail?.trim() || '') },
       recommenderRelation:  { stringValue: String(recommenderRelation || '') },
       submittedByUid:       { nullValue: null },
+      source:               { stringValue: 'public_form' },
       status:               { stringValue: 'pending' },
       createdAt:            { timestampValue: new Date().toISOString() },
       reviewedByUid:        { nullValue: null },

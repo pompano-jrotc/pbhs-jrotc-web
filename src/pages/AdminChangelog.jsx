@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="403"    label="Patches"     />
+        <Stat value="404"    label="Patches"     />
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.205" label="Current"     />
+        <Stat value="v1.8.206" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,12 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.205" date="Nov 18" title="Bug fix — leadership-calendar.ics: res.set() not available in Vercel runtime; replaced with res.setHeader() (OPS-02)" isCurrent changes={<>
+        <Release versions="v1.8.206" date="Nov 18" title="Security hardening — rate limit storage-delete, input length caps on ribbon recommendations, source marker on public submissions" isCurrent changes={<>
+          <C type="sec">api/storage-delete.js: added per-UID rate limit (60 deletes/hr) to prevent bulk deletion from a compromised staff account (V-01)</C>
+          <C type="sec">api/notify.js recommend-ribbon: added max-length validation — cadetDisplayName and recommenderName capped at 200 chars, reason at 2000 chars (V-02)</C>
+          <C type="sec">api/notify.js recommend-ribbon: writes source: &apos;public_form&apos; to Firestore so reviewers know recommenderName is unverified (V-03)</C>
+        </>} />
+        <Release versions="v1.8.205" date="Nov 18" title="Bug fix — leadership-calendar.ics: res.set() not available in Vercel runtime; replaced with res.setHeader() (OPS-02)" changes={<>
           <C type="fix">api/leadership-calendar.ics.js: res.status(200).set({'{'}...{'}'}) threw TypeError: res.status(...).set is not a function in Vercel Node.js runtime — Express .set() not available; replaced with individual res.setHeader() calls to match calendar.ics.js pattern (OPS-02)</C>
         </>} />
         <Release versions="v1.8.204" date="Nov 18" title="Security hardening — pen test phase 2 cont.: leaderboard removed, 13 Firestore read rules tightened, Storage deletes locked to API route (P-01/Q-02/T-01/T-03/R-02/Q-07/U-01)" isCurrent={false} changes={<>

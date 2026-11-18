@@ -8,6 +8,7 @@
 // Headers: Authorization: Bearer <firebase-id-token>
 
 import { jwtVerify, createRemoteJWKSet, SignJWT, importPKCS8 } from 'jose';
+import { checkRateLimit, getClientIp } from '../lib/rateLimit.js';
 
 const ALLOWED_PREFIXES = ['form-submissions/', 'meeting-attachments/'];
 
@@ -98,6 +99,12 @@ export default async function handler(req, res) {
       audience: account.project_id,
     });
     const uid = payload.sub;
+
+    const rl = await checkRateLimit(`storage-delete:${uid}`, 60, 3600);
+    if (!rl.allowed) {
+      res.setHeader('Retry-After', '3600');
+      return res.status(429).json({ error: 'Rate limit exceeded — try again later.' });
+    }
 
     const accessToken = await getAccessToken();
 
