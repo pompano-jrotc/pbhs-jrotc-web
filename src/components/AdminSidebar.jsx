@@ -62,15 +62,15 @@ const AdminSidebar = ({
   }, [role]);
 
   useEffect(() => {
-    const email = userData?.email || auth.currentUser?.email;
-    if (role !== 'sergeant_major' || !email) { setIsOnTeam(false); return; }
+    const uid = userData?.uid || auth.currentUser?.uid;
+    if (role !== 'sergeant_major' || !uid) { setIsOnTeam(false); return; }
     const q = query(
       collection(db, 'specialTeams'),
-      where('commanderEmails', 'array-contains', email)
+      where('commanderUids', 'array-contains', uid)
     );
     const unsub = onSnapshot(q, snap => setIsOnTeam(!snap.empty));
     return () => unsub();
-  }, [role, userData?.email]);
+  }, [role, userData?.uid]);
 
   const uid = userData?.uid || auth.currentUser?.uid;
   const deviceTrusted = isDeviceTrusted(uid);

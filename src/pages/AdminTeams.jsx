@@ -39,8 +39,11 @@ const AdminTeams = ({ hideHeader = false }) => {
   // isAuthorized - referencing a const in a dependency array before its
   // declaration line throws a "Cannot access before initialization" error
   // on every render, not just sometimes.
+  const uid = user?.uid || '';
   const accessibleTeams = teams.filter(t =>
-    isPowerUser || (t.commanderEmails && t.commanderEmails.includes(userEmail))
+    isPowerUser ||
+    (t.commanderUids && t.commanderUids.includes(uid)) ||
+    (!t.commanderUids && t.commanderEmails && t.commanderEmails.includes(userEmail))
   );
   const isAuthorized = isPowerUser || accessibleTeams.length > 0;
 
@@ -107,10 +110,12 @@ const AdminTeams = ({ hideHeader = false }) => {
     e.preventDefault();
     const docId = editingId || formData.name.toLowerCase().replace(/\s+/g, '-');
     const commanderEmails = formData.leadership.map(l => l.email?.toLowerCase().trim()).filter(Boolean);
+    const commanderUids   = formData.leadership.map(l => l.uid).filter(Boolean);
 
     const finalData = {
       ...formData,
       commanderEmails,
+      commanderUids,
       requirements: typeof formData.requirements === 'string' ? formData.requirements.split(',').map(r => r.trim()).filter(Boolean) : formData.requirements,
       disciplines: typeof formData.disciplines === 'string' ? formData.disciplines.split(',').map(d => d.trim()).filter(Boolean) : formData.disciplines,
       updatedAt: new Date(),
@@ -153,7 +158,8 @@ const AdminTeams = ({ hideHeader = false }) => {
       ...updatedLeadership[index],
       name: person?.fullName || '',
       rank: person?.rank || '',
-      email: person?.email || selectedEmail
+      email: person?.email || selectedEmail,
+      uid:  person?.id    || '',
     };
     setFormData({ ...formData, leadership: updatedLeadership });
   };

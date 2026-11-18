@@ -177,9 +177,11 @@ service cloud.firestore {
 
     match /specialTeams/{teamId} {
       allow read: if isSignedIn();
+      // UID-first gate (new saves); email fallback for legacy docs without commanderUids.
       allow update: if isSignedIn() && (
         isAdmin() ||
-        request.auth.token.email.lower() in resource.data.commanderEmails
+        (resource.data.commanderUids != null && request.auth.uid in resource.data.commanderUids) ||
+        (resource.data.commanderUids == null && request.auth.token.email.lower() in resource.data.commanderEmails)
       );
       allow create, delete: if isSignedIn() && isAdmin();
     }
@@ -1024,9 +1026,10 @@ service cloud.firestore {
     }
 
     // Ribbon type catalog — staff (70+) can create/update/delete types;
-    // all authenticated users can read (needed for award modals).
+    // public read so the RecommendRibbon portal can show ribbon options
+    // to unauthenticated visitors; ribbon names contain no PII.
     match /ribbonTypes/{id} {
-      allow read:   if isSignedIn();
+      allow read:   if true;
       allow create: if isSignedIn() && myLevel() >= 70;
       allow update: if isSignedIn() && myLevel() >= 70;
       allow delete: if isSignedIn() && myLevel() >= 80;
@@ -1081,15 +1084,16 @@ service cloud.firestore {
       allow delete: if isSignedIn() && myLevel() >= 70;
     }
 
-    // Ribbon recommendations — anyone signed in or public can create;
-    // staff (70+) can read/update/delete.
-    // Create: command-tier (45+) only — the missing isSignedIn() was a bug that
-    // allowed unauthenticated callers to create fake recommendations.
+    // Ribbon recommendations — any authenticated user can submit (no level
+    // requirement — the portal is intended for cadets, parents, and community);
+    // command-tier (45+) and staff can read; staff can update/delete.
+    // isSignedIn() prevents unauthenticated bot spam while keeping it open
+    // to any verified battalion member.
     match /ribbonRecommendations/{id} {
       allow read:   if isSignedIn() && myLevel() >= 45;
-      allow create: if isSignedIn() && myLevel() >= 45 &&
-                       request.resource.data.rosterDocId is string &&
-                       request.resource.data.rosterDocId.size() > 0 &&
+      allow create: if isSignedIn() &&
+                       request.resource.data.cadetDisplayName is string &&
+                       request.resource.data.cadetDisplayName.size() >= 2 &&
                        request.resource.data.recommenderName is string &&
                        request.resource.data.recommenderName.size() >= 2 &&
                        request.resource.data.reason is string &&

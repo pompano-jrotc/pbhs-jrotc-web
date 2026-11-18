@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.201" label="Current"     />
+        <Stat value="v1.8.202" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,14 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.201" date="Nov 17" title="UX — delete button visible to company command despite Firestore 70+ requirement (N-01)" isCurrent changes={<>
+        <Release versions="v1.8.202" date="Nov 18" title="Fix O-01 and P-02 — RecommendRibbon portal restored; specialTeams UID-based auth" isCurrent changes={<>
+          <C type="fix">RecommendRibbon.jsx: ribbon recommendation portal was silently broken for all non-command users — Firestore rule required isSignedIn() &amp;&amp; myLevel() &gt;= 45 but the page is designed for any portal member (parents, cadets, community); lowered create rule to isSignedIn() (any authenticated user), swapped field validation from rosterDocId to cadetDisplayName so manual name entry works, added sign-in gate UI for unauthenticated visitors, and added a free-text cadet name input for users whose roster access is insufficient to use the picker.</C>
+          <C type="fix">firestore.rules/ribbonTypes: changed read rule from isSignedIn() to if true so unauthenticated visitors can see the available ribbon catalog on the RecommendRibbon page (ribbon names and descriptions contain no PII).</C>
+          <C type="sec">AdminTeams.jsx: now stores commanderUids (Firebase UIDs) alongside commanderEmails on every team save — uid is captured from the personnel picker when a leader is selected; accessibleTeams check prefers UID over email for teams with commanderUids populated.</C>
+          <C type="sec">AdminSidebar.jsx: sergeant_major team-link check switched from commanderEmails array-contains-email query to commanderUids array-contains-uid, eliminating the email-based Firestore query and matching the new UID-first save model.</C>
+          <C type="sec">firestore.rules/specialTeams: allow update now checks request.auth.uid in commanderUids (UID-first) with fallback to commanderEmails for legacy documents that have not been re-saved with UIDs yet, eliminating email-based authorization for updated teams.</C>
+        </>} />
+        <Release versions="v1.8.201" date="Nov 17" title="UX — delete button visible to company command despite Firestore 70+ requirement (N-01)" isCurrent={false} changes={<>
           <C type="fix">AdminCadetProfile.jsx: delete (Trash2) button was shown to any user with userLevel &gt;= COMMAND_LEVEL (45) — company commanders, XOs, and 1SGs saw the button and got a silent "Failed — try again" error on click because the Firestore roster delete rule requires myLevel() &gt;= 70 (staff tier); wrapped the delete button in its own STAFF_LEVEL (70) guard to match the actual permission, keeping the edit and history buttons visible to level 45+ as before.</C>
         </>} />
         <Release versions="v1.8.200" date="Nov 17" title="Security — unapproved accounts bypass role gate in notify-security.js (L-01)" isCurrent={false} changes={<>

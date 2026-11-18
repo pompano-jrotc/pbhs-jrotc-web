@@ -5,11 +5,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, getDocs, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import { Shield, Award, CheckCircle, Search, User, ChevronDown, Loader2, X } from 'lucide-react';
+import { Shield, Award, CheckCircle, Search, User, ChevronDown, Loader2, X, LogIn } from 'lucide-react';
 
 const RELATIONS = [
   { value: 'parent',    label: 'Parent / Guardian' },
@@ -60,6 +60,8 @@ const RecommendRibbon = () => {
     if (!relation)           setRelation('peer');
   }, [userData?.fullName, user?.email]); // eslint-disable-line
 
+  const [manualCadetName, setManualCadetName] = useState('');
+
   const [submitting, setSubmitting] = useState(false);
   const [submitted,  setSubmitted]  = useState(false);
   const [error,      setError]      = useState(null);
@@ -78,21 +80,23 @@ const RecommendRibbon = () => {
   }, [roster, search]);
 
   // ── Submit ────────────────────────────────────────────────────────────────────
+  const resolvedCadetName = selectedCadet?.fullName || manualCadetName.trim();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedCadet)        { setError('Please select a cadet.'); return; }
-    if (!selectedRibbon)       { setError('Please select a ribbon.'); return; }
-    if (!reason.trim())        { setError('Please describe why this cadet deserves this ribbon.'); return; }
+    if (!resolvedCadetName)      { setError('Please select or enter a cadet name.'); return; }
+    if (!selectedRibbon)         { setError('Please select a ribbon.'); return; }
+    if (!reason.trim())          { setError('Please describe why this cadet deserves this ribbon.'); return; }
     if (!recommenderName.trim()) { setError('Your name is required.'); return; }
-    if (!relation)             { setError('Please select your relation to the cadet.'); return; }
+    if (!relation)               { setError('Please select your relation to the cadet.'); return; }
 
     setSubmitting(true);
     setError(null);
     try {
       await addDoc(collection(db, 'ribbonRecommendations'), {
-        rosterDocId:      selectedCadet.id,
-        cadetDisplayName: selectedCadet.fullName || '',
-        cadetCompany:     selectedCadet.company  || '',
+        rosterDocId:      selectedCadet?.id || '',
+        cadetDisplayName: resolvedCadetName,
+        cadetCompany:     selectedCadet?.company || '',
         ribbonTypeId:     selectedRibbon.id,
         ribbonName:       selectedRibbon.name,
         ribbonCode:       selectedRibbon.code || '',
@@ -122,6 +126,7 @@ const RecommendRibbon = () => {
     setSelectedRibbon(null);
     setReason('');
     setSearch('');
+    setManualCadetName('');
     setSubmitted(false);
     setError(null);
   };
@@ -149,7 +154,26 @@ const RecommendRibbon = () => {
 
       {/* ── Main content ── */}
       <section className="pb-24 px-6 md:px-14 max-w-2xl mx-auto">
-        {submitted ? (
+        {!user && !loadingData ? (
+          /* ── Sign-in gate ── */
+          <div className="bg-slate-900 border border-white/10 rounded-3xl p-10 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center mx-auto mb-6">
+              <LogIn className="text-yellow-400" size={28} />
+            </div>
+            <h2 className="text-xl font-black uppercase italic tracking-tighter text-white mb-3">
+              Sign in to Submit
+            </h2>
+            <p className="text-slate-400 text-sm leading-relaxed mb-8 max-w-sm mx-auto">
+              Portal members can search the cadet roster and submit ribbon recommendations. Sign in with your PBHS JROTC account.
+            </p>
+            <Link
+              to="/login"
+              className="inline-block px-8 py-3 rounded-xl bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-black uppercase text-xs tracking-widest transition-all"
+            >
+              Sign In
+            </Link>
+          </div>
+        ) : submitted ? (
           /* ── Success state ── */
           <div className="bg-slate-900 border border-white/10 rounded-3xl p-10 text-center">
             <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-6">
@@ -159,7 +183,7 @@ const RecommendRibbon = () => {
               Recommendation Submitted
             </h2>
             <p className="text-slate-400 text-sm leading-relaxed mb-2">
-              Your recommendation for <span className="text-white font-black">{selectedCadet?.fullName}</span> to receive the{' '}
+              Your recommendation for <span className="text-white font-black">{resolvedCadetName}</span> to receive the{' '}
               <span className="text-yellow-400 font-black">{selectedRibbon?.name}</span> has been submitted.
             </p>
             <p className="text-slate-500 text-xs mb-8">
@@ -200,6 +224,15 @@ const RecommendRibbon = () => {
                     <X size={14} />
                   </button>
                 </div>
+              ) : roster.length === 0 ? (
+                /* Manual name input for users without roster read access */
+                <input
+                  type="text"
+                  placeholder="Cadet's full name…"
+                  value={manualCadetName}
+                  onChange={e => setManualCadetName(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-white/10 bg-slate-800/50 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-500/40"
+                />
               ) : (
                 <div className="space-y-3">
                   <div className="relative">
