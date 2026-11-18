@@ -192,9 +192,12 @@ service cloud.firestore {
     //            numeric ROLE_HIERARCHY value, matching the app's guard.
     match /announcements/{id} {
       // "All"-targeted announcements are public (shown on the public site).
-      // Staff/leadership/officer-team-targeted announcements require auth so they
-      // cannot be scraped from the Firestore REST API without a signed-in session.
-      allow read: if resource.data.target == 'All' || isSignedIn();
+      // Non-"All" targets (Staff, Leadership, CC, 1SG, officer teams) are gated
+      // to platoon_sergeant (level 20) and above so that squad-level cadets
+      // cannot bypass the UI's target filter via the Firestore SDK directly.
+      // The UI's getAllowedTargets() further restricts Staff/Leadership/XO/CC/1SG
+      // to level 70+ — this rule enforces the minimum floor at the data layer.
+      allow read: if resource.data.target == 'All' || (isSignedIn() && myLevel() >= 20);
       allow create: if isSignedIn() && myLevel() >= 70;
       allow delete: if isSignedIn() && myLevel() >= resource.data.issuerLevel;
     }

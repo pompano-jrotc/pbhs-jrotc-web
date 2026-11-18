@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.197" date="Nov 17" title="Security — announcement PII in public REST API, non-public target restriction (I-07/I-08)" isCurrent changes={<>
+        <Release versions="v1.8.198" date="Nov 17" title="Security — targeted announcements readable by any cadet via Firestore SDK (J-01)" isCurrent changes={<>
+          <C type="sec">firestore.rules/announcements: allow read was isSignedIn() for non-'All' targets — any level-1 cadet could query the Firestore SDK and read Staff/Leadership/CC/1SG-targeted announcements, bypassing the client-side target filter; tightened to myLevel() &gt;= 20 (platoon_sergeant+) for non-'All' targets, matching the minimum leadership threshold at the data layer; the UI's getAllowedTargets() further restricts Staff/Leadership/XO/CC/1SG to level 70+ for display.</C>
+        </>} />
+        <Release versions="v1.8.197" date="Nov 17" title="Security — announcement PII in public REST API, non-public target restriction (I-07/I-08)" isCurrent={false} changes={<>
           <C type="sec">firestore.rules/announcements: allow read was if true — staff/leadership-targeted announcements (target:Staff, XO, Leadership) would be readable via the Firestore REST API without authentication; changed to allow read if target=='All' || isSignedIn(), matching the client-side filtering already in Announcements.jsx.</C>
           <C type="sec">AdminAnnouncements.jsx: issuer (cadet full name + rank) was written to the public announcements collection — readable by anyone via Firestore REST API; removed issuer from new announcement writes (issuerUid and issuerLevel are sufficient for attribution and delete-rule enforcement); admin portal falls back to "Battalion Staff" for new posts without a name.</C>
         </>} />
