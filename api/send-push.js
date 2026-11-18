@@ -129,10 +129,13 @@ async function verifyAndGetLevel(idToken) {
   const docRes      = await fetch(docUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!docRes.ok) throw new Error('Caller user doc not found');
   const doc         = await docRes.json();
-  const role        = doc.fields?.role?.stringValue || 'cadet';
-  const callerCo    = doc.fields?.company?.stringValue || '';
-  const fullName    = doc.fields?.fullName?.stringValue || '';
-  return { uid, role, userLevel: HIERARCHY[role] || 0, callerCompany: callerCo, fullName };
+  const role     = doc.fields?.role?.stringValue     || 'cadet';
+  const callerCo = doc.fields?.company?.stringValue  || '';
+  const fullName = doc.fields?.fullName?.stringValue || '';
+  const approved = doc.fields?.approved?.booleanValue;
+  // approved === false → pending approval; absent → legacy (treat as approved).
+  const userLevel = approved === false ? 0 : (HIERARCHY[role] || 0);
+  return { uid, role, userLevel, callerCompany: callerCo, fullName };
 }
 
 // ── Push helpers ──────────────────────────────────────────────────────────────

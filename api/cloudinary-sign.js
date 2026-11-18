@@ -70,7 +70,10 @@ async function getCallerLevel(uid) {
   if (!res.ok) return 0;
   const doc = await res.json();
   if (!doc.fields) return 0;
-  const role = doc.fields.role?.stringValue || '';
+  const role     = doc.fields.role?.stringValue     || '';
+  const approved = doc.fields.approved?.booleanValue;
+  // approved === false → pending approval; absent → legacy (treat as approved).
+  if (approved === false) return 0;
   const ROLE_LEVELS = {
     district_army_instructor: 105, senior_army_instructor: 100, army_instructor: 95,
     battalion_commander: 90, battalion_xo: 85, battalion_csm: 85, sergeant_major: 80,

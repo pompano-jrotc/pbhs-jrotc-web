@@ -155,7 +155,12 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.198" date="Nov 17" title="Security — targeted announcements readable by any cadet via Firestore SDK (J-01)" isCurrent changes={<>
+        <Release versions="v1.8.199" date="Nov 17" title="Security — unapproved accounts bypass API role gates in send-push, notify, cloudinary-sign (K-01)" isCurrent changes={<>
+          <C type="sec">send-push.js: verifyAndGetLevel read role without checking approved field — an unapproved instructor (approved:false, role:army_instructor+) would get userLevel 95-105 and pass the staff 70+ gate, able to send push notifications and global email broadcasts to all approved battalion members before any admin reviewed their account; fixed to return userLevel 0 when approved === false.</C>
+          <C type="sec">notify.js: getUserByUid did not return or check approved field — same unapproved-account bypass; unapproved instructors could send cycle/forms/supply/uniform email notifications; fixed getUserByUid to return approved field and added 403 guard in the main handler.</C>
+          <C type="sec">cloudinary-sign.js: getCallerLevel did not check approved field — unapproved instructors could generate Cloudinary upload signatures (command-tier 45+ required) before account approval; fixed to return 0 when approved === false.</C>
+        </>} />
+        <Release versions="v1.8.198" date="Nov 17" title="Security — targeted announcements readable by any cadet via Firestore SDK (J-01)" isCurrent={false} changes={<>
           <C type="sec">firestore.rules/announcements: allow read was isSignedIn() for non-'All' targets — any level-1 cadet could query the Firestore SDK and read Staff/Leadership/CC/1SG-targeted announcements, bypassing the client-side target filter; tightened to myLevel() &gt;= 20 (platoon_sergeant+) for non-'All' targets, matching the minimum leadership threshold at the data layer; the UI's getAllowedTargets() further restricts Staff/Leadership/XO/CC/1SG to level 70+ for display.</C>
         </>} />
         <Release versions="v1.8.197" date="Nov 17" title="Security — announcement PII in public REST API, non-public target restriction (I-07/I-08)" isCurrent={false} changes={<>

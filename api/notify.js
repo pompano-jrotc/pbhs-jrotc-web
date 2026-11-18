@@ -109,10 +109,11 @@ async function getUserByUid(accessToken, projectId, uid) {
   const doc = await res.json();
   if (!doc.fields) return null;
   return {
-    email:    doc.fields.email?.stringValue    || '',
-    fullName: doc.fields.fullName?.stringValue || '',
-    role:     doc.fields.role?.stringValue     || '',
-    company:  doc.fields.company?.stringValue  || '',
+    email:    doc.fields.email?.stringValue     || '',
+    fullName: doc.fields.fullName?.stringValue  || '',
+    role:     doc.fields.role?.stringValue      || '',
+    company:  doc.fields.company?.stringValue   || '',
+    approved: doc.fields.approved?.booleanValue,
   };
 }
 
@@ -494,6 +495,8 @@ export default async function handler(req, res) {
   const accessToken = await getAccessToken();
   const caller      = await getUserByUid(accessToken, projectId, uid);
   if (!caller) return res.status(403).json({ error: 'User not found' });
+  // approved === false → pending approval; absent → legacy (treat as approved).
+  if (caller.approved === false) return res.status(403).json({ error: 'Account pending approval' });
 
   if (subHandler === 'cycle')   return handleCycle(req.body, caller, accessToken, projectId, res);
   if (subHandler === 'forms')   return handleForms(req.body, caller, accessToken, projectId, res);
