@@ -191,7 +191,10 @@ service cloud.firestore {
     //   delete — deleter must outrank the issuer; issuerLevel is stored as the
     //            numeric ROLE_HIERARCHY value, matching the app's guard.
     match /announcements/{id} {
-      allow read: if true;
+      // "All"-targeted announcements are public (shown on the public site).
+      // Staff/leadership/officer-team-targeted announcements require auth so they
+      // cannot be scraped from the Firestore REST API without a signed-in session.
+      allow read: if resource.data.target == 'All' || isSignedIn();
       allow create: if isSignedIn() && myLevel() >= 70;
       allow delete: if isSignedIn() && myLevel() >= resource.data.issuerLevel;
     }

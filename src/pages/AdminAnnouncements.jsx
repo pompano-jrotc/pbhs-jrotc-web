@@ -203,7 +203,10 @@ const AdminAnnouncements = () => {
     setUploadError('');
     setEmailStats(null);
     try {
-      const issuer = `${userData?.rank || ''} ${userData?.fullName || userData?.name || 'Staff'}`.trim();
+      // issuer name intentionally omitted from the public announcements collection —
+      // announcements has allow read: if true so the name would be publicly readable.
+      // The admin portal resolves attribution from issuerUid; the public page shows
+      // "PBHS JROTC Tornado Battalion" regardless (see Announcements.jsx).
 
       // Optional attachment upload (PDF or image)
       let pdfUrl = null, pdfFileName = null, attachmentType = null;
@@ -230,7 +233,7 @@ const AdminAnnouncements = () => {
       const payload = {
         content: text,
         timestamp: serverTimestamp(),
-        issuer,
+        issuerUid:   user?.uid || '',
         issuerLevel: userPower,
         target: 'All',
         active: true,
@@ -283,7 +286,7 @@ const AdminAnnouncements = () => {
             body:    JSON.stringify({
               idToken,
               title: 'Broadcast — PBHS JROTC',
-              body:  `${issuer}: ${text.substring(0, 160)}`,
+              body:  `${notifIssuer}: ${text.substring(0, 160)}`,
               announcementType: 'global',
               content: text, issuer: notifIssuer,
               ...(pdfUrl && { pdfUrl, pdfFileName: pdfFile?.name }),
@@ -470,7 +473,7 @@ const AdminAnnouncements = () => {
                     {item.title && <p className="text-sm font-black text-slate-900 dark:text-white mb-1">{item.title}</p>}
                     <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed pr-4 font-medium whitespace-pre-wrap">{item.content}</p>
                     <div className="flex flex-wrap items-center gap-2 mt-2">
-                      <p className="text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-tight">By: {item.issuer}</p>
+                      <p className="text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-tight">By: {item.issuer || 'Battalion Staff'}</p>
                       <span className="text-[8px] text-slate-400 dark:text-slate-500 font-black px-1 rounded bg-slate-200 dark:bg-white/10">LVL {item.issuerLevel}</span>
                       {item.expiresAt && (
                         <span className="text-[8px] font-black text-amber-500 flex items-center gap-0.5">

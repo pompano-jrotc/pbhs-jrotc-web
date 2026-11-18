@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.196" date="Nov 17" title="Security — unapproved accounts bypass approval gate via Firestore SDK (H-01)" isCurrent changes={<>
+        <Release versions="v1.8.197" date="Nov 17" title="Security — announcement PII in public REST API, non-public target restriction (I-07/I-08)" isCurrent changes={<>
+          <C type="sec">firestore.rules/announcements: allow read was if true — staff/leadership-targeted announcements (target:Staff, XO, Leadership) would be readable via the Firestore REST API without authentication; changed to allow read if target=='All' || isSignedIn(), matching the client-side filtering already in Announcements.jsx.</C>
+          <C type="sec">AdminAnnouncements.jsx: issuer (cadet full name + rank) was written to the public announcements collection — readable by anyone via Firestore REST API; removed issuer from new announcement writes (issuerUid and issuerLevel are sufficient for attribution and delete-rule enforcement); admin portal falls back to "Battalion Staff" for new posts without a name.</C>
+        </>} />
+        <Release versions="v1.8.196" date="Nov 17" title="Security — unapproved accounts bypass approval gate via Firestore SDK (H-01)" isCurrent={false} changes={<>
           <C type="sec">firestore.rules: instructor signup allowed self-assigning army_instructor / senior_army_instructor / district_army_instructor roles; combined with approved:false the portal UI blocked access, but Firestore rules had no approval check — an unapproved L95-L105 account could directly query the Firebase SDK and read all protected collections (roster, users, challenge records, fundraiser entries) before staff reviewed the account; added isApproved() helper and gated isAdmin(), isUserManager(), isSelfEditExempt(), and myLevel() on it so that unapproved accounts always resolve to level 0, matching the portal UI's approval gate at the data layer.</C>
         </>} />
         <Release versions="v1.8.195" date="Nov 17" title="Security — users collection over-permissive read, public PII exposure in announcements" isCurrent={false} changes={<>
