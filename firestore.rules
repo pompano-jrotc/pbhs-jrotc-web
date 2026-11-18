@@ -108,7 +108,15 @@ service cloud.firestore {
     // --- RULES ---
 
     match /users/{userId} {
-      allow read: if isSignedIn();
+      // Cadets may always read their own profile (for dashboard and My Profile page).
+      // Platoon leadership and above (level 20+) may read all user docs — required
+      // by roster, admin, stats, and team-management components.
+      // Plain squad_member / cadet tiers cannot enumerate the full user list, which
+      // would expose phone numbers and emails of all battalion members.
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId ||
+        myLevel() >= 20
+      );
 
       // Self-registration: new signed-in user may create their own profile
       // doc only as an unapproved plain cadet — never with an elevated role.

@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.194" date="Nov 17" title="Security hardening — issuer spoofing, email desync, Redis race, hardcoded emails, pdfUrl injection, CORS" isCurrent changes={<>
+        <Release versions="v1.8.195" date="Nov 17" title="Security — users collection over-permissive read, public PII exposure in announcements" isCurrent changes={<>
+          <C type="sec">firestore.rules/users: allow read was if isSignedIn() — any level-1 cadet could query Firestore REST API and enumerate all portal accounts including phone numbers and emails of all battalion members (minors); tightened to self-read OR myLevel() &gt;= 20 (platoon leadership and above), which covers all components that need to query the user list while protecting low-tier members from mass-enumeration.</C>
+          <C type="sec">Announcements.jsx (public page): post.issuer showed the posting cadet's full name and rank to unauthenticated visitors; replaced with generic "PBHS JROTC Tornado Battalion" attribution — the admin portal retains the named attribution behind authentication.</C>
+        </>} />
+        <Release versions="v1.8.194" date="Nov 17" title="Security hardening — issuer spoofing, email desync, Redis race, hardcoded emails, pdfUrl injection, CORS" isCurrent={false} changes={<>
           <C type="sec">send-push: issuer (announcement "Posted by" name) was taken from the request body — any staff member could send announcements falsely attributed to any name; now derived from the caller's verified Firestore fullName, making it impossible to spoof.</C>
           <C type="sec">send-push: pdfUrl was included in announcement emails without validation — any URL (javascript:, file://, internal SSRF targets) was injectable as the PDF link; added https:// protocol gate, rejecting non-https values with 400.</C>
           <C type="sec">admin-update-account: 'email' was in SAFE_FIELDS for the update-user-fields type — an admin could update Firestore email without touching Firebase Auth, desyncing the two stores and re-routing notification emails; removed 'email' from that list (email changes must go through the update-email type which updates both atomically).</C>

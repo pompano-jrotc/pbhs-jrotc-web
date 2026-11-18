@@ -115,7 +115,7 @@ const Announcements = () => {
                   </div>
                   <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 px-2.5 py-1 rounded-md">
                     <User size={12} className="text-yellow-500" />
-                    <span>By: {post.issuer || 'Battalion Staff'}</span>
+                    <span>PBHS JROTC Tornado Battalion</span>
                   </div>
                   {post.expiresAt && (
                     <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-white/5 px-2.5 py-1 rounded-md">
