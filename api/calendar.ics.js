@@ -161,11 +161,10 @@ export default async function handler(req, res) {
 
     const body = lines.join('\r\n') + '\r\n';
 
-    return res.status(200).set({
-      'Content-Type': 'text/calendar; charset=utf-8',
-      'Content-Disposition': 'inline; filename="pbhs-jrotc.ics"',
-      'Cache-Control': 'public, max-age=21600',
-    }).send(body);
+    res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline; filename="pbhs-jrotc.ics"');
+    res.setHeader('Cache-Control', 'public, max-age=21600');
+    return res.status(200).send(body);
   } catch (err) {
     console.error('calendar.ics error:', err);
     return res.status(500).send('Internal error');

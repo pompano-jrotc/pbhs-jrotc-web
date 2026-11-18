@@ -104,16 +104,17 @@ export default async function handler(request) {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         'Access-Control-Allow-Origin': 'https://pbhsjrotc.com',
       },
     });
   } catch (err) {
     console.error('leaderboard.json error:', err);
     return new Response(JSON.stringify({ records:[], roster:{}, fundraiserEntries:[] }), {
-      status: 200, // return empty gracefully rather than 500
+      status: 200,
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
         'Access-Control-Allow-Origin': 'https://pbhsjrotc.com',
       },
     });

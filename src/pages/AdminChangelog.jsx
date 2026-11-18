@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="396"    label="Patches"     />
-        <Stat value="719"    label="Commits"     />
+        <Stat value="397"    label="Patches"     />
+        <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.191" label="Current"     />
+        <Stat value="v1.8.192" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.191" date="Nov 17" title="Infra — consolidate 5 API routes into 2 to stay within Vercel Hobby 12-function limit" isCurrent changes={<>
+        <Release versions="v1.8.192" date="Nov 17" title="Pen test fixes — calendar.ics 500, leaderboard rate limiting" isCurrent changes={<>
+          <C type="fix">calendar.ics: replaced res.set() chain with res.setHeader() calls — Vercel's serverless shim does not return this from set(), causing the response to never send and the function to 500 on every request.</C>
+          <C type="sec">leaderboard.json: added CDN edge caching (s-maxage=60, stale-while-revalidate=300) — previously had no rate limiting; Vercel edge cache now limits Firestore calls to ~1/min regardless of traffic.</C>
+        </>} />
+        <Release versions="v1.8.191" date="Nov 17" title="Infra — consolidate 5 API routes into 2 to stay within Vercel Hobby 12-function limit" changes={<>
           <C type="fix">notify-cycle, notify-forms, notify-supply, notify-uniform merged into a single /api/notify dispatcher — handler field selects the sub-handler; reduces function count by 4.</C>
           <C type="fix">leadership-cal-token merged into leadership-calendar.ics as ?action=token branch — reduces function count by 1 (net: 16 → 12 functions).</C>
           <C type="sec">s6-reminder target now validated via Firestore role lookup (email → company_s6_assistant check) instead of trusting caller-supplied email.</C>
