@@ -11,8 +11,15 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    // Returns true only when the account is approved (or has no approved field —
+    // pre-dates the approval system and is treated as approved by convention).
+    function isApproved() {
+      let d = userDoc();
+      return !('approved' in d) || d.approved != false;
+    }
+
     function isAdmin() {
-      return userDoc().role in [
+      return isApproved() && userDoc().role in [
         'district_army_instructor', 'senior_army_instructor', 'army_instructor',
         'battalion_commander', 'battalion_xo', 'battalion_csm', 'sergeant_major'
       ];
@@ -23,13 +30,13 @@ service cloud.firestore {
     // cloning constraint as admins: cannot elevate a role to their own level or above.
     function isUserManager() {
       return isAdmin() ||
-        userDoc().role in ['s1_adjutant', 's6_technology'];
+        (isApproved() && userDoc().role in ['s1_adjutant', 's6_technology']);
     }
 
     // Roles that are exempt from the roster self-edit restriction.
     // These accounts may edit their own roster entry freely.
     function isSelfEditExempt() {
-      return userDoc().role in [
+      return isApproved() && userDoc().role in [
         'district_army_instructor', 'battalion_commander', 'battalion_xo', 'battalion_csm',
         'senior_army_instructor', 'army_instructor', 's1_adjutant'
       ];
@@ -67,7 +74,14 @@ service cloud.firestore {
     }
 
     function myLevel() {
-      return roleLevel(userDoc().role);
+      // Unapproved accounts (approved == false) get level 0 so that they
+      // cannot read elevated collections via the Firebase SDK even though
+      // the portal UI already shows them a "pending approval" screen.
+      // Accounts created before the approved field was introduced have no
+      // 'approved' key and are treated as approved.
+      let d = userDoc();
+      if ('approved' in d && d.approved == false) return 0;
+      return roleLevel(d.role);
     }
 
     // Company 1SG and above — matches COMMAND_LEVEL gate in App.jsx.

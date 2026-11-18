@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.195" date="Nov 17" title="Security — users collection over-permissive read, public PII exposure in announcements" isCurrent changes={<>
+        <Release versions="v1.8.196" date="Nov 17" title="Security — unapproved accounts bypass approval gate via Firestore SDK (H-01)" isCurrent changes={<>
+          <C type="sec">firestore.rules: instructor signup allowed self-assigning army_instructor / senior_army_instructor / district_army_instructor roles; combined with approved:false the portal UI blocked access, but Firestore rules had no approval check — an unapproved L95-L105 account could directly query the Firebase SDK and read all protected collections (roster, users, challenge records, fundraiser entries) before staff reviewed the account; added isApproved() helper and gated isAdmin(), isUserManager(), isSelfEditExempt(), and myLevel() on it so that unapproved accounts always resolve to level 0, matching the portal UI's approval gate at the data layer.</C>
+        </>} />
+        <Release versions="v1.8.195" date="Nov 17" title="Security — users collection over-permissive read, public PII exposure in announcements" isCurrent={false} changes={<>
           <C type="sec">firestore.rules/users: allow read was if isSignedIn() — any level-1 cadet could query Firestore REST API and enumerate all portal accounts including phone numbers and emails of all battalion members (minors); tightened to self-read OR myLevel() &gt;= 20 (platoon leadership and above), which covers all components that need to query the user list while protecting low-tier members from mass-enumeration.</C>
           <C type="sec">Announcements.jsx (public page): post.issuer showed the posting cadet's full name and rank to unauthenticated visitors; replaced with generic "PBHS JROTC Tornado Battalion" attribution — the admin portal retains the named attribution behind authentication.</C>
         </>} />
