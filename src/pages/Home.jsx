@@ -257,8 +257,7 @@ const Home = () => {
                       <Clock size={12} />
                       {item.timestamp?.toDate().toLocaleDateString() || "Active Order"}
                     </div>
-                    <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed mb-4">{item.content}</p>
-                    <div className="text-yellow-500/40 text-[9px] font-black uppercase tracking-widest">Signed: {item.issuer || 'Battalion Staff'}</div>
+                    <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">{item.content}</p>
                   </div>
                 ))
               )}

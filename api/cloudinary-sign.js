@@ -100,14 +100,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Every mode requires a valid Firebase session — no unauthenticated signing.
-  let callerUid;
-  try {
-    callerUid = await verifyFirebaseToken(req);
-  } catch {
-    return res.status(401).json({ error: 'Valid Firebase session required' });
-  }
-
   const apiKey    = process.env.CLOUDINARY_API_KEY;
   const apiSecret = process.env.CLOUDINARY_API_SECRET;
   if (!apiKey || !apiSecret) {
@@ -115,6 +107,11 @@ export default async function handler(req, res) {
   }
 
   // ── Download redirect mode ────────────────────────────────────────────────
+  // Public documents are readable by anyone (Firestore documents collection
+  // has allow read: if true). Auth is NOT required here — the URL allowlist
+  // below (res.cloudinary.com + cloud-name prefix) prevents SSRF, and the
+  // per-IP rate limit prevents abuse. Upload signing (below) still requires
+  // a valid Firebase session and staff-level role.
   if (req.query.download === '1') {
     const ip = getClientIp(req);
     const rl = await checkRateLimit(`cloudinary-download:${ip}`, 60, 60);
@@ -167,7 +164,14 @@ export default async function handler(req, res) {
     return res.redirect(302, `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/download?${qs}`);
   }
 
-  // ── Upload signature mode (default) ──────────────────────────────────────
+  // ── Upload signature mode (default) — requires a valid Firebase session ──
+  let callerUid;
+  try {
+    callerUid = await verifyFirebaseToken(req);
+  } catch {
+    return res.status(401).json({ error: 'Valid Firebase session required' });
+  }
+
   const uploadRl = await checkRateLimit(`cloudinary-sign:${callerUid}`, 20, 60);
   if (!uploadRl.allowed) {
     return res.status(429).json({ error: 'Too many requests' });
