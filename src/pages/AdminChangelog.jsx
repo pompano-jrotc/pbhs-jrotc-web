@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.207" label="Current"     />
+        <Stat value="v1.8.208" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.207" date="Nov 19" title="Bug fix — public Events page broken for non-signed-in users (S-01 rule regression)" isCurrent changes={<>
+        <Release versions="v1.8.208" date="Nov 19" title="Bug fix — public Announcements page broken for non-signed-in users (I-08/J-01 rule regression)" isCurrent changes={<>
+          <C type="fix">firestore.rules announcements collection: reverted allow read to &apos;if true&apos; — per-doc target check broke unauthenticated list queries; target filtering (All vs Staff/Leadership/etc.) enforced client-side by getAllowedTargets() in Announcements.jsx</C>
+        </>} />
+        <Release versions="v1.8.207" date="Nov 19" title="Bug fix — public Events page broken for non-signed-in users (S-01 rule regression)" isCurrent={false} changes={<>
           <C type="fix">firestore.rules events collection: reverted allow read to &apos;if true&apos; — per-document isPrivate rule broke unauthenticated list queries (Firestore denies entire query if any doc fails the rule); private event filtering moved to client-side</C>
           <C type="fix">src/pages/Events.jsx: added .filter(e =&gt; !e.isPrivate) on snapshot result to hide private events from the public calendar page</C>
         </>} />
