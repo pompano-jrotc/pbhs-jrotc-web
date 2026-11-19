@@ -175,7 +175,10 @@ service cloud.firestore {
     }
 
     match /specialTeams/{teamId} {
-      allow read: if isSignedIn() && myLevel() >= 1;
+      // Public — readable by anyone (Teams page is public). No sensitive fields;
+      // a per-doc rule would break unauthenticated list queries the same way it
+      // did for events and announcements.
+      allow read: if true;
       // UID-based gate only; email fallback removed — all docs migrated to commanderUids via P-02.
       allow update: if isSignedIn() && (
         isAdmin() ||
