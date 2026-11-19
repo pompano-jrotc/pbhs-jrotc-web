@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { db } from '../firebase'; // Ensure your firebase config is exported from here
+import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import {
   Crosshair, Shield, Flag, Trophy, Target,
-  ChevronRight, Clock, MapPin, Lock, Globe,
-  Moon, Ban
+  ChevronRight, Clock, MapPin
 } from 'lucide-react';
 import { TeamsPageSkeleton } from '../components/Skeleton';
 import { usePageMeta } from '../hooks/usePageMeta';
@@ -19,7 +17,6 @@ const Teams = () => {
     description: 'Extracurricular battalion teams - Drill, Raiders, Color Guard, and more. See schedules and joining requirements.',
     path: '/teams',
   });
-  const navigate = useNavigate();
   const [activeTeam, setActiveTeam] = useState(null);
   const [teamsData, setTeamsData] = useState({});
   const [loading, setLoading] = useState(true);
@@ -63,15 +60,6 @@ const Teams = () => {
 
   const currentTeam = teamsData[activeTeam];
 
-  const handleContactCommander = () => {
-    const isOutOfSeason = currentTeam?.status === "Out of Season" || currentTeam?.status === "Not in Season";
-    const isRosterFull = currentTeam?.status === "Closed Practice";
-
-    if (!isOutOfSeason && !isRosterFull) {
-      // FIX: Use currentTeam.id (which is the Firestore Doc ID)
-      navigate(`/commander/${currentTeam.id}`);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pt-32 pb-20 px-6 text-left font-sans">
@@ -172,7 +160,7 @@ const Teams = () => {
 
                     <div className="bg-slate-100 dark:bg-slate-950/50 rounded-2xl p-6 border border-slate-200 dark:border-white/5">
                       <h4 className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-[0.2em] mb-4">Joining Requirements</h4>
-                      <ul className="space-y-3 mb-6">
+                      <ul className="space-y-3">
                         {currentTeam.requirements?.map((req, i) => (
                           <li key={i} className="flex items-center gap-3 text-slate-600 dark:text-slate-300 text-xs">
                             <div className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
@@ -180,22 +168,6 @@ const Teams = () => {
                           </li>
                         ))}
                       </ul>
-
-                      <button
-                        onClick={handleContactCommander}
-                        className={`w-full py-4 rounded-xl font-black uppercase text-xs tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg
-                          ${(currentTeam.status !== "Closed Practice" && currentTeam.status !== "Out of Season" && currentTeam.status !== "Not in Season")
-                            ? 'bg-yellow-500 text-slate-950 hover:bg-yellow-400 shadow-yellow-500/10'
-                            : 'bg-slate-200 dark:bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-200 dark:border-white/5 shadow-none opacity-60'
-                          }`}
-                        disabled={currentTeam.status === "Closed Practice" || currentTeam.status === "Out of Season" || currentTeam.status === "Not in Season"}
-                      >
-                        {currentTeam.status === "Closed Practice" ? <Lock size={14}/> : (currentTeam.status === "Out of Season" || currentTeam.status === "Not in Season") ? <Ban size={14}/> : null}
-
-                        {currentTeam.status === "Closed Practice" ? "Roster Full" :
-                         (currentTeam.status === "Out of Season" || currentTeam.status === "Not in Season") ? "No Active Commander" :
-                         "View Team Leadership"}
-                      </button>
                     </div>
                   </div>
                 </motion.div>

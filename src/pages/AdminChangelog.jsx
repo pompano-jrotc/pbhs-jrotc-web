@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.210" label="Current"     />
+        <Stat value="v1.8.211" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.210" date="Nov 19" title="Bug fix — public Teams page broken for non-signed-in users (specialTeams rule regression)" isCurrent changes={<>
+        <Release versions="v1.8.211" date="Nov 19" title="Remove View Team Leadership button from public Teams page" isCurrent changes={<>
+          <C type="fix">src/pages/Teams.jsx: removed View Team Leadership / No Active Commander button — triggered commander lookup against users collection (auth-gated), causing permission-denied error for unauthenticated visitors</C>
+        </>} />
+        <Release versions="v1.8.210" date="Nov 19" title="Bug fix — public Teams page broken for non-signed-in users (specialTeams rule regression)" isCurrent={false} changes={<>
           <C type="fix">firestore.rules specialTeams collection: reverted allow read to &apos;if true&apos; — per-auth rule broke unauthenticated list queries; Teams page is public, no sensitive fields</C>
         </>} />
         <Release versions="v1.8.209" date="Nov 19" title="Bug fix — public Documents download broken for non-signed-in users; remove issuer name from public bulletin board" isCurrent={false} changes={<>
