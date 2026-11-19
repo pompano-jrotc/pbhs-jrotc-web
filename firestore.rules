@@ -226,8 +226,11 @@ service cloud.firestore {
 
     // Public calendar — readable without auth. Staff tier (70+) can create;
     // creators at any level can edit/delete their own events.
+    // isPrivate filtering is enforced client-side (Events.jsx) and in the
+    // ICS feed (calendar.ics.js) — a per-doc rule breaks unauthenticated
+    // list queries because Firestore denies the entire result if any doc fails.
     match /events/{id} {
-      allow read: if resource.data.isPrivate != true || isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn() && myLevel() >= 70;
       allow update, delete: if isSignedIn() && (
         myLevel() >= 70 ||

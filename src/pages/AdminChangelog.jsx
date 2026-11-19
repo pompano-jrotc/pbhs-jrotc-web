@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.206" label="Current"     />
+        <Stat value="v1.8.207" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.206" date="Nov 18" title="Security hardening — rate limit storage-delete, input length caps on ribbon recommendations, source marker on public submissions" isCurrent changes={<>
+        <Release versions="v1.8.207" date="Nov 19" title="Bug fix — public Events page broken for non-signed-in users (S-01 rule regression)" isCurrent changes={<>
+          <C type="fix">firestore.rules events collection: reverted allow read to &apos;if true&apos; — per-document isPrivate rule broke unauthenticated list queries (Firestore denies entire query if any doc fails the rule); private event filtering moved to client-side</C>
+          <C type="fix">src/pages/Events.jsx: added .filter(e =&gt; !e.isPrivate) on snapshot result to hide private events from the public calendar page</C>
+        </>} />
+        <Release versions="v1.8.206" date="Nov 18" title="Security hardening — rate limit storage-delete, input length caps on ribbon recommendations, source marker on public submissions" isCurrent={false} changes={<>
           <C type="sec">api/storage-delete.js: added per-UID rate limit (60 deletes/hr) to prevent bulk deletion from a compromised staff account (V-01)</C>
           <C type="sec">api/notify.js recommend-ribbon: added max-length validation — cadetDisplayName and recommenderName capped at 200 chars, reason at 2000 chars (V-02)</C>
           <C type="sec">api/notify.js recommend-ribbon: writes source: &apos;public_form&apos; to Firestore so reviewers know recommenderName is unverified (V-03)</C>

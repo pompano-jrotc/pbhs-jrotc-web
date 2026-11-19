@@ -10,7 +10,7 @@ const Events = () => {
     // Orders events by date so the soonest ones appear first
     const q = query(collection(db, "events"), orderBy("date", "asc"));
     const unsub = onSnapshot(q, (snap) => {
-      setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setEvents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter(e => !e.isPrivate));
     });
     return () => unsub();
   }, []);
