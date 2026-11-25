@@ -57,13 +57,15 @@ function buildTree(entries) {
     const xo   = coEntries.find(e => e.position === 'Company XO');
     const isg  = coEntries.find(e => e.position === 'First Sergeant');
     const msg  = coEntries.find(e => e.position === 'Master Sergeant');
+    // Only Company S1–S7 assistants go under XO — NOT Squad Leader Assistants
     const asst = coEntries
-      .filter(e => e.position?.includes('Assistant'))
+      .filter(e => e.position in ASST_ORDER)
       .sort((a, b) => (ASST_ORDER[a.position] ?? 99) - (ASST_ORDER[b.position] ?? 99));
 
-    // Entries that go into platoon/squad levels
+    // Field entries: everything except HQ command and company staff assistants
+    // Squad Leader Assistants ARE field entries — they belong in their squad
     const HQ_POS = new Set(['Company Commander','Company XO','First Sergeant','Master Sergeant']);
-    const field  = coEntries.filter(e => !HQ_POS.has(e.position) && !e.position?.includes('Assistant'));
+    const field  = coEntries.filter(e => !HQ_POS.has(e.position) && !(e.position in ASST_ORDER));
 
     // Group field entries by platoon
     const byPlatoon = {};
