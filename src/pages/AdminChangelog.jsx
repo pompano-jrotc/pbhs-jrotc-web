@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.215" label="Current"     />
+        <Stat value="v1.8.216" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.215" date="Nov 25" title="Remove Achievement Wall + Dashboard; fix cadet challenge; /my/announcements; service hours access" isCurrent changes={<>
+        <Release versions="v1.8.216" date="Nov 25" title="Fix My Record permission error — promotionScores and ribbonAwards Firestore rules" isCurrent changes={<>
+          <C type="fix">firestore.rules promotionScores: removed per-document resource.data checks (company == userDoc().company and linkedUid == request.auth.uid) from allow read — Firestore denies the entire list query when any per-doc condition is present for users below 70; changed to allow read: if isSignedIn() &amp;&amp; myLevel() &gt;= 1; AdminS1 query already scopes by company for non-battalion users</C>
+          <C type="fix">firestore.rules ribbonAwards: resource.data.rosterDocId == request.auth.uid was comparing a Firestore doc ID to a Firebase Auth UID (always false) and was a per-document list-query check that broke ribbon fetch on My Record for all users below level 45; changed to allow read: if isSignedIn() &amp;&amp; myLevel() &gt;= 1</C>
+        </>} />
+        <Release versions="v1.8.215" date="Nov 25" title="Remove Achievement Wall + Dashboard; fix cadet challenge; /my/announcements; service hours access" isCurrent={false} changes={<>
           <C type="feat">Removed Achievement Wall page and nav link — no longer needed</C>
           <C type="feat">Removed Dashboard — all roles now redirect to My Record (/admin/my) as the portal home; /admin/dashboard redirects to /admin/my</C>
           <C type="fix">firestore.rules roster: added self-read clause (resource.data.linkedUid == request.auth.uid) so squad members can query their own roster document; this unblocks cadet challenge scores, ribbons, and chain of command on My Record</C>

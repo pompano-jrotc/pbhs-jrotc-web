@@ -750,11 +750,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && (
         userDoc().role == 's1_adjutant' || myLevel() >= 85
       );
-      allow read: if isSignedIn() && (
-        myLevel() >= 70 ||
-        (myLevel() >= 35 && resource.data.company == userDoc().company) ||
-        resource.data.linkedUid == request.auth.uid
-      );
+      allow read: if isSignedIn() && myLevel() >= 1;
       allow update: if isSignedIn() && (
         myLevel() >= 70 ||
         (myLevel() >= 45 && resource.data.company == userDoc().company &&
@@ -1041,7 +1037,7 @@ service cloud.firestore {
     // Ribbon awards — staff (70+) can create/update/delete awards;
     // anyone can read their own (cadet portal), staff can read all.
     match /ribbonAwards/{id} {
-      allow read:   if isSignedIn() && (myLevel() >= 45 || resource.data.rosterDocId == request.auth.uid);
+      allow read:   if isSignedIn() && myLevel() >= 1;
       allow create: if isSignedIn() && myLevel() >= 45;
       allow update: if isSignedIn() && myLevel() >= 70;
       allow delete: if isSignedIn() && myLevel() >= 70;
