@@ -6,6 +6,7 @@ import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 import { Search, Shield, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+// Shield kept for the empty-state fallback
 import { usePageMeta } from '../hooks/usePageMeta';
 
 // ── Layout constants ──────────────────────────────────────────────────────────
@@ -396,7 +397,7 @@ export default function MyLeadership() {
 
       {/* ── Toolbar ── */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/5 bg-slate-950 shrink-0 flex-wrap">
-        <Shield size={14} className="text-yellow-500 shrink-0" />
+        <img src="/battalion-logo.png" alt="PBHS JROTC" className="w-5 h-5 object-contain shrink-0" />
         <span className="text-[11px] font-black uppercase tracking-widest text-slate-200">Chain of Command</span>
         <span className="text-[10px] text-slate-500 font-bold">{entries.length} personnel</span>
 
