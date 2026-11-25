@@ -180,7 +180,6 @@ const CadetPortal = () => {
 
     const annQ = query(
       collection(db, 'announcements'),
-      where('active', '==', true),
       orderBy('timestamp', 'desc'),
       limit(3),
     );
@@ -214,12 +213,16 @@ const CadetPortal = () => {
     const q = query(
       collection(db, 'companyAnnouncements'),
       where('company', '==', co),
-      where('active', '==', true),
       orderBy('timestamp', 'desc'),
-      limit(3),
+      limit(10),
     );
+    const now = Date.now();
     const unsub = onSnapshot(q, snap => {
-      setCompanyAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data(), _isCompany: true })));
+      const posts = snap.docs
+        .map(d => ({ id: d.id, ...d.data(), _isCompany: true }))
+        .filter(p => !p.expiresAt || p.expiresAt > now)
+        .slice(0, 3);
+      setCompanyAnnouncements(posts);
     }, () => setCompanyAnnouncements([]));
     return () => unsub();
   }, [user, rosterDoc?.company, userData?.company]);

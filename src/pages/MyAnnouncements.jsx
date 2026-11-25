@@ -59,12 +59,11 @@ export default function MyAnnouncements() {
     path: '/admin/my/announcements',
   });
 
-  // Global announcements (active, ordered by newest first)
+  // Global announcements
   useEffect(() => {
     if (authLoading || !user) return;
     const q = query(
       collection(db, 'announcements'),
-      where('active', '==', true),
       orderBy('timestamp', 'desc'),
     );
     const unsub = onSnapshot(q, snap => {
@@ -74,7 +73,7 @@ export default function MyAnnouncements() {
     return () => unsub();
   }, [authLoading, user]);
 
-  // Company announcements
+  // Company announcements (filtered client-side by expiresAt)
   useEffect(() => {
     if (authLoading || !user) return;
     const co = userData?.company || '';
@@ -82,11 +81,15 @@ export default function MyAnnouncements() {
     const q = query(
       collection(db, 'companyAnnouncements'),
       where('company', '==', co),
-      where('active', '==', true),
       orderBy('timestamp', 'desc'),
     );
+    const now = Date.now();
     const unsub = onSnapshot(q, snap => {
-      setCompanyAnns(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setCompanyAnns(
+        snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(p => !p.expiresAt || p.expiresAt > now),
+      );
       setLoadingCompany(false);
     }, () => setLoadingCompany(false));
     return () => unsub();
