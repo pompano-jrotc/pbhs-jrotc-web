@@ -187,7 +187,7 @@ const CadetPortal = () => {
       const now = Date.now();
       const visible = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(a => a.active && (!a.expiresAt || a.expiresAt > now));
+        .filter(a => a.active !== false && (!a.expiresAt || a.expiresAt > now));
       setAnnouncements(visible);
     }, () => {});
 
