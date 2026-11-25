@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.217" label="Current"     />
+        <Stat value="v1.8.218" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,8 +155,15 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.217" date="Nov 25" title="New: Full Chain of Command page at /admin/my/leadership" isCurrent changes={<>
-          <C type="feat">New authenticated page /admin/my/leadership — queries the full roster collection and displays every cadet in a top-down battalion hierarchy: Battalion Command → Battalion Staff → per-Company (HQ → Staff Assistants → Platoons → Squads with collapsible sections)</C>
+        <Release versions="v1.8.218" date="Nov 25" title="New: Interactive zoomable org chart at /admin/my/leadership" isCurrent changes={<>
+          <C type="feat">MyLeadership page completely rebuilt as a full-screen interactive SVG org chart — zoomable with mouse wheel or +/− buttons, pannable by dragging; shows all 184 roster entries as individual nodes connected by elbow edges</C>
+          <C type="feat">Each node displays full name, rank, and position title; colour-coded by tier: yellow (Battalion Cmd), green (Battalion Staff), blue (Company Cmd), indigo (Company Staff), teal (Platoon), grey (Squad)</C>
+          <C type="feat">Search bar highlights matching nodes in gold and auto-pans the viewport to the first result; match count shown inline</C>
+          <C type="feat">Fit-to-screen button and zoom percentage indicator; touch drag panning supported on mobile</C>
+          <C type="feat">Tree structure: BC → XO (+ S1–S7) + CSM (+ SGM) + DCO + per-company CC → XO/1SG (+ platoons → squads → members)</C>
+        </>} />
+        <Release versions="v1.8.217" date="Nov 25" title="New: Full Chain of Command page at /admin/my/leadership" isCurrent={false} changes={<>
+          <C type="feat">New authenticated page /admin/my/leadership — queries the full roster collection and displays every cadet in a top-down battalion hierarchy: Battalion Command → Battalion Staff → per-Company (HQ → Staff Assistants → Platoons → Squads, collapsible list)</C>
           <C type="feat">My Record "View All Leadership" button now links to the new authenticated chain of command page instead of the public /leadership page; button text updated to "View Full Chain of Command"</C>
           <C type="feat">Page is accessible to all approved portal members (myLevel() &gt;= 1)</C>
         </>} />
