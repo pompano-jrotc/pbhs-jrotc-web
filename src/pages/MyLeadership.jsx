@@ -5,8 +5,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
-import { Search, Shield, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
-// Shield kept for the empty-state fallback
+import { Search, Shield, ChevronDown } from 'lucide-react';
 import { usePageMeta } from '../hooks/usePageMeta';
 
 // ── Layout constants ──────────────────────────────────────────────────────────
@@ -249,11 +248,13 @@ export default function MyLeadership() {
   const [search, setSearch]       = useState('');
   const [vp, setVp]               = useState({ x: 0, y: 40, scale: 1 });
   const [selected, setSelected]   = useState(null); // { node, x, y }
+  const [zoomOpen, setZoomOpen]   = useState(false);
 
   const containerRef = useRef(null);
   const dragRef      = useRef(null);
   const wasDragRef   = useRef(false);
   const vpRef        = useRef(vp);
+  const zoomMenuRef  = useRef(null);
 
   usePageMeta({
     title: 'Chain of Command',
@@ -288,12 +289,17 @@ export default function MyLeadership() {
     return { nodes, edges, nodeMap, totalW, totalH };
   }, [entries]);
 
-  // ── Auto-fit on load ────────────────────────────────────────────────────────
+  // ── Initial viewport: center on user's own node at 100%, or fit-to-screen ───
   useEffect(() => {
     if (nodes.length === 0 || !containerRef.current) return;
     const r = containerRef.current.getBoundingClientRect();
-    const scale = Math.min(1, r.width / (totalW + 40), r.height / (totalH + 40)) * 0.9;
-    setVp({ x: (r.width - totalW * scale) / 2, y: 40, scale });
+    const myNode = nodes.find(n => n.entry?.linkedUid === user?.uid);
+    if (myNode) {
+      setVp({ scale: 1, x: r.width / 2 - myNode.x, y: r.height / 2 - myNode.y });
+    } else {
+      const scale = Math.min(1, r.width / (totalW + 40), r.height / (totalH + 40)) * 0.9;
+      setVp({ x: (r.width - totalW * scale) / 2, y: 40, scale });
+    }
   }, [nodes.length, totalW, totalH]);
 
   // ── Search highlight ────────────────────────────────────────────────────────
@@ -365,7 +371,28 @@ export default function MyLeadership() {
   };
   const onTouchEnd = () => { touchRef.current = null; };
 
-  // ── Fit to screen ───────────────────────────────────────────────────────────
+  // ── Close zoom dropdown on outside click ────────────────────────────────────
+  useEffect(() => {
+    if (!zoomOpen) return;
+    const handler = (e) => {
+      if (zoomMenuRef.current && !zoomMenuRef.current.contains(e.target)) setZoomOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [zoomOpen]);
+
+  // ── Zoom helpers ─────────────────────────────────────────────────────────────
+  const ZOOM_OPTIONS = [
+    { label: 'Fit',  value: 'fit' },
+    { label: '50%',  value: 0.5   },
+    { label: '75%',  value: 0.75  },
+    { label: '90%',  value: 0.9   },
+    { label: '100%', value: 1     },
+    { label: '125%', value: 1.25  },
+    { label: '150%', value: 1.5   },
+    { label: '200%', value: 2     },
+  ];
+
   const fitToScreen = () => {
     if (!containerRef.current || nodes.length === 0) return;
     const r = containerRef.current.getBoundingClientRect();
@@ -373,14 +400,17 @@ export default function MyLeadership() {
     setVp({ x: (r.width - totalW * scale) / 2, y: 40, scale });
   };
 
-  const zoom = (dir) => {
+  const applyZoomOption = (opt) => {
+    setZoomOpen(false);
+    if (opt.value === 'fit') { fitToScreen(); return; }
     if (!containerRef.current) return;
     const r = containerRef.current.getBoundingClientRect();
     const mx = r.width / 2, my = r.height / 2;
-    setVp(v => {
-      const ns = Math.max(0.04, Math.min(3, v.scale * (dir > 0 ? 1.3 : 1 / 1.3)));
-      return { scale: ns, x: mx - (mx - v.x) * (ns / v.scale), y: my - (my - v.y) * (ns / v.scale) };
-    });
+    setVp(v => ({
+      scale: opt.value,
+      x: mx - (mx - v.x) * (opt.value / v.scale),
+      y: my - (my - v.y) * (opt.value / v.scale),
+    }));
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -417,20 +447,34 @@ export default function MyLeadership() {
           )}
         </div>
 
-        {/* Zoom controls */}
-        <div className="flex items-center gap-1">
-          <button onClick={() => zoom(1)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
-            <ZoomIn size={12} />
-          </button>
-          <button onClick={() => zoom(-1)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
-            <ZoomOut size={12} />
-          </button>
-          <button onClick={fitToScreen} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors">
-            <Maximize2 size={12} />
-          </button>
-          <span className="text-[10px] text-slate-600 ml-1 select-none w-10 text-right tabular-nums">
+        {/* Zoom dropdown */}
+        <div ref={zoomMenuRef} className="relative">
+          <button
+            onClick={() => setZoomOpen(o => !o)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] font-bold text-slate-300 hover:text-white transition-colors tabular-nums"
+          >
             {Math.round(vp.scale * 100)}%
-          </span>
+            <ChevronDown size={10} className={`text-slate-500 transition-transform ${zoomOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {zoomOpen && (
+            <div className="absolute right-0 top-full mt-1 w-28 rounded-xl border border-white/10 bg-slate-900 shadow-2xl overflow-hidden z-50 py-1">
+              {ZOOM_OPTIONS.map((opt, i) => (
+                <React.Fragment key={opt.label}>
+                  {i === 1 && <div className="border-t border-white/10 my-1" />}
+                  <button
+                    onClick={() => applyZoomOption(opt)}
+                    className={`w-full text-left px-3 py-1.5 text-[11px] font-medium transition-colors hover:bg-white/8 ${
+                      opt.value !== 'fit' && Math.round(vp.scale * 100) === Math.round(opt.value * 100)
+                        ? 'text-yellow-400 bg-yellow-500/8'
+                        : 'text-slate-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                </React.Fragment>
+              ))}
+            </div>
+          )}
         </div>
 
         <span className="text-[9px] text-slate-600 hidden sm:block">scroll to zoom · drag to pan</span>
