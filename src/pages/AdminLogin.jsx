@@ -354,7 +354,7 @@ const AdminLogin = () => {
                   autoComplete="one-time-code"
                   placeholder="6-DIGIT CODE"
                   maxLength={6}
-                  className="w-full bg-blue-50/50 dark:bg-black/40 border border-blue-100 dark:border-white/10 rounded-2xl py-4 px-5 text-sm focus:border-blue-100 dark:focus:border-white/10 outline-none transition-all font-black tracking-[0.4em] text-center text-slate-900 dark:text-white placeholder:text-blue-200 dark:placeholder:text-slate-700 placeholder:tracking-widest"
+                  className="w-full bg-blue-50/50 dark:bg-black/40 border border-blue-100 dark:border-white/10 rounded-2xl py-4 px-5 text-sm focus:border-blue-100 dark:focus:border-white/10 outline-none transition-all font-black tracking-[0.4em] text-center text-slate-900 dark:text-white placeholder:text-blue-200 dark:placeholder:text-slate-700 placeholder:tracking-widest caret-white"
                   value={mfaCode}
                   onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
                   required
