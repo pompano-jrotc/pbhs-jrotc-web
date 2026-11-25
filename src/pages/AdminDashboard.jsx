@@ -52,7 +52,7 @@ const AdminDashboard = () => {
       const unsubRequests = onSnapshot(collection(db, "uniform_requests"), (snapshot) => {
         const pending = snapshot.docs.filter(d => d.data().status === 'Pending').length;
         setRequestCount(pending);
-      });
+      }, () => {});
       unsubs.push(unsubRequests);
     } else if (userLvl >= COMMAND_LEVEL && userData.company) {
       // Company leadership (45–69): show cadets still pending turn-in in their company.

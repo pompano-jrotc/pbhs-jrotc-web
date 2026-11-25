@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.212" label="Current"     />
+        <Stat value="v1.8.213" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.212" date="Nov 25" title="Bug fix — photo upload 401; CSP blocks image preview blob URLs in Publishing Hub" isCurrent changes={<>
+        <Release versions="v1.8.213" date="Nov 25" title="Bug fix — uncaught Firestore listener error on AdminDashboard uniform_requests" isCurrent changes={<>
+          <C type="fix">src/pages/AdminDashboard.jsx: uniform_requests snapshot had no error callback — Firestore permission errors (transient during index builds or brief auth-state changes) logged as uncaught listener errors; added silent error handler</C>
+        </>} />
+        <Release versions="v1.8.212" date="Nov 25" title="Bug fix — photo upload 401; CSP blocks image preview blob URLs in Publishing Hub" isCurrent={false} changes={<>
           <C type="fix">src/utils/cloudinaryUpload.js, cloudinarySignedUpload.js: upload signature fetch was missing Firebase ID token in Authorization header — server always returned 401 for authenticated users trying to upload photos or documents</C>
           <C type="fix">vercel.json CSP img-src: added blob: source — browser-generated blob: URLs for upload preview images were blocked by Content Security Policy</C>
         </>} />
