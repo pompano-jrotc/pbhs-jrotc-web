@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.218" label="Current"     />
+        <Stat value="v1.8.219" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,12 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.218" date="Nov 25" title="New: Interactive zoomable org chart at /admin/my/leadership" isCurrent changes={<>
+        <Release versions="v1.8.219" date="Nov 25" title="Fix: Org chart company hierarchy restructured" isCurrent changes={<>
+          <C type="fix">Company staff assistants (S1–S7) now fall under Company XO instead of 1SG</C>
+          <C type="fix">Master Sergeant now falls under 1SG (not as a sibling of 1SG at CC level)</C>
+          <C type="fix">Company hierarchy: CC → XO (+ assistants) + 1SG (+ MSG + platoons → squads → members)</C>
+        </>} />
+        <Release versions="v1.8.218" date="Nov 25" title="New: Interactive zoomable org chart at /admin/my/leadership" isCurrent={false} changes={<>
           <C type="feat">MyLeadership page completely rebuilt as a full-screen interactive SVG org chart — zoomable with mouse wheel or +/− buttons, pannable by dragging; shows all 184 roster entries as individual nodes connected by elbow edges</C>
           <C type="feat">Each node displays full name, rank, and position title; colour-coded by tier: yellow (Battalion Cmd), green (Battalion Staff), blue (Company Cmd), indigo (Company Staff), teal (Platoon), grey (Squad)</C>
           <C type="feat">Search bar highlights matching nodes in gold and auto-pans the viewport to the first result; match count shown inline</C>

@@ -99,14 +99,18 @@ function buildTree(entries) {
         return makeNode(plLeader, psNode ? [psNode] : squadNodes);
       });
 
-    // 1SG children: assistants + platoons; CC children: XO, 1SG (or MSG), platoons fallback
-    const isgChildren = [...asst.map(e => makeNode(e)), ...platoonNodes];
+    // XO has company staff assistants as children
+    const xoNode = makeNode(xo, asst.map(e => makeNode(e)));
+
+    // 1SG has MSG + platoons as children
+    const msgNode = msg ? makeNode(msg) : null;
+    const isgChildren = [msgNode, ...platoonNodes].filter(Boolean);
     const isgNode = isg ? makeNode(isg, isgChildren) : null;
 
+    // CC children: XO (with assistants), 1SG (with MSG + platoons)
     const ccChildren = [
-      xo  ? makeNode(xo)  : null,
+      xoNode,
       isgNode ?? (isgChildren.length ? makeNode(null, isgChildren) : null),
-      msg ? makeNode(msg) : null,
     ].filter(Boolean);
 
     return makeNode(cc, ccChildren);
