@@ -67,7 +67,12 @@ export default function MyAnnouncements() {
       orderBy('timestamp', 'desc'),
     );
     const unsub = onSnapshot(q, snap => {
-      setGlobalAnns(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const now = Date.now();
+      setGlobalAnns(
+        snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(a => a.active && (!a.expiresAt || a.expiresAt > now)),
+      );
       setLoadingGlobal(false);
     }, () => setLoadingGlobal(false));
     return () => unsub();

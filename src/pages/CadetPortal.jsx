@@ -184,7 +184,11 @@ const CadetPortal = () => {
       limit(3),
     );
     const unsubAnn = onSnapshot(annQ, snap => {
-      setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const now = Date.now();
+      const visible = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(a => a.active && (!a.expiresAt || a.expiresAt > now));
+      setAnnouncements(visible);
     }, () => {});
 
     const unsubLeadership = onSnapshot(collection(db, 'leadership'), snap => {

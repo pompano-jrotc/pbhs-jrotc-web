@@ -73,7 +73,7 @@ const AdminAnnouncements = () => {
       const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       const now = Date.now();
       const filtered = all
-        .filter(p => !p.expiresAt || p.expiresAt > now)
+        .filter(p => userPower >= STAFF_LEVEL || (!p.expiresAt || p.expiresAt > now))
         .filter(p => userPower >= STAFF_LEVEL || p.company === userData.company);
       setCompanyPosts(filtered);
     }, () => {});
@@ -463,12 +463,15 @@ const AdminAnnouncements = () => {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-8 shadow-xl dark:shadow-none overflow-y-auto max-h-[700px]">
             <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-6 px-2">Broadcast History</h2>
             <div className="space-y-4">
-              {existingAnnouncements.map(item => (
-                <div key={item.id} className="bg-slate-50 dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-white/5 flex justify-between items-start hover:border-yellow-500/30 transition-all shadow-sm dark:shadow-none">
+              {existingAnnouncements.map(item => {
+                const isExpired = (item.expiresAt && item.expiresAt <= Date.now()) || item.active === false;
+                return (
+                <div key={item.id} className={`bg-slate-50 dark:bg-slate-950 p-5 rounded-2xl border flex justify-between items-start hover:border-yellow-500/30 transition-all shadow-sm dark:shadow-none ${isExpired ? 'border-slate-300 dark:border-white/10 opacity-60' : 'border-slate-200 dark:border-white/5'}`}>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded border border-yellow-500/50 text-yellow-500 bg-white dark:bg-slate-900">{item.eventType}</span>
                       <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-slate-400">To: {item.target}</span>
+                      {isExpired && <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-slate-200 dark:bg-white/10 text-slate-500">Archived</span>}
                     </div>
                     {item.title && <p className="text-sm font-black text-slate-900 dark:text-white mb-1">{item.title}</p>}
                     <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed pr-4 font-medium whitespace-pre-wrap">{item.content}</p>
@@ -501,7 +504,8 @@ const AdminAnnouncements = () => {
                     <Trash2 size={18} />
                   </button>
                 </div>
-              ))}
+                );
+              })}
               {existingAnnouncements.length === 0 && (
                 <p className="text-center text-slate-400 dark:text-slate-600 text-xs font-bold uppercase tracking-widest py-10">No records found</p>
               )}
@@ -632,11 +636,13 @@ const AdminAnnouncements = () => {
                       ? ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' · ' +
                         ts.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
                       : '';
+                    const isExpired = post.expiresAt && post.expiresAt <= Date.now();
                     return (
-                      <div key={post.id} className="bg-slate-50 dark:bg-slate-950 p-5 rounded-2xl border border-slate-200 dark:border-white/5 flex justify-between items-start hover:border-yellow-500/30 transition-all">
+                      <div key={post.id} className={`bg-slate-50 dark:bg-slate-950 p-5 rounded-2xl border flex justify-between items-start hover:border-yellow-500/30 transition-all ${isExpired ? 'border-slate-300 dark:border-white/10 opacity-60' : 'border-slate-200 dark:border-white/5'}`}>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded border border-yellow-500/50 text-yellow-500 bg-white dark:bg-slate-900">{post.company}</span>
+                            {isExpired && <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded bg-slate-200 dark:bg-white/10 text-slate-500">Archived</span>}
                           </div>
                           {post.title && <p className="text-sm font-black text-slate-900 dark:text-white mb-1">{post.title}</p>}
                           <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed pr-4 font-medium whitespace-pre-wrap">{post.content}</p>
