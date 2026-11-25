@@ -6,6 +6,7 @@
 
 import { validateUpload } from './validateUpload';
 import { withRetry } from './withRetry';
+import { auth } from '../firebase';
 
 /**
  * Upload a document (PDF or WebP image) to Cloudinary via signed upload.
@@ -24,8 +25,11 @@ export async function uploadPdfSigned(file, folder = 'documents') {
   // PDFs stay on raw/upload.
   const resourceType = detectedType === 'image/webp' ? 'image' : 'raw';
 
-  // Get a short-lived signature from our API endpoint
-  const signRes = await fetch(`/api/cloudinary-sign?folder=${encodeURIComponent(folder)}`);
+  // Get a short-lived signature from our API endpoint (requires Firebase auth)
+  const idToken = await auth.currentUser?.getIdToken();
+  const signRes = await fetch(`/api/cloudinary-sign?folder=${encodeURIComponent(folder)}`, {
+    headers: idToken ? { Authorization: `Bearer ${idToken}` } : {},
+  });
   if (!signRes.ok) {
     const { error: msg } = await signRes.json().catch(() => ({}));
     throw new Error(msg || 'Failed to get upload credentials');

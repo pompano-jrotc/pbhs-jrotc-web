@@ -1,6 +1,7 @@
 import { withRetry } from './withRetry';
 import { validateUpload } from './validateUpload';
 import { convertToWebp } from './convertToWebp';
+import { auth } from '../firebase';
 
 /**
  * Upload a file to Cloudinary using a server-signed upload token so the
@@ -21,7 +22,10 @@ export async function uploadToCloudinary(file, kind, folder = 'photos') {
     ? await convertToWebp(file)
     : file;
 
-  const signRes = await fetch(`/api/cloudinary-sign?folder=${encodeURIComponent(folder)}`);
+  const idToken = await auth.currentUser?.getIdToken();
+  const signRes = await fetch(`/api/cloudinary-sign?folder=${encodeURIComponent(folder)}`, {
+    headers: idToken ? { Authorization: `Bearer ${idToken}` } : {},
+  });
   if (!signRes.ok) {
     const { error: msg } = await signRes.json().catch(() => ({}));
     throw new Error(msg || 'Failed to get upload credentials');
