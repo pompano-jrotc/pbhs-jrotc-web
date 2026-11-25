@@ -370,30 +370,23 @@ const AdminUsers = ({ hideHeader = false }) => {
         }
 
         // ── Portal-is-master sync ─────────────────────────────────────────
-        // If this user account is the master for a linked roster entry, push
-        // personal-info fields to that roster doc so both stay in sync.
-        // Company/platoon/squad/secondaryCompany are NOT pushed from portal →
-        // roster: those are organisational assignments managed exclusively in
-        // the roster. Battalion entries (Zulu/Battalion) always have null
-        // platoon/squad regardless of what the portal doc says.
+        // Push all shared fields — including company — from accounts → roster
+        // so both records stay in sync regardless of which tab was edited last.
+        // Battalion entries (Zulu/Battalion) always have null platoon/squad.
         try {
           const BATTALION_COMPANIES = ['Battalion', 'Zulu'];
           const rosterSnap = await getDocs(
             query(collection(db, 'roster'), where('linkedUid', '==', editingRecord.id))
           );
           for (const rosterDoc of rosterSnap.docs) {
-            // Account page is always the source of truth for linked roster entries —
-            // push all shared fields regardless of syncMaster setting.
-            const existingCompany = rosterDoc.data().company;
-            const isBn = BATTALION_COMPANIES.includes(existingCompany);
+            const isBn = BATTALION_COMPANIES.includes(formData.company || '');
             await updateDoc(rosterDoc.ref, {
               fullName: (formData.fullName || '').trim().toUpperCase() || rosterDoc.data().fullName,
               rank:     formData.rank     || null,
               position: formData.position || null,
               gender:   formData.gender   || null,
               letLevel: formData.letLevel || null,
-              // Platoon and squad: pull from account for company entries;
-              // battalion entries always have null platoon/squad.
+              company:  formData.company  || null,
               ...(isBn
                 ? { platoon: null, squad: null }
                 : { platoon: formData.platoon || null, squad: formData.squad || null }),

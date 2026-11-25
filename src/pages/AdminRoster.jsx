@@ -2060,7 +2060,7 @@ const AdminRoster = ({ hideHeader = false }) => {
                   <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-3 flex items-center gap-2">
                     <RefreshCw size={10} className="text-slate-400 shrink-0" />
                     <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed">
-                      Saving from the <strong className="text-slate-600 dark:text-slate-300">Accounts page</strong> always updates this entry — the portal account is the source of truth.
+                      Both tabs stay in sync — saving from either <strong className="text-slate-600 dark:text-slate-300">Accounts</strong> or <strong className="text-slate-600 dark:text-slate-300">Roster</strong> updates the other record automatically.
                     </p>
                   </div>
                 )}
