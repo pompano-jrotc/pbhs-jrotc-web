@@ -769,10 +769,10 @@ const CadetPortal = () => {
                 )}
               </div>
               <Link
-                to="/leadership"
+                to="/admin/my/leadership"
                 className="mt-4 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest bg-slate-950/10 hover:bg-slate-950/20 rounded-xl py-2.5 transition-all"
               >
-                View All Leadership <ChevronRight size={12} />
+                View Full Chain of Command <ChevronRight size={12} />
               </Link>
             </div>
 

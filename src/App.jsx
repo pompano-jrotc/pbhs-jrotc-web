@@ -31,6 +31,7 @@ const SignUp = lazy(() => import('./pages/SignUp'));
 const Photos = lazy(() => import('./pages/Photos'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
 const MyAnnouncements = lazy(() => import('./pages/MyAnnouncements'));
+const MyLeadership = lazy(() => import('./pages/MyLeadership'));
 const CadetInfo = lazy(() => import('./pages/CadetInfo'));
 const Teams = lazy(() => import('./pages/Teams'));
 const Announcements = lazy(() => import('./pages/Announcements'));
@@ -461,6 +462,10 @@ const AppContent = () => {
             <Route
               path="/admin/my/announcements"
               element={<ProtectedRoute><MyAnnouncements /></ProtectedRoute>}
+            />
+            <Route
+              path="/admin/my/leadership"
+              element={<ProtectedRoute><MyLeadership /></ProtectedRoute>}
             />
 
             {/* AFI Prep Tool — command 45+ edit; staff 70+ create sessions */}

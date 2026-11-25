@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.216" label="Current"     />
+        <Stat value="v1.8.217" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,12 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.216" date="Nov 25" title="Fix My Record permission error — promotionScores and ribbonAwards Firestore rules" isCurrent changes={<>
+        <Release versions="v1.8.217" date="Nov 25" title="New: Full Chain of Command page at /admin/my/leadership" isCurrent changes={<>
+          <C type="feat">New authenticated page /admin/my/leadership — queries the full roster collection and displays every cadet in a top-down battalion hierarchy: Battalion Command → Battalion Staff → per-Company (HQ → Staff Assistants → Platoons → Squads with collapsible sections)</C>
+          <C type="feat">My Record "View All Leadership" button now links to the new authenticated chain of command page instead of the public /leadership page; button text updated to "View Full Chain of Command"</C>
+          <C type="feat">Page is accessible to all approved portal members (myLevel() &gt;= 1)</C>
+        </>} />
+        <Release versions="v1.8.216" date="Nov 25" title="Fix My Record permission error — promotionScores and ribbonAwards Firestore rules" isCurrent={false} changes={<>
           <C type="fix">firestore.rules promotionScores: removed per-document resource.data checks (company == userDoc().company and linkedUid == request.auth.uid) from allow read — Firestore denies the entire list query when any per-doc condition is present for users below 70; changed to allow read: if isSignedIn() &amp;&amp; myLevel() &gt;= 1; AdminS1 query already scopes by company for non-battalion users</C>
           <C type="fix">firestore.rules ribbonAwards: resource.data.rosterDocId == request.auth.uid was comparing a Firestore doc ID to a Firebase Auth UID (always false) and was a per-document list-query check that broke ribbon fetch on My Record for all users below level 45; changed to allow read: if isSignedIn() &amp;&amp; myLevel() &gt;= 1</C>
         </>} />
