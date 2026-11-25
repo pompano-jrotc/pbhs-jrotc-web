@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.219" label="Current"     />
+        <Stat value="v1.8.220" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.219" date="Nov 25" title="Fix: Org chart company hierarchy restructured" isCurrent changes={<>
+        <Release versions="v1.8.220" date="Nov 25" title="Org chart: sorted staff + click-to-expand info card" isCurrent changes={<>
+          <C type="feat">Company staff assistants now sorted S1→S2→S3→S4→S5→S6→S7 for all companies</C>
+          <C type="feat">Clicking any node opens a floating info card showing full name, rank, position, unit, LET level, and secondary position</C>
+        </>} />
+        <Release versions="v1.8.219" date="Nov 25" title="Fix: Org chart company hierarchy restructured" isCurrent={false} changes={<>
           <C type="fix">Company staff assistants (S1–S7) now fall under Company XO instead of 1SG</C>
           <C type="fix">Master Sergeant now falls under 1SG (not as a sibling of 1SG at CC level)</C>
           <C type="fix">Company hierarchy: CC → XO (+ assistants) + 1SG (+ MSG + platoons → squads → members)</C>

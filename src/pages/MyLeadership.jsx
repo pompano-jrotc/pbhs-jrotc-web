@@ -17,6 +17,13 @@ const VG = 44;    // vertical gap between levels
 const BATTALION_CO = new Set(['Battalion', 'Zulu', 'HQ', '', null, undefined]);
 const COMPANY_ORDER = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot'];
 
+const ASST_ORDER = {
+  'Company S1 Assistant': 1, 'Company S2 Assistant': 2,
+  'Company S3 Assistant': 3, 'Company S4 Assistant': 4,
+  'Company S5 Assistant': 5, 'Company S6 Assistant': 6,
+  'Company S7 Assistant': 7,
+};
+
 // ── Build org-tree from flat roster entries ───────────────────────────────────
 let _uid = 0;
 const makeNode = (entry, children = []) => ({
@@ -50,7 +57,9 @@ function buildTree(entries) {
     const xo   = coEntries.find(e => e.position === 'Company XO');
     const isg  = coEntries.find(e => e.position === 'First Sergeant');
     const msg  = coEntries.find(e => e.position === 'Master Sergeant');
-    const asst = coEntries.filter(e => e.position?.includes('Assistant'));
+    const asst = coEntries
+      .filter(e => e.position?.includes('Assistant'))
+      .sort((a, b) => (ASST_ORDER[a.position] ?? 99) - (ASST_ORDER[b.position] ?? 99));
 
     // Entries that go into platoon/squad levels
     const HQ_POS = new Set(['Company Commander','Company XO','First Sergeant','Master Sergeant']);
@@ -225,9 +234,11 @@ export default function MyLeadership() {
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
   const [vp, setVp]               = useState({ x: 0, y: 40, scale: 1 });
+  const [selected, setSelected]   = useState(null); // { node, x, y }
 
   const containerRef = useRef(null);
   const dragRef      = useRef(null);
+  const wasDragRef   = useRef(false);
   const vpRef        = useRef(vp);
 
   usePageMeta({
@@ -314,12 +325,15 @@ export default function MyLeadership() {
   // ── Mouse drag ──────────────────────────────────────────────────────────────
   const onMouseDown = (e) => {
     if (e.button !== 0) return;
+    wasDragRef.current = false;
     dragRef.current = { sx: e.clientX, sy: e.clientY, vx: vpRef.current.x, vy: vpRef.current.y };
   };
   const onMouseMove = (e) => {
     if (!dragRef.current) return;
     const { sx, sy, vx, vy } = dragRef.current;
-    setVp(v => ({ ...v, x: vx + (e.clientX - sx), y: vy + (e.clientY - sy) }));
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) wasDragRef.current = true;
+    setVp(v => ({ ...v, x: vx + dx, y: vy + dy }));
   };
   const onMouseUp = () => { dragRef.current = null; };
 
@@ -411,7 +425,7 @@ export default function MyLeadership() {
       {/* ── Canvas ── */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-hidden bg-slate-950 select-none cursor-grab active:cursor-grabbing"
+        className="flex-1 overflow-hidden bg-slate-950 select-none cursor-grab active:cursor-grabbing relative"
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
@@ -419,6 +433,7 @@ export default function MyLeadership() {
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
+        onClick={() => setSelected(null)}
       >
         <svg
           width="100%"
@@ -452,17 +467,28 @@ export default function MyLeadership() {
               const nx   = node.x - NW / 2;
               const ny   = node.y - NH / 2;
 
+              const isSelected = selected?.node?.id === node.id;
               return (
-                <g key={node.id} transform={`translate(${nx},${ny})`}>
+                <g
+                  key={node.id}
+                  transform={`translate(${nx},${ny})`}
+                  style={{ cursor: node.entry ? 'pointer' : 'default' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (wasDragRef.current || !node.entry) return;
+                    setSelected(isSelected ? null : { node, x: e.clientX, y: e.clientY });
+                  }}
+                >
                   {/* Background rect */}
                   <rect
                     width={NW} height={NH} rx={7} ry={7}
                     fill={c.bg}
-                    stroke={hit ? '#fbbf24' : c.border}
-                    strokeWidth={hit ? 2 : 1}
+                    stroke={isSelected ? '#38bdf8' : hit ? '#fbbf24' : c.border}
+                    strokeWidth={isSelected || hit ? 2 : 1}
                   />
-                  {/* Search highlight overlay */}
-                  {hit && <rect width={NW} height={NH} rx={7} ry={7} fill="#fbbf2422" />}
+                  {/* Highlight overlays */}
+                  {hit        && <rect width={NW} height={NH} rx={7} ry={7} fill="#fbbf2422" />}
+                  {isSelected && <rect width={NW} height={NH} rx={7} ry={7} fill="#38bdf822" />}
 
                   {/* Name */}
                   <text
@@ -506,6 +532,62 @@ export default function MyLeadership() {
             })}
           </g>
         </svg>
+
+        {/* Info popup card */}
+        {selected && (() => {
+          const e   = selected.node.entry;
+          const sty = nodeStyle(e);
+          const containerRect = containerRef.current?.getBoundingClientRect();
+          const rawX = selected.x - (containerRect?.left ?? 0) + 12;
+          const rawY = selected.y - (containerRect?.top  ?? 0) - 10;
+          const popW = 220;
+          const left = rawX + popW > (containerRect?.width ?? 9999) ? rawX - popW - 24 : rawX;
+          const rows = [
+            { label: 'Position',           value: e.position },
+            { label: 'Rank',               value: e.rank },
+            { label: 'Company',            value: e.company },
+            { label: 'Platoon',            value: e.platoon },
+            { label: 'Squad',              value: e.squad },
+            { label: 'LET Level',          value: e.letLevel != null ? `LET ${e.letLevel}` : null },
+            { label: 'Secondary Position', value: e.secondaryPosition },
+          ].filter(r => r.value);
+          return (
+            <div
+              onClick={ev => ev.stopPropagation()}
+              style={{
+                position: 'absolute',
+                left,
+                top: rawY,
+                width: popW,
+                background: '#0d1117',
+                border: `1.5px solid ${sty.border}`,
+                borderRadius: 10,
+                boxShadow: '0 8px 32px #00000080',
+                zIndex: 50,
+                overflow: 'hidden',
+              }}
+            >
+              {/* Header */}
+              <div style={{ background: sty.bg, padding: '10px 12px 8px', borderBottom: `1px solid ${sty.border}40` }}>
+                <div style={{ color: sty.label, fontSize: 12, fontWeight: 800, lineHeight: 1.2, letterSpacing: '0.01em' }}>
+                  {e.fullName}
+                </div>
+                {e.rank && (
+                  <div style={{ color: sty.sub, fontSize: 10, marginTop: 2 }}>{e.rank}</div>
+                )}
+              </div>
+              {/* Body */}
+              <div style={{ padding: '8px 12px 10px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {rows.map(({ label, value }) => (
+                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                    <span style={{ fontSize: 9, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0, paddingTop: 1 }}>{label}</span>
+                    <span style={{ fontSize: 10, color: '#d1d5db', textAlign: 'right', lineHeight: 1.3 }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Empty state */}
         {entries.length === 0 && (
