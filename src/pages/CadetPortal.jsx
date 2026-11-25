@@ -333,11 +333,6 @@ const CadetPortal = () => {
                   desc: 'Instructors post scholarships, internships, and programs here. Browse and bookmark the ones that interest you.',
                   link: '/admin/scholarships',
                 },
-                {
-                  title: 'Achievement Wall',
-                  desc: 'Promotions, competition wins, and other accomplishments posted by staff — your achievements are now on the record.',
-                  link: '/admin/achievements',
-                },
               ].map(item => (
                 <Link
                   key={item.title}
