@@ -9,10 +9,10 @@ import { Search, Shield, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { usePageMeta } from '../hooks/usePageMeta';
 
 // ── Layout constants ──────────────────────────────────────────────────────────
-const NW = 114;   // node width
-const NH = 54;    // node height
-const HG = 10;    // horizontal gap between siblings
-const VG = 68;    // vertical gap between levels
+const NW = 92;    // node width
+const NH = 52;    // node height
+const HG = 5;     // horizontal gap between siblings
+const VG = 62;    // vertical gap between levels
 
 const BATTALION_CO = new Set(['Battalion', 'Zulu', 'HQ', '', null, undefined]);
 const COMPANY_ORDER = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo', 'Foxtrot'];
@@ -466,24 +466,24 @@ export default function MyLeadership() {
 
                   {/* Name */}
                   <text
-                    x={NW / 2} y={19}
+                    x={NW / 2} y={18}
                     textAnchor="middle"
                     fill={hit ? '#fbbf24' : c.label}
-                    fontSize={9.5}
+                    fontSize={9}
                     fontWeight="800"
                     fontFamily="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif"
                     letterSpacing="0.01em"
                   >
-                    {trunc(name, 16)}
+                    {trunc(name, 14)}
                   </text>
 
                   {/* Rank */}
                   {rank && (
                     <text
-                      x={NW / 2} y={31}
+                      x={NW / 2} y={29}
                       textAnchor="middle"
                       fill={c.sub}
-                      fontSize={8}
+                      fontSize={7.5}
                       fontFamily="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif"
                       letterSpacing="0.04em"
                     >
@@ -493,13 +493,13 @@ export default function MyLeadership() {
 
                   {/* Position */}
                   <text
-                    x={NW / 2} y={rank ? 43 : 36}
+                    x={NW / 2} y={rank ? 41 : 34}
                     textAnchor="middle"
                     fill="#6b7280"
-                    fontSize={7.5}
+                    fontSize={7}
                     fontFamily="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif"
                   >
-                    {trunc(pos, 19)}
+                    {trunc(pos, 16)}
                   </text>
                 </g>
               );
