@@ -275,7 +275,7 @@ export default function AdminServiceHours({ hideHeader = false }) {
   const totalPending = entries.filter(e => e.status === 'pending').length;
 
   return (
-    <div className={hideHeader ? 'w-full' : 'p-4 md:p-6 space-y-6 max-w-5xl mx-auto'}>
+    <div className={hideHeader ? 'w-full' : 'p-4 md:p-6 space-y-6'}>
       {!hideHeader && (
         <AdminPageHeader
           title="Service Hours"
