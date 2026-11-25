@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.220" label="Current"     />
+        <Stat value="v1.8.225" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,26 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.220" date="Nov 25" title="Org chart: sorted staff + click-to-expand info card" isCurrent changes={<>
+        <Release versions="v1.8.225" date="Nov 25" title="Fix: Firestore permission errors on My Profile — uniformSizes + fundraiser personal view" isCurrent changes={<>
+          <C type="fix">firestore.rules uniformSizes: opened allow read to myLevel() &gt;= 1 — previous rule required myLevel() &gt;= 45 OR a per-document resource.data.linkedUid check that Firestore cannot verify from a cadetId query constraint, causing permission denials for all cadets below company command</C>
+          <C type="fix">AdminFundraiser personal subscription: replaced query by cadetId with where(&apos;linkedUid&apos;, &apos;==&apos;, user.uid) — cadetId constraint could not satisfy the fundraiserEntries read rule for cadets below level 70; linkedUid constraint lets Firestore verify the self-read condition directly</C>
+          <C type="fix">Removed now-unnecessary roster doc pre-fetch step from AdminFundraiser personal view (the fundraiserEntries query no longer needs the roster doc ID)</C>
+        </>} />
+        <Release versions="v1.8.224" date="Nov 25" title="Org chart: zoom dropdown + start centered on user's node" isCurrent={false} changes={<>
+          <C type="feat">Zoom controls replaced with a dropdown showing Fit / 50% / 75% / 90% / 100% / 125% / 150% / 200%</C>
+          <C type="feat">Page now loads at 100% zoom centered on the current user's own roster node; falls back to fit-to-screen if user has no linked roster entry</C>
+        </>} />
+        <Release versions="v1.8.223" date="Nov 25" title="Replace shield with battalion logo in Chain of Command toolbar" isCurrent={false} changes={<>
+          <C type="feat">Chain of Command toolbar: shield icon replaced with /battalion-logo.png</C>
+        </>} />
+        <Release versions="v1.8.222" date="Nov 25" title="Fix: Squad Leader Assistants correctly placed between SL and squad members" isCurrent={false} changes={<>
+          <C type="fix">SLAs now render as an intermediate layer: SL → SLA → squad members; previously appeared as siblings of squad members</C>
+          <C type="fix">SLAs no longer incorrectly grouped under Company XO (position in ASST_ORDER exact-key lookup replaced substring includes check)</C>
+        </>} />
+        <Release versions="v1.8.221" date="Nov 25" title="Fix: LET level display in info card" isCurrent={false} changes={<>
+          <C type="fix">Info card LET level no longer shows &quot;LET LET 4&quot; — letLevel field already includes the &quot;LET &quot; prefix; removed duplicate prepend</C>
+        </>} />
+        <Release versions="v1.8.220" date="Nov 25" title="Org chart: sorted staff + click-to-expand info card" isCurrent={false} changes={<>
           <C type="feat">Company staff assistants now sorted S1→S2→S3→S4→S5→S6→S7 for all companies</C>
           <C type="feat">Clicking any node opens a floating info card showing full name, rank, position, unit, LET level, and secondary position</C>
         </>} />

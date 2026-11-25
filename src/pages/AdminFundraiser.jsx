@@ -285,38 +285,19 @@ const AdminFundraiser = () => {
   }, [canViewAll, myCompany]);
 
   // ── Personal-view state ───────────────────────────────────────────────────────
-  const [myRosterDocId,     setMyRosterDocId]     = useState(null);
-  const [myRosterDocLoaded, setMyRosterDocLoaded] = useState(false);
   const [myEntries,         setMyEntries]         = useState([]);
   const [myDataLoading,     setMyDataLoading]     = useState(true);
 
-  // Step 1 (personal view only): find my roster doc by linkedUid
+  // Personal view: subscribe to my entries by linkedUid.
+  // Querying by cadetId or cadetName required Firestore to evaluate a per-document
+  // resource.data.linkedUid condition that it cannot verify from those constraints,
+  // causing permission denials for cadets below level 70. linkedUid IS the auth UID,
+  // so Firestore can verify resource.data.linkedUid == request.auth.uid directly.
   useEffect(() => {
-    if (canViewFull || !user || authLoading) return;
-    getDocs(query(collection(db, 'roster'), where('linkedUid', '==', user.uid)))
-      .then(snap => {
-        setMyRosterDocId(snap.empty ? null : snap.docs[0].id);
-        setMyRosterDocLoaded(true);
-      })
-      .catch(() => setMyRosterDocLoaded(true));
-  }, [canViewFull, user, authLoading]);
-
-  // Step 2 (personal view only): subscribe to my entries once roster doc is known
-  useEffect(() => {
-    if (canViewFull || !myRosterDocLoaded) return;
+    if (canViewFull || !user) return;
     setMyDataLoading(true);
 
-    let q;
-    if (myRosterDocId) {
-      q = query(collection(db, 'fundraiserEntries'), where('cadetId', '==', myRosterDocId));
-    } else if (userData?.fullName) {
-      // Fallback: match by cadet name (for users without a linkedUid on their roster doc)
-      q = query(collection(db, 'fundraiserEntries'), where('cadetName', '==', userData.fullName));
-    } else {
-      setMyEntries([]);
-      setMyDataLoading(false);
-      return;
-    }
+    const q = query(collection(db, 'fundraiserEntries'), where('linkedUid', '==', user.uid));
 
     const unsub = onSnapshot(q, snap => {
       const all = snap.docs
@@ -331,7 +312,7 @@ const AdminFundraiser = () => {
     });
 
     return () => unsub();
-  }, [canViewFull, myRosterDocId, myRosterDocLoaded, userData?.fullName]);
+  }, [canViewFull, user]);
 
   // ── Full-view subscriptions ───────────────────────────────────────────────────
   useEffect(() => {
