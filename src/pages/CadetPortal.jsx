@@ -333,6 +333,11 @@ const CadetPortal = () => {
                   desc: 'Instructors post scholarships, internships, and programs here. Browse and bookmark the ones that interest you.',
                   link: '/admin/scholarships',
                 },
+                {
+                  title: 'Ribbon Rack',
+                  desc: 'Your awarded ribbons from staff are displayed here — scroll down to see your full ribbon rack and decoration history.',
+                  link: '/admin/my',
+                },
               ].map(item => (
                 <Link
                   key={item.title}
