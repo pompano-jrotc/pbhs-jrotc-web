@@ -381,16 +381,14 @@ service cloud.firestore {
     // delete — staff (70+) only. Commanders submit rosterPendingActions instead;
     //          Battalion S1 reviews and performs the actual delete.
     match /roster/{id} {
-      allow read: if isSignedIn() && (
-        myLevel() >= 70 ||
-        resource.data.linkedUid == request.auth.uid ||
-        (myLevel() >= 45 && resource.data.company == userDoc().company) ||
-        // Battalion members whose secondaryCompany attaches them to a company's
-        // class period — allows company XOs and 1SGs to see their attached cadets.
-        (myLevel() >= 45 && resource.data.secondaryCompany == userDoc().company) ||
-        (myLevel() >= 35 && resource.data.company == userDoc().company &&
-          userDoc().role in ['company_s1_assistant', 'company_s3_assistant', 'company_s4_assistant'])
-      );
+      // All approved portal members (level 1+) may list roster entries.
+      // The roster holds name/rank/position/company data only (no contact info —
+      // that lives in /users). This matches the chain-of-command page intent:
+      // every cadet can see the full battalion hierarchy.
+      // Firestore per-document resource.data checks on a list query return only
+      // matching docs, not the full collection — that's why the old rule returned
+      // just 1 record for squad members. Opening list to myLevel() >= 1 fixes it.
+      allow read: if isSignedIn() && myLevel() >= 1;
       allow create: if isSignedIn() && (
         myLevel() >= 70 ||
         // Company command (45–69): own company only, cannot assign battalion positions.
