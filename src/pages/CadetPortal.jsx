@@ -181,7 +181,7 @@ const CadetPortal = () => {
     const annQ = query(
       collection(db, 'announcements'),
       orderBy('timestamp', 'desc'),
-      limit(3),
+      limit(20),
     );
     const unsubAnn = onSnapshot(annQ, snap => {
       const now = Date.now();
@@ -546,7 +546,7 @@ const CadetPortal = () => {
                       Service Hours
                     </h2>
                     <Link to="/admin/service-hours" className="text-[10px] font-black uppercase tracking-widest text-yellow-500 hover:text-yellow-400 border border-yellow-500/30 hover:border-yellow-500/60 px-3 py-1.5 rounded-xl transition-all">
-                      Log Hours
+                      Details
                     </Link>
                   </div>
                   <div className="grid grid-cols-2 gap-4 mb-6">
@@ -565,7 +565,7 @@ const CadetPortal = () => {
                   {serviceHours.length === 0 ? (
                     <div className="text-center py-2 space-y-1">
                       <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No hours logged yet.</p>
-                      <p className="text-xs text-slate-400 dark:text-slate-500">Use the <strong className="font-bold text-slate-500">Log Hours</strong> button above to submit community service entries — your instructor will approve them and they'll count toward both thresholds.</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">Community service submissions are logged by your company leadership and approved by your instructor.</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
