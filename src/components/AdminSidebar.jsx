@@ -46,12 +46,14 @@ const AdminSidebar = ({
   const [isOnTeam, setIsOnTeam] = useState(false);
 
   useEffect(() => {
+    const currentLevel = ROLE_HIERARCHY[role] || 0;
+    if (currentLevel < 70) return; // isStaffObserver/canApproveUniform/isAdmin required for full-collection read
     const unsub = onSnapshot(collection(db, 'uniform_requests'), (snapshot) => {
       const pending = snapshot.docs.filter(d => d.data().status === 'Pending').length;
       setRequestCount(pending);
-    });
+    }, () => {});
     return () => unsub();
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     const currentLevel = ROLE_HIERARCHY[role] || 0;
@@ -68,7 +70,7 @@ const AdminSidebar = ({
       collection(db, 'specialTeams'),
       where('commanderUids', 'array-contains', uid)
     );
-    const unsub = onSnapshot(q, snap => setIsOnTeam(!snap.empty));
+    const unsub = onSnapshot(q, snap => setIsOnTeam(!snap.empty), () => {});
     return () => unsub();
   }, [role, userData?.uid]);
 
