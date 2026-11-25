@@ -8,7 +8,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
-import { ROLE_HIERARCHY, STAFF_LEVEL } from '../constants';
+import { ROLE_HIERARCHY, STAFF_LEVEL, COMMAND_LEVEL } from '../constants';
 import AdminPageHeader from '../components/AdminPageHeader';
 import { writeLog } from '../lib/writeLog';
 import {
@@ -228,6 +228,7 @@ export default function AdminServiceHours({ hideHeader = false }) {
   const { user, userData, role } = useAuth();
   const userLevel = ROLE_HIERARCHY[role] || 0;
   const canReview = userLevel >= STAFF_REVIEW_LEVEL;
+  const canSubmit = userLevel >= COMMAND_LEVEL;
 
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -278,7 +279,7 @@ export default function AdminServiceHours({ hideHeader = false }) {
       {!hideHeader && (
         <AdminPageHeader
           title="Service Hours"
-          subtitle={canReview ? 'Review and approve cadet community service submissions' : 'Track your community service hours'}
+          subtitle={canReview ? 'Review and approve cadet community service submissions' : canSubmit ? 'Log and track community service hours for your company' : 'View your community service hours'}
           icon={Award}
         />
       )}
@@ -315,16 +316,18 @@ export default function AdminServiceHours({ hideHeader = false }) {
             </button>
           ))}
         </div>
-        <button
-          onClick={() => setShowForm(f => !f)}
-          className="ml-auto flex items-center gap-1.5 bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-black text-xs px-3 py-2 rounded-lg transition-colors"
-        >
-          <Plus size={13} />
-          {showForm ? 'Cancel' : 'Log Hours'}
-        </button>
+        {canSubmit && (
+          <button
+            onClick={() => setShowForm(f => !f)}
+            className="ml-auto flex items-center gap-1.5 bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-black text-xs px-3 py-2 rounded-lg transition-colors"
+          >
+            <Plus size={13} />
+            {showForm ? 'Cancel' : 'Log Hours'}
+          </button>
+        )}
       </div>
 
-      {showForm && (
+      {canSubmit && showForm && (
         <SubmitForm userData={userData} user={user} onDone={() => setShowForm(false)} />
       )}
 

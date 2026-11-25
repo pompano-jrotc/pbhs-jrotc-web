@@ -30,7 +30,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const SignUp = lazy(() => import('./pages/SignUp'));
 const Photos = lazy(() => import('./pages/Photos'));
 const AdminLogin = lazy(() => import('./pages/AdminLogin'));
-const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const MyAnnouncements = lazy(() => import('./pages/MyAnnouncements'));
 const CadetInfo = lazy(() => import('./pages/CadetInfo'));
 const Teams = lazy(() => import('./pages/Teams'));
 const Announcements = lazy(() => import('./pages/Announcements'));
@@ -93,7 +93,6 @@ const CadetPortal         = lazy(() => import('./pages/CadetPortal'));
 const AdminServiceHours   = lazy(() => import('./pages/AdminServiceHours'));
 const AdminAttendance     = lazy(() => import('./pages/AdminAttendance'));
 const AdminScholarshipBoard = lazy(() => import('./pages/AdminScholarshipBoard'));
-const AdminAchievementWall  = lazy(() => import('./pages/AdminAchievementWall'));
 const AdminAFIPrep          = lazy(() => import('./pages/AdminAFIPrep'));
 const AdminTeamsPrivate     = lazy(() => import('./pages/AdminTeamsPrivate'));
 
@@ -172,7 +171,7 @@ const ProtectedRoute = ({ children, minLevel, allowedRoles, excludedRoles }) => 
   // STAFF_LEVEL. Top command can always override, same as everywhere else.
   // excludedRoles denies specific roles even if they meet the level threshold.
   if (!canAccessRoute({ userLevel, role, minLevel, allowedRoles, adminLevel: ADMIN_LEVEL, excludedRoles })) {
-    return <Navigate to="/admin/dashboard" />;
+    return <Navigate to="/admin/my" />;
   }
 
   // Legacy MFA gate: applies to staff-level accounts that existed before the
@@ -264,7 +263,7 @@ const AppContent = () => {
               /admin (login) and /admin/signup are outside this wrapper on purpose —
               those pages don't need the authenticated sidebar. */}
           <Route element={<AdminLayout />}>
-            <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/admin/dashboard" element={<Navigate to="/admin/my" replace />} />
             {/* Gated: S4 assistants, company command (CC/XO/1SG), S4 logistics,
                 and battalion command (adminLevel override). All lower tiers are
                 redirected — cadets, squad/platoon leadership don't have access. */}
@@ -458,10 +457,10 @@ const AppContent = () => {
               element={<ProtectedRoute><AdminScholarshipBoard /></ProtectedRoute>}
             />
 
-            {/* Achievement Wall — all cadets view; staff 70+ post/hide */}
+            {/* My Announcements — authenticated view of relevant announcements */}
             <Route
-              path="/admin/achievements"
-              element={<ProtectedRoute><AdminAchievementWall /></ProtectedRoute>}
+              path="/admin/my/announcements"
+              element={<ProtectedRoute><MyAnnouncements /></ProtectedRoute>}
             />
 
             {/* AFI Prep Tool — command 45+ edit; staff 70+ create sessions */}

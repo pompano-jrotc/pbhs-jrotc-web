@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.214" label="Current"     />
+        <Stat value="v1.8.215" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,15 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.214" date="Nov 25" title="Bug fix — AdminSidebar uniform_requests uncaught Firestore error on every page" isCurrent changes={<>
+        <Release versions="v1.8.215" date="Nov 25" title="Remove Achievement Wall + Dashboard; fix cadet challenge; /my/announcements; service hours access" isCurrent changes={<>
+          <C type="feat">Removed Achievement Wall page and nav link — no longer needed</C>
+          <C type="feat">Removed Dashboard — all roles now redirect to My Record (/admin/my) as the portal home; /admin/dashboard redirects to /admin/my</C>
+          <C type="fix">firestore.rules roster: added self-read clause (resource.data.linkedUid == request.auth.uid) so squad members can query their own roster document; this unblocks cadet challenge scores, ribbons, and chain of command on My Record</C>
+          <C type="feat">CadetPortal announcements: now shows company announcements (from companyAnnouncements collection) merged with global announcements; "view all" chevron links to /admin/my/announcements</C>
+          <C type="feat">New /admin/my/announcements page — authenticated view of global announcements + company-specific announcements in one place</C>
+          <C type="feat">Service Hours: blocked submission for cadets below level 45 (company leadership+); read-only view preserved; firestore.rules serviceHours create now requires myLevel() &gt;= 45</C>
+        </>} />
+        <Release versions="v1.8.214" date="Nov 25" title="Bug fix — AdminSidebar uniform_requests uncaught Firestore error on every page" isCurrent={false} changes={<>
           <C type="fix">src/components/AdminSidebar.jsx: uniform_requests snapshot ran for all roles with no error handler — fired before auth settled on mount, throwing uncaught permission-denied on every admin page; added role guard (staff 70+ only) and silent error callback; also added error handler to specialTeams sidebar subscription</C>
         </>} />
         <Release versions="v1.8.213" date="Nov 25" title="Bug fix — uncaught Firestore listener error on AdminDashboard uniform_requests" isCurrent={false} changes={<>

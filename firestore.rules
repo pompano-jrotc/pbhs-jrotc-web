@@ -383,6 +383,7 @@ service cloud.firestore {
     match /roster/{id} {
       allow read: if isSignedIn() && (
         myLevel() >= 70 ||
+        resource.data.linkedUid == request.auth.uid ||
         (myLevel() >= 45 && resource.data.company == userDoc().company) ||
         // Battalion members whose secondaryCompany attaches them to a company's
         // class period — allows company XOs and 1SGs to see their attached cadets.
@@ -1108,16 +1109,13 @@ service cloud.firestore {
     }
 
     // ── Service Hours ─────────────────────────────────────────────────────────
-    // Create: cadets submit their own hours (linkedUid must match auth.uid);
+    // Create: company leadership (45+) log hours for cadets in their company;
     //         staff (70+) may create entries on behalf of any cadet.
     // Read:   staff (70+) can see all entries; a cadet can only see their own.
     // Update: staff (70+) — to approve/reject/reset status.
     // Delete: staff (70+) only.
     match /serviceHours/{id} {
-      allow create: if isSignedIn() && (
-        request.resource.data.linkedUid == request.auth.uid ||
-        myLevel() >= 70
-      );
+      allow create: if isSignedIn() && myLevel() >= 45;
       allow read:   if isSignedIn() && (
         myLevel() >= 70 ||
         resource.data.linkedUid == request.auth.uid

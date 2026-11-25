@@ -7,7 +7,6 @@ import { db, auth } from '../firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import {
-  LayoutDashboard,
   UserCircle,
   LogOut,
   Lock,
@@ -25,7 +24,6 @@ import {
   CalendarDays,
   Award,
   GraduationCap,
-  Trophy,
   Shield,
 } from 'lucide-react';
 import { ROLE_HIERARCHY, ADMIN_LEVEL, STAFF_LEVEL, COMMAND_LEVEL } from '../constants';
@@ -266,7 +264,6 @@ const AdminSidebar = ({
           )}
         </Link>
 
-        {navLink('/admin/dashboard', LayoutDashboard, 'Dashboard')}
         {navLink('/admin/my', Award, 'My Record')}
 
         {loading ? (
@@ -302,7 +299,6 @@ const AdminSidebar = ({
         {/* ── MY TOOLS ───────────────────────────────────────── */}
         <div className={`mt-3 pt-3 border-t border-slate-100 dark:border-white/5 ${collapsed ? '' : 'space-y-0.5'}`}>
           {navLink('/admin/scholarships', GraduationCap, 'Scholarships')}
-          {navLink('/admin/achievements', Trophy, 'Achievement Wall')}
           {isCommander && navLink('/admin/teams-private', Shield, 'Teams (Internal)')}
         </div>
 

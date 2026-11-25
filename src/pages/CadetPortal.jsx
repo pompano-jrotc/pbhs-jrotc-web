@@ -42,8 +42,9 @@ const CadetPortal = () => {
   const [rosterLoaded,  setRosterLoaded]  = useState(false);
   const [ribbons,       setRibbons]       = useState([]);
   const [ptRecords,     setPtRecords]     = useState([]);
-  const [events,        setEvents]        = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
+  const [events,              setEvents]              = useState([]);
+  const [announcements,       setAnnouncements]       = useState([]);
+  const [companyAnnouncements, setCompanyAnnouncements] = useState([]);
   const [leadership,    setLeadership]    = useState({ bc: '', xo: '', csm: '' });
 
   // Company chain (CC → PL → SL) for squad-level cadets
@@ -179,6 +180,7 @@ const CadetPortal = () => {
 
     const annQ = query(
       collection(db, 'announcements'),
+      where('active', '==', true),
       orderBy('timestamp', 'desc'),
       limit(3),
     );
@@ -203,6 +205,24 @@ const CadetPortal = () => {
     return () => { unsubEvents(); unsubAnn(); unsubLeadership(); };
   }, [loading, user]);
 
+
+  // ── Company announcements ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const co = rosterDoc?.company || userData?.company || '';
+    if (!co) return;
+    const q = query(
+      collection(db, 'companyAnnouncements'),
+      where('company', '==', co),
+      where('active', '==', true),
+      orderBy('timestamp', 'desc'),
+      limit(3),
+    );
+    const unsub = onSnapshot(q, snap => {
+      setCompanyAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data(), _isCompany: true })));
+    }, () => setCompanyAnnouncements([]));
+    return () => unsub();
+  }, [user, rosterDoc?.company, userData?.company]);
 
   // ── Fundraiser entries (own only via linkedUid) ───────────────────────────
   useEffect(() => {
@@ -784,18 +804,18 @@ const CadetPortal = () => {
                 <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
                   <Megaphone size={13} /> Announcements
                 </h3>
-                <Link to="/announcements" className="text-yellow-500 p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-all">
+                <Link to="/admin/my/announcements" className="text-yellow-500 p-1 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-all">
                   <ChevronRight size={16} />
                 </Link>
               </div>
-              {announcements.length === 0 ? (
+              {companyAnnouncements.length === 0 && announcements.length === 0 ? (
                 <div className="text-center py-3 space-y-1">
                   <p className="text-xs font-bold text-slate-500 dark:text-slate-400">No recent announcements.</p>
                   <p className="text-[10px] text-slate-400 dark:text-slate-500">Updates and messages from instructors or battalion staff will appear here when posted.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {announcements.map(a => {
+                  {[...companyAnnouncements, ...announcements].slice(0, 3).map(a => {
                     const ts = a.timestamp?.toDate?.();
                     const dateStr = ts
                       ? ts.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -803,6 +823,9 @@ const CadetPortal = () => {
                     const text = a.content || a.body || a.message || a.text || '';
                     return (
                       <div key={a.id} className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-white/5">
+                        {a._isCompany && (
+                          <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-0.5">{a.company} Co.</p>
+                        )}
                         {(a.title || dateStr) && (
                           <p className="text-[10px] font-black text-yellow-500 uppercase tracking-widest mb-1">
                             {a.title || dateStr}
