@@ -99,8 +99,19 @@ function buildTree(entries) {
           )
           .map(([, sqEs]) => {
             const sl      = sqEs.find(e => e.position === 'Squad Leader');
-            const others  = sqEs.filter(e => e.position !== 'Squad Leader');
-            return makeNode(sl, others.map(e => makeNode(e)));
+            const slas    = sqEs.filter(e => e.position === 'Squad Leader Assistant');
+            const members = sqEs.filter(e => !['Squad Leader','Squad Leader Assistant'].includes(e.position));
+            const memberNodes = members.map(e => makeNode(e));
+            // SLAs sit between SL and squad members
+            let slChildren;
+            if (slas.length === 1) {
+              slChildren = [makeNode(slas[0], memberNodes)];
+            } else if (slas.length > 1) {
+              slChildren = slas.map((sla, i) => makeNode(sla, i === 0 ? memberNodes : []));
+            } else {
+              slChildren = memberNodes;
+            }
+            return makeNode(sl, slChildren);
           });
 
         // PS → squads, PL → [PS] or squads directly
@@ -548,7 +559,7 @@ export default function MyLeadership() {
             { label: 'Company',            value: e.company },
             { label: 'Platoon',            value: e.platoon },
             { label: 'Squad',              value: e.squad },
-            { label: 'LET Level',          value: e.letLevel != null ? `LET ${e.letLevel}` : null },
+            { label: 'LET Level',          value: e.letLevel != null ? String(e.letLevel) : null },
             { label: 'Secondary Position', value: e.secondaryPosition },
           ].filter(r => r.value);
           return (
