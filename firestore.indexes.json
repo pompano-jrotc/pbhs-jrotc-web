@@ -129,6 +129,22 @@
         { "fieldPath": "isAssigned", "order": "ASCENDING" },
         { "fieldPath": "dueDate",    "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "s6Carts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive",   "order": "ASCENDING" },
+        { "fieldPath": "sortOrder",  "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "s6Tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive",   "order": "ASCENDING" },
+        { "fieldPath": "sortOrder",  "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
