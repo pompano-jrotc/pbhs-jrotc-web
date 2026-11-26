@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.226" label="Current"     />
+        <Stat value="v1.8.227" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.226" date="Nov 25" title="Fix: My Records fundraiser permission error — OR-chain poisoning in Firestore rules" isCurrent changes={<>
+        <Release versions="v1.8.227" date="Nov 25" title="Fix: S6 Checklist blank for company_s6_assistant — missing Firestore read rule" isCurrent changes={<>
+          <C type="fix">firestore.rules s6Checklists: added company_s6_assistant to allow read — previous rule only permitted s6_technology and s5_public_affairs; assistants querying by date could not satisfy the per-document resource.data.completedByUid check from that constraint, so the entire checklist view was blank</C>
+        </>} />
+        <Release versions="v1.8.226" date="Nov 25" title="Fix: My Records fundraiser permission error — OR-chain poisoning in Firestore rules" isCurrent={false} changes={<>
           <C type="fix">firestore.rules fundraiserEntries: split single allow read with OR chain into three separate allow read statements — Firestore&apos;s list query evaluator treats resource.data.company in an OR branch as a per-document check that poisons other branches (including linkedUid == request.auth.uid) even when those would independently satisfy the rule; separate statements are evaluated independently</C>
           <C type="fix">MyProfile fetchMyRecords: added per-query .catch(() =&gt; &lt;empty&gt;) wrapper on each Promise.all entry — a single denied query no longer blanks the entire My Records section; each data source fails gracefully in isolation</C>
         </>} />

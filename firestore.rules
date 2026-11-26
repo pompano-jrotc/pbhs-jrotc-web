@@ -582,10 +582,13 @@ service cloud.firestore {
     // Auto-created once per cart per day. Assistants can create/update their own.
     // S6 + S5 (read-only review) + staff can read all.
     match /s6Checklists/{checkId} {
+      // s6_technology and company_s6_assistant need full list access to do their job;
+      // s5_public_affairs and high command can review. The old per-document
+      // resource.data.completedByUid check blocked list queries for assistants
+      // because Firestore cannot verify that condition from a date constraint.
       allow read: if isSignedIn() && (
-        userDoc().role in ['s6_technology', 's5_public_affairs'] ||
-        myLevel() >= 85 ||
-        resource.data.completedByUid == request.auth.uid
+        userDoc().role in ['s6_technology', 's5_public_affairs', 'company_s6_assistant'] ||
+        myLevel() >= 85
       );
       allow create: if isSignedIn() && (
         userDoc().role in ['s6_technology', 'company_s6_assistant'] ||
