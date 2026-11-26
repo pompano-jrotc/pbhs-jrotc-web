@@ -332,7 +332,7 @@ function EventCard({ event, archived = false, onClick, onDelete, onArchive, onUn
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 const AdminS1 = ({ hideHeader = false, forceTab = null }) => {
-  const { userData, role, loading: authLoading } = useAuth();
+  const { user, userData, role, loading: authLoading } = useAuth();
   const confirm = useConfirm();
   const { companies }  = useCompanies();
 

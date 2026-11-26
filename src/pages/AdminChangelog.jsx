@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.235" label="Current"     />
+        <Stat value="v1.8.236" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.235" date="Nov 25" title="Permissions: S3 assistant loses uniform sizes; promotion board hidden from S1/S3 assistants in cadet profile" isCurrent changes={<>
+        <Release versions="v1.8.236" date="Nov 25" title="Fix: AdminS1 crash — &quot;user is not defined&quot; on form submission" isCurrent changes={<>
+          <C type="fix">AdminS1 useAuth destructure: added missing &apos;user&apos; — was used in form submission handlers (userId field) but never pulled from useAuth(), causing an uncaught ReferenceError on submit</C>
+        </>} />
+        <Release versions="v1.8.235" date="Nov 25" title="Permissions: S3 assistant loses uniform sizes; promotion board hidden from S1/S3 assistants in cadet profile" isCurrent={false} changes={<>
           <C type="fix">AdminStaff canSeeUniformSizes: removed company_s3_assistant — S3 assistants no longer see the Uniform Sizes sub-tab in the S4 shop</C>
           <C type="fix">AdminCadetProfile: Promotion Boards section (and Boards stat tile) now gated by canSeePromotionBoard — matches the same role allowlist as the Promotion Board sub-tab in AdminStaff; S1/S3 company assistants cannot view board scores on individual cadet profiles</C>
         </>} />
