@@ -9,7 +9,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { ROLE_HIERARCHY, STAFF_LEVEL } from '../constants';
+import { ROLE_HIERARCHY, STAFF_LEVEL, COMMAND_LEVEL } from '../constants';
 import {
   ClipboardList, Shield, Sparkles, Laptop, Users2, Package,
   Ruler, ShoppingCart, Shirt, NotepadText, ClipboardCheck,

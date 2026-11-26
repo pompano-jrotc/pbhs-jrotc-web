@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.228" label="Current"     />
+        <Stat value="v1.8.229" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.228" date="Nov 25" title="Fix: S3 shop redirects users below Command Level — tab visibility gate mismatch" isCurrent changes={<>
+        <Release versions="v1.8.229" date="Nov 25" title="Fix: COMMAND_LEVEL not imported in AdminStaff — crash on staff page" isCurrent changes={<>
+          <C type="fix">AdminStaff.jsx: added COMMAND_LEVEL to import from constants — v1.8.228 used COMMAND_LEVEL in canSeeS3/canSeeAAR but forgot to import it, causing a ReferenceError crash on /admin/staff for all users</C>
+        </>} />
+        <Release versions="v1.8.228" date="Nov 25" title="Fix: S3 shop redirects users below Command Level — tab visibility gate mismatch" isCurrent={false} changes={<>
           <C type="fix">AdminStaff canSeeS3 and canSeeAAR raised from userLevel &gt;= 20 to userLevel &gt;= COMMAND_LEVEL (45) — tabs were visible to platoon and squad roles but AdminAARLogs internally fires a redirect for anyone below level 45, causing an immediate redirect on click for those users</C>
         </>} />
         <Release versions="v1.8.227" date="Nov 25" title="Fix: S6 Checklist blank for company_s6_assistant — missing Firestore read rule" isCurrent={false} changes={<>
