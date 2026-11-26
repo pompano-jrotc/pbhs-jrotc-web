@@ -42,10 +42,11 @@ import { ROLE_HIERARCHY, ROLE_LABELS } from '../constants';
 import {
   Shirt, Plus, Trash2, Edit3, X, Loader2, CheckCircle2,
   Filter, Send, Lock, Unlock, AlertTriangle, ChevronDown,
-  Settings2, Check, GraduationCap, Download,
+  Settings2, Check, GraduationCap, Download, Printer,
 } from 'lucide-react';
 import { groupByLet } from '../utils/groupByLet';
 import { exportCSV } from '../utils/exportCSV';
+import { printRoster } from '../utils/printRoster';
 import { motion, AnimatePresence } from 'framer-motion';
 import AdminPageHeader from '../components/AdminPageHeader';
 import CadetSearch from '../components/CadetSearch';
@@ -188,9 +189,13 @@ const AdminUniformSizes = ({ hideHeader = false }) => {
   const [sizesFetchKey,  setSizesFetchKey]  = useState(0);
 
   // ── Column config state (S4 logistics only) ───────────────────────────────────
-  const [showConfigPanel, setShowConfigPanel] = useState(false);
-  const [configCols,      setConfigCols]      = useState(ALL_COLUMN_KEYS);
-  const [savingConfig,    setSavingConfig]     = useState(false);
+  const [showConfigPanel,  setShowConfigPanel]  = useState(false);
+  const [configCols,       setConfigCols]       = useState(ALL_COLUMN_KEYS);
+  const [savingConfig,     setSavingConfig]      = useState(false);
+
+  // ── Print state ───────────────────────────────────────────────────────────────
+  const [showPrintOptions, setShowPrintOptions] = useState(false);
+  const [printUniformCols, setPrintUniformCols] = useState(ALL_COLUMN_KEYS);
 
   // ── Finalize column selection ─────────────────────────────────────────────────
   const [submitCols, setSubmitCols] = useState(ALL_COLUMN_KEYS);
@@ -487,6 +492,20 @@ const AdminUniformSizes = ({ hideHeader = false }) => {
       { key: 'classAJacket', label: 'Class A Jacket' },
       { key: 'classAPants', label: 'Class A Pants' },
     ]);
+  };
+
+  // ── Print roster ─────────────────────────────────────────────────────────────
+  const handlePrintUniformRoster = () => {
+    const selectedColDefs = ALL_COLUMNS
+      .filter(c => printUniformCols.includes(c.key))
+      .map(col => ({
+        label: col.label,
+        getValue: c => sizeMap[c.uid]?.[col.key] || '',
+      }));
+    const cols = selectedColDefs.length > 0 ? selectedColDefs : null;
+    const title = `${activeCompany} Company – Uniform Sizes`;
+    printRoster(cadets, title, cols ? { columns: cols } : undefined);
+    setShowPrintOptions(false);
   };
 
   // ── Save record ───────────────────────────────────────────────────────────────
@@ -838,6 +857,56 @@ const AdminUniformSizes = ({ hideHeader = false }) => {
             >
               <Download size={13} /> Export CSV
             </button>
+          )}
+          {cadets.length > 0 && activeCompany && (
+            <div className="relative">
+              <button
+                onClick={() => setShowPrintOptions(o => !o)}
+                title="Print company roster"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest transition-all border bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 text-slate-500 dark:text-slate-400 hover:border-yellow-500 hover:text-yellow-600"
+              >
+                <Printer size={13} /> Print Roster
+              </button>
+              {showPrintOptions && (
+                <div className="absolute right-0 top-full mt-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-xl p-4 min-w-[220px]">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">Columns to Include</p>
+                  <div className="space-y-2 mb-3">
+                    {ALL_COLUMNS.map(col => (
+                      <label key={col.key} className="flex items-center gap-2.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={printUniformCols.includes(col.key)}
+                          onChange={e => setPrintUniformCols(prev =>
+                            e.target.checked ? [...prev, col.key] : prev.filter(k => k !== col.key)
+                          )}
+                          className="accent-yellow-500 w-3.5 h-3.5"
+                        />
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                          {col.label}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-slate-400 dark:text-slate-500 mb-3">
+                    Battalion leadership always included.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handlePrintUniformRoster}
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 hover:bg-yellow-400 text-slate-950 px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                    >
+                      <Printer size={11} /> Print PDF
+                    </button>
+                    <button
+                      onClick={() => setShowPrintOptions(false)}
+                      className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-[10px] font-black uppercase transition-all"
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.237" label="Current"     />
+        <Stat value="v1.8.239" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,15 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.237" date="Nov 25" title="Permissions: S1 assistant can now edit uniform sizes (same access as S4 assistant)" isCurrent changes={<>
+        <Release versions="v1.8.239" date="Nov 25" title="Feature: Print PDF button for S1 Form Tracker and Uniform Sizes" isCurrent changes={<>
+          <C type="feat">AdminS1 detail view: Print Roster button — column picker dropdown (Status, Notes, Company for battalion events, blank column); generates a jsPDF roster via the shared printRoster utility, same format as Cadet Challenge</C>
+          <C type="feat">AdminUniformSizes: Print Roster button — column picker for all 6 uniform size categories (Class B Shirt/Pants/Shoes, PT Shirt, Company Shirt, Class A Jacket); generates a jsPDF roster grouped by LET level</C>
+        </>} />
+        <Release versions="v1.8.238" date="Nov 25" title="Fix: Firestore rules — S1 assistant can now read/write uniformSizes and uniformSizeStatus" isCurrent={false} changes={<>
+          <C type="fix">firestore.rules uniformSizes: added company_s1_assistant alongside company_s4_assistant in create/update rules — v1.8.237 granted S1 assistant INPUT_ROLES in AdminUniformSizes.jsx but Firestore still denied read/write, causing a permission-denied snapshot error on page load</C>
+          <C type="fix">firestore.rules uniformSizeStatus: same fix — S1 assistant now allowed read/write for their own company&apos;s status doc</C>
+        </>} />
+        <Release versions="v1.8.237" date="Nov 25" title="Permissions: S1 assistant can now edit uniform sizes (same access as S4 assistant)" isCurrent={false} changes={<>
           <C type="feat">AdminUniformSizes INPUT_ROLES: added company_s1_assistant — full input/edit access for their own company&apos;s uniform sizes; finalize remains S4 assistant only</C>
         </>} />
         <Release versions="v1.8.236" date="Nov 25" title="Fix: AdminS1 crash — &quot;user is not defined&quot; on form submission" isCurrent={false} changes={<>

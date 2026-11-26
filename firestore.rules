@@ -650,12 +650,12 @@ service cloud.firestore {
       allow create: if isSignedIn() && (
         myLevel() >= 70 ||
         (myLevel() >= 45 && request.resource.data.company == userDoc().company) ||
-        (userDoc().role == 'company_s4_assistant' && request.resource.data.company == userDoc().company)
+        (userDoc().role in ['company_s4_assistant', 'company_s1_assistant'] && request.resource.data.company == userDoc().company)
       );
       allow update: if isSignedIn() && (
         myLevel() >= 70 ||
         (myLevel() >= 45 && resource.data.company == userDoc().company) ||
-        (userDoc().role == 'company_s4_assistant' && resource.data.company == userDoc().company)
+        (userDoc().role in ['company_s4_assistant', 'company_s1_assistant'] && resource.data.company == userDoc().company)
       );
       allow delete: if isSignedIn() && myLevel() >= 70;
     }
@@ -669,13 +669,13 @@ service cloud.firestore {
         myLevel() >= 70 ||
         userDoc().role == 's4_logistics' ||
         (myLevel() >= 45 && company == userDoc().company) ||
-        (userDoc().role == 'company_s4_assistant' && company == userDoc().company)
+        (userDoc().role in ['company_s4_assistant', 'company_s1_assistant'] && company == userDoc().company)
       );
       allow write: if isSignedIn() && (
         myLevel() >= 70 ||
         userDoc().role == 's4_logistics' ||
         (myLevel() >= 45 && company == userDoc().company) ||
-        (userDoc().role == 'company_s4_assistant' && company == userDoc().company)
+        (userDoc().role in ['company_s4_assistant', 'company_s1_assistant'] && company == userDoc().company)
       );
     }
 

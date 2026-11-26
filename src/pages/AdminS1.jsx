@@ -41,9 +41,10 @@ import {
   ClipboardList, Plus, ChevronLeft, CheckCircle2, Clock,
   Search, ChevronDown, ChevronUp, BookUser, Upload,
   Mail, X, FileText, Paperclip, Trophy, GraduationCap,
-  Trash2, RotateCcw, Pencil, Check,
+  Trash2, RotateCcw, Pencil, Check, Printer,
 } from 'lucide-react';
 import AdminPageHeader from '../components/AdminPageHeader';
+import { printRoster } from '../utils/printRoster';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ROLE_HIERARCHY, ADMIN_LEVEL, STAFF_LEVEL, COMMAND_LEVEL } from '../constants';
 import { useCompanies } from '../hooks/useCompanies';
@@ -372,6 +373,8 @@ const AdminS1 = ({ hideHeader = false, forceTab = null }) => {
   const [editDueDate,  setEditDueDate]  = useState(false);   // inline due-date editor open
   const [newDueDate,   setNewDueDate]   = useState('');       // value for the date <input>
   const [savingDate,   setSavingDate]   = useState(false);
+  const [showPrintOptions, setShowPrintOptions] = useState(false);
+  const [printFormCols,    setPrintFormCols]    = useState(['status', 'notes']);
 
   const [createForm, setCreateForm] = useState({
     title:   '',
@@ -922,6 +925,30 @@ const AdminS1 = ({ hideHeader = false, forceTab = null }) => {
     setEditDueDate(false);
   };
 
+  // ── Form Tracker print ────────────────────────────────────────────────────────
+  const FORM_PRINT_COL_DEFS = [
+    { key: 'status',  label: 'Status',  getValue: s => s.status === 'turned_in' ? 'Turned In' : 'Pending' },
+    ...(isBattalionLevel && selectedEvent?.scope === 'battalion'
+      ? [{ key: 'company', label: 'Company', getValue: s => s.company || '' }]
+      : []),
+    { key: 'notes', label: 'Notes',  getValue: s => s.notes || '' },
+    { key: 'blank', label: '',       getValue: () => '' },
+  ];
+
+  const handlePrintFormRoster = () => {
+    const selectedColDefs = FORM_PRINT_COL_DEFS.filter(d => printFormCols.includes(d.key));
+    const cols = selectedColDefs.length > 0 ? selectedColDefs : null;
+    const scope = selectedEvent?.scope === 'battalion' ? 'Battalion-Wide' : `${selectedEvent?.company} Company`;
+    const title = `${selectedEvent?.title} — ${scope}`;
+    const cadetsForPrint = statSubs.map(s => ({
+      fullName: s.cadetName || '',
+      letLevel: s.letLevel  || '',
+      ...s,
+    }));
+    printRoster(cadetsForPrint, title, cols ? { columns: cols } : undefined);
+    setShowPrintOptions(false);
+  };
+
   // ── Guards ────────────────────────────────────────────────────────────────────
   if (authLoading) return (
     <div className="flex-1 flex items-center justify-center min-h-[400px]">
@@ -1019,22 +1046,76 @@ const AdminS1 = ({ hideHeader = false, forceTab = null }) => {
               </div>
             </div>
 
-            {/* Overdue reminder button (S1 / admin only, when past due and there are pending cadets) */}
-            {hasOverdue && isBattalionLevel && (
-              <div className="flex flex-col items-end gap-1">
-                <button
-                  onClick={handleSendReminder}
-                  disabled={sendingEmail}
-                  className="flex items-center gap-2 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-colors"
-                >
-                  <Mail size={14} />
-                  {sendingEmail ? 'Sending…' : 'Send Overdue Reminder'}
-                </button>
-                {emailFeedback && (
-                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">{emailFeedback}</p>
-                )}
-              </div>
-            )}
+            {/* Right-side action buttons */}
+            <div className="flex flex-col items-end gap-2">
+              {/* Print roster */}
+              {statSubs.length > 0 && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowPrintOptions(o => !o)}
+                    title="Print form roster"
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all border bg-white dark:bg-slate-900 border-blue-100 dark:border-white/5 text-slate-500 dark:text-slate-400 hover:border-yellow-500 hover:text-yellow-600"
+                  >
+                    <Printer size={13} /> Print Roster
+                  </button>
+                  {showPrintOptions && (
+                    <div className="absolute right-0 top-full mt-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-xl p-4 min-w-[220px]">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">Columns to Include</p>
+                      <div className="space-y-2 mb-3">
+                        {FORM_PRINT_COL_DEFS.map(col => (
+                          <label key={col.key} className="flex items-center gap-2.5 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={printFormCols.includes(col.key)}
+                              onChange={e => setPrintFormCols(prev =>
+                                e.target.checked ? [...prev, col.key] : prev.filter(k => k !== col.key)
+                              )}
+                              className="accent-yellow-500 w-3.5 h-3.5"
+                            />
+                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                              {col.label || 'Blank Column'}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-[9px] text-slate-400 dark:text-slate-500 mb-3">
+                        Cadet names and LET levels always included.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handlePrintFormRoster}
+                          className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 hover:bg-yellow-400 text-slate-950 px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
+                        >
+                          <Printer size={11} /> Print PDF
+                        </button>
+                        <button
+                          onClick={() => setShowPrintOptions(false)}
+                          className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-[10px] font-black uppercase transition-all"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Overdue reminder button (S1 / admin only, when past due and there are pending cadets) */}
+              {hasOverdue && isBattalionLevel && (
+                <div className="flex flex-col items-end gap-1">
+                  <button
+                    onClick={handleSendReminder}
+                    disabled={sendingEmail}
+                    className="flex items-center gap-2 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-black uppercase tracking-wider px-4 py-2.5 rounded-xl transition-colors"
+                  >
+                    <Mail size={14} />
+                    {sendingEmail ? 'Sending…' : 'Send Overdue Reminder'}
+                  </button>
+                  {emailFeedback && (
+                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">{emailFeedback}</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ── Stats ──────────────────────────────────────────────────────────── */}
