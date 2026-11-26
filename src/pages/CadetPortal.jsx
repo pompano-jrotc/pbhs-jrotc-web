@@ -380,7 +380,7 @@ const CadetPortal = () => {
                     {rank && <span className="text-yellow-500">{rank} </span>}{displayName}
                   </h1>
                   <p className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mt-1.5">
-                    {[position, company && `${company} Co.`, platoon && `${platoon} PLT`].filter(Boolean).join(' · ')}
+                    {[position, company && `${company} Co.`, platoon && (platoon === 'Company HQ' ? platoon : `${platoon} PLT`)].filter(Boolean).join(' · ')}
                   </p>
                 </div>
 

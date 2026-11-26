@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.233" label="Current"     />
+        <Stat value="v1.8.234" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.233" date="Nov 25" title="Fix: S4/S7 assistants no longer redirected from Form Tracker — AdminS1 gate mismatch" isCurrent changes={<>
+        <Release versions="v1.8.234" date="Nov 25" title="Fix: Profile card shows &quot;Company HQ PLT&quot; instead of &quot;Company HQ&quot;" isCurrent changes={<>
+          <C type="fix">CadetPortal profile header: platoon display no longer appends &quot; PLT&quot; when the platoon is &quot;Company HQ&quot; — HQ is not a numbered platoon and the suffix was incorrect</C>
+        </>} />
+        <Release versions="v1.8.233" date="Nov 25" title="Fix: S4/S7 assistants no longer redirected from Form Tracker — AdminS1 gate mismatch" isCurrent={false} changes={<>
           <C type="fix">AdminS1 CAN_VIEW_ROLES: added company_s4_assistant and company_s7_assistant — AdminStaff correctly shows them the Form Tracker sub-tab (per spec) but AdminS1&apos;s internal isAuthorized gate did not include them, causing an immediate redirect to /admin/dashboard on click</C>
         </>} />
         <Release versions="v1.8.232" date="Nov 25" title="Fix: Staff Shops navbar link now visible for all users who can access any shop (L5+)" isCurrent={false} changes={<>
