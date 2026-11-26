@@ -74,21 +74,24 @@ const MyProfile = () => {
         const rosterDoc = rosterSnap.docs[0];
         const rosterDocId = rosterDoc?.id ?? null;
 
-        // Step 2: fetch all record types concurrently
+        // Step 2: fetch all record types concurrently — each failure is isolated so
+        // one denied query doesn't blank the entire My Records section.
+        const empty = { docs: [] };
+        const safe = p => p.catch(() => empty);
         const [sizesSnap, fitnessSnap, fundraiserSnap, boardScoresSnap, ribbonsSnap] = await Promise.all([
           rosterDocId
-            ? getDocs(query(collection(db, 'uniformSizes'), where('cadetId', '==', rosterDocId)))
-            : Promise.resolve({ docs: [] }),
+            ? safe(getDocs(query(collection(db, 'uniformSizes'), where('cadetId', '==', rosterDocId))))
+            : Promise.resolve(empty),
           rosterDocId
-            ? getDocs(query(collection(db, 'cadetChallengeRecords'), where('cadetId', '==', rosterDocId)))
-            : Promise.resolve({ docs: [] }),
-          getDocs(query(collection(db, 'fundraiserEntries'), where('linkedUid', '==', user.uid))),
+            ? safe(getDocs(query(collection(db, 'cadetChallengeRecords'), where('cadetId', '==', rosterDocId))))
+            : Promise.resolve(empty),
+          safe(getDocs(query(collection(db, 'fundraiserEntries'), where('linkedUid', '==', user.uid)))),
           rosterDocId
-            ? getDocs(query(collection(db, 'promotionScores'), where('rosterDocId', '==', rosterDocId)))
-            : Promise.resolve({ docs: [] }),
+            ? safe(getDocs(query(collection(db, 'promotionScores'), where('rosterDocId', '==', rosterDocId))))
+            : Promise.resolve(empty),
           rosterDocId
-            ? getDocs(query(collection(db, 'ribbonAwards'), where('rosterDocId', '==', rosterDocId)))
-            : Promise.resolve({ docs: [] }),
+            ? safe(getDocs(query(collection(db, 'ribbonAwards'), where('rosterDocId', '==', rosterDocId))))
+            : Promise.resolve(empty),
         ]);
 
         if (cancelled) return;

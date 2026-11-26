@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.225" label="Current"     />
+        <Stat value="v1.8.226" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.225" date="Nov 25" title="Fix: Firestore permission errors on My Profile — uniformSizes + fundraiser personal view" isCurrent changes={<>
+        <Release versions="v1.8.226" date="Nov 25" title="Fix: My Records fundraiser permission error — OR-chain poisoning in Firestore rules" isCurrent changes={<>
+          <C type="fix">firestore.rules fundraiserEntries: split single allow read with OR chain into three separate allow read statements — Firestore&apos;s list query evaluator treats resource.data.company in an OR branch as a per-document check that poisons other branches (including linkedUid == request.auth.uid) even when those would independently satisfy the rule; separate statements are evaluated independently</C>
+          <C type="fix">MyProfile fetchMyRecords: added per-query .catch(() =&gt; &lt;empty&gt;) wrapper on each Promise.all entry — a single denied query no longer blanks the entire My Records section; each data source fails gracefully in isolation</C>
+        </>} />
+        <Release versions="v1.8.225" date="Nov 25" title="Fix: Firestore permission errors on My Profile — uniformSizes + fundraiser personal view" isCurrent={false} changes={<>
           <C type="fix">firestore.rules uniformSizes: opened allow read to myLevel() &gt;= 1 — previous rule required myLevel() &gt;= 45 OR a per-document resource.data.linkedUid check that Firestore cannot verify from a cadetId query constraint, causing permission denials for all cadets below company command</C>
           <C type="fix">AdminFundraiser personal subscription: replaced query by cadetId with where(&apos;linkedUid&apos;, &apos;==&apos;, user.uid) — cadetId constraint could not satisfy the fundraiserEntries read rule for cadets below level 70; linkedUid constraint lets Firestore verify the self-read condition directly</C>
           <C type="fix">Removed now-unnecessary roster doc pre-fetch step from AdminFundraiser personal view (the fundraiserEntries query no longer needs the roster doc ID)</C>

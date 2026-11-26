@@ -610,14 +610,17 @@ service cloud.firestore {
     // update — company command for own company; staff (70+) for all.
     // delete — staff (70+) only.
     match /fundraiserEntries/{entryId} {
-      // staff (70+) sees all; company command (45+) sees own company;
-      // cadets can read their own entry via linkedUid (CadetPortal profile view).
-      // Lower-level cadets see the leaderboard via /api/leaderboard.json (field-whitelisted).
-      allow read: if isSignedIn() && (
-        myLevel() >= 70 ||
-        (myLevel() >= 45 && resource.data.company == userDoc().company) ||
-        resource.data.linkedUid == request.auth.uid
-      );
+      // Split into separate allow read statements to prevent OR-chain poisoning:
+      // when any OR branch contains resource.data.*, Firestore can deny the entire
+      // query even if another branch (like linkedUid == auth.uid) would independently
+      // satisfy it. Separate statements are evaluated independently.
+      // staff (70+) sees all
+      allow read: if isSignedIn() && myLevel() >= 70;
+      // company command (45+) sees own company
+      allow read: if isSignedIn() && myLevel() >= 45 && resource.data.company == userDoc().company;
+      // any cadet reads their own entries — query must filter by linkedUid so
+      // Firestore can verify resource.data.linkedUid == request.auth.uid from constraint
+      allow read: if isSignedIn() && resource.data.linkedUid == request.auth.uid;
       allow create: if isSignedIn() && (
         myLevel() >= 70 ||
         (myLevel() >= 45 && request.resource.data.company == userDoc().company)
