@@ -115,8 +115,9 @@ const AdminSidebar = ({
     'company_s1_assistant', 'company_xo', 'company_1sg', 'company_commander',
     'company_master_sergeant', 'company_s3_assistant',
   ];
-  const canSeeS1 = S1_TRACKER_ROLES.includes(role) || userLevel >= ADMIN_LEVEL;
+  const canSeeS1 = S1_TRACKER_ROLES.includes(role) || userLevel >= 5;
   const canSeeS2 = role === 's2_intelligence' || role === 'company_s2_assistant' || userLevel >= ADMIN_LEVEL;
+  const canSeeS3 = userLevel >= 20;
   const canSeeS4 = canSeeUniforms;
   const canSeeS5 = role === 's5_public_affairs' || role === 'company_s5_assistant' || (isTopFour && !isRestrictedCmd);
   const canSeeS6 = role === 's6_technology' || role === 'company_s6_assistant' || role === 's5_public_affairs' || userLevel >= ADMIN_LEVEL;
@@ -274,7 +275,7 @@ const AdminSidebar = ({
         ) : isCommander && (
           <div className={`${collapsed ? '' : 'space-y-0.5'} mt-1`}>
             {navLink('/admin/personnel', Users2, 'Personnel Hub')}
-            {(canSeeS1 || canSeeS2 || canSeeS4 || canSeeS5 || canSeeS6) && navLink('/admin/staff', Briefcase, 'Staff Shops')}
+            {(canSeeS1 || canSeeS2 || canSeeS3 || canSeeS4 || canSeeS5 || canSeeS6) && navLink('/admin/staff', Briefcase, 'Staff Shops')}
             {navLink('/admin/leadership-calendar', CalendarDays, 'Leadership Cal')}
 {hasFullFundraiserAccess && navLink('/admin/fundraiser', Heart, 'Fundraiser')}
             {(role === 's5_public_affairs' || role === 's6_technology' || (isTopFour && !isRestrictedCmd) || isStaffOrS4) && navLink('/admin/publishing', Globe, 'Publishing Hub')}
@@ -290,7 +291,7 @@ const AdminSidebar = ({
             {navLink('/admin/staff', Briefcase, 'Staff Shops')}
           </div>
         )}
-        {(canSeeS1 || canSeeS2 || canSeeS4 || canSeeS5 || canSeeS6) && !isCommander && !isS1S3Assistant && (
+        {(canSeeS1 || canSeeS2 || canSeeS3 || canSeeS4 || canSeeS5 || canSeeS6) && !isCommander && !isS1S3Assistant && (
           <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/5 space-y-0.5">
             {navLink('/admin/staff', Briefcase, 'Staff Shops')}
           </div>

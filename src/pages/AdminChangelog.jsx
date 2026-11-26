@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.231" label="Current"     />
+        <Stat value="v1.8.232" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,12 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.231" date="Nov 25" title="Fix: Staff shop permissions aligned with spec — Meeting Logs, AAR, S3 tab, Form Tracker" isCurrent changes={<>
+        <Release versions="v1.8.232" date="Nov 25" title="Fix: Staff Shops navbar link now visible for all users who can access any shop (L5+)" isCurrent changes={<>
+          <C type="fix">AdminSidebar canSeeS1: L80 floor → L5 — Meeting Logs and Service Hours are accessible from L5; sidebar was hiding the Staff Shops link from anyone below L80 without a specific role in S1_TRACKER_ROLES</C>
+          <C type="fix">AdminSidebar canSeeS3 added at userLevel &gt;= 20 — AAR logs are accessible from L20 (Platoon Sergeant) but the sidebar had no S3 gate at all, causing L20–L44 users to never see the Staff Shops nav link</C>
+          <C type="fix">Staff Shops navLink condition: added canSeeS3 to the OR chain — covers all three places in the sidebar where the Staff Shops link is conditionally rendered</C>
+        </>} />
+        <Release versions="v1.8.231" date="Nov 25" title="Fix: Staff shop permissions aligned with spec — Meeting Logs, AAR, S3 tab, Form Tracker" isCurrent={false} changes={<>
           <C type="fix">AdminStaff canSeeMeetingLogs: L45 → L5 — spec allows Sq Member (L5) and all roles above to view meeting logs</C>
           <C type="fix">AdminStaff canSeeAAR: L45 → L20 — spec allows Platoon Sergeant (L20) and all company assistants (L35) to view AARs</C>
           <C type="fix">AdminStaff canSeeS1/canSeeS3: now derived from their sub-tab gates — a role that can see any sub-tab will always see the shop tab; removing the previous fixed level floors</C>
