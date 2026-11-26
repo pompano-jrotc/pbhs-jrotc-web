@@ -121,6 +121,11 @@ const AdminStaff = () => {
     { key: 'afi-prep',         label: 'AFI Prep',            icon: ClipboardCheck, show: canSeeAFIPrep },
   ].filter(t => t.show);
   const [s1SubTab, setS1SubTab] = useState(s1SubTabs[0]?.key || '');
+  useEffect(() => {
+    if (s1SubTabs.length > 0 && !s1SubTabs.find(t => t.key === s1SubTab)) {
+      setS1SubTab(s1SubTabs[0].key);
+    }
+  }, [role]); // eslint-disable-line
 
   // ── S3 sub-tabs ──────────────────────────────────────────────────────────────
   const s3SubTabs = [
@@ -138,6 +143,11 @@ const AdminStaff = () => {
     { key: 'uniform-items',   label: 'Uniform Items',   icon: Shirt,        show: canSeeUniformItems },
   ].filter(t => t.show);
   const [s4SubTab, setS4SubTab] = useState(s4SubTabs[0]?.key || '');
+  useEffect(() => {
+    if (s4SubTabs.length > 0 && !s4SubTabs.find(t => t.key === s4SubTab)) {
+      setS4SubTab(s4SubTabs[0].key);
+    }
+  }, [role]); // eslint-disable-line
 
   // ── S6 sub-tabs ──────────────────────────────────────────────────────────────
   const s6SubTabs = [
@@ -148,6 +158,11 @@ const AdminStaff = () => {
     { key: 'feedback',            label: 'Feedback Hub',       icon: MessageSquare, show: canSeeFeedbackHub },
   ].filter(t => t.show);
   const [s6SubTab, setS6SubTab] = useState(s6SubTabs[0]?.key || '');
+  useEffect(() => {
+    if (s6SubTabs.length > 0 && !s6SubTabs.find(t => t.key === s6SubTab)) {
+      setS6SubTab(s6SubTabs[0].key);
+    }
+  }, [role]); // eslint-disable-line
 
   const subTabClass = (active) =>
     `flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${

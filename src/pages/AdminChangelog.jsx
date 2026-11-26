@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.229" label="Current"     />
+        <Stat value="v1.8.230" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.229" date="Nov 25" title="Fix: COMMAND_LEVEL not imported in AdminStaff — crash on staff page" isCurrent changes={<>
+        <Release versions="v1.8.230" date="Nov 25" title="Fix: Staff shop sub-tabs blank when role loads async" isCurrent changes={<>
+          <C type="fix">AdminStaff S1/S4/S6 sub-tab state: added useEffect to reset sub-tab selection to the first visible tab when role loads — on mount the user&apos;s role is not yet resolved from Firebase so sub-tab lists are empty; when role resolves the lists populate but the selected key stays &apos;&apos;, causing all sub-tab content to be hidden</C>
+        </>} />
+        <Release versions="v1.8.229" date="Nov 25" title="Fix: COMMAND_LEVEL not imported in AdminStaff — crash on staff page" isCurrent={false} changes={<>
           <C type="fix">AdminStaff.jsx: added COMMAND_LEVEL to import from constants — v1.8.228 used COMMAND_LEVEL in canSeeS3/canSeeAAR but forgot to import it, causing a ReferenceError crash on /admin/staff for all users</C>
         </>} />
         <Release versions="v1.8.228" date="Nov 25" title="Fix: S3 shop redirects users below Command Level — tab visibility gate mismatch" isCurrent={false} changes={<>
