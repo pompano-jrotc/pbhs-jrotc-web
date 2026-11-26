@@ -238,8 +238,11 @@ const AdminUniformSizes = ({ hideHeader = false }) => {
   // updates immediately) and on a permission-error retry (so that a rules
   // change propagates without a page reload — the subscription restarts and
   // the new listener is evaluated under the updated rules).
+  // Only runs for input/view-all users — personal-view users use the personal
+  // subscription below and don't need (or have permission for) the company query.
   useEffect(() => {
     if (authLoading) return;
+    if (!canInput && !canViewAll) { setSizes([]); setDataLoading(false); return; }
     setDataLoading(true);
     let q;
     if (canViewAll && !filterCompany) {
@@ -272,7 +275,7 @@ const AdminUniformSizes = ({ hideHeader = false }) => {
     );
     return () => { unsub(); if (retryTimer) clearTimeout(retryTimer); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, filterCompany, activeCompany, canViewAll, sizesFetchKey]);
+  }, [authLoading, filterCompany, activeCompany, canInput, canViewAll, sizesFetchKey]);
 
   // ── Subscribe: roster cadets ──────────────────────────────────────────────────
   // When a canViewAll user is in "All Companies" mode (no filterCompany), load
@@ -280,7 +283,9 @@ const AdminUniformSizes = ({ hideHeader = false }) => {
   // all-companies uniform sizes that are already loading. Without this, the
   // cadets subscription would fall back to myCompany (often 'Battalion'),
   // showing only HQ rows while sizes for every company are loaded.
+  // Only runs for input/view-all users — personal-view users don't need this.
   useEffect(() => {
+    if (!canInput && !canViewAll) { setCadets([]); return; }
     let q;
     if (canViewAll && !filterCompany) {
       // All-companies overview — load full roster (no company filter)
@@ -302,16 +307,18 @@ const AdminUniformSizes = ({ hideHeader = false }) => {
       setCadets(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
     });
     return () => unsub();
-  }, [activeCompany, canViewAll, filterCompany]);
+  }, [activeCompany, canInput, canViewAll, filterCompany]);
 
   // ── Subscribe: cycle/status doc ───────────────────────────────────────────────
+  // Only runs for input/view-all users — personal-view users don't need status.
   useEffect(() => {
+    if (!canInput && !canViewAll) { setStatusDoc({}); return; }
     if (!activeCompany) { setStatusDoc({}); return; }
     const unsub = onSnapshot(doc(db, 'uniformSizeStatus', activeCompany), snap => {
       setStatusDoc(snap.exists() ? snap.data() : {});
     });
     return () => unsub();
-  }, [activeCompany]);
+  }, [canInput, canViewAll, activeCompany]);
 
   // ── Personal-view effects ─────────────────────────────────────────────────────
   // Step 1: find the user's roster doc by linkedUid
