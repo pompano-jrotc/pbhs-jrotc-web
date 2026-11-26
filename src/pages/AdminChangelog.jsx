@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.234" label="Current"     />
+        <Stat value="v1.8.235" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,11 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.234" date="Nov 25" title="Fix: Profile card shows &quot;Company HQ PLT&quot; instead of &quot;Company HQ&quot;" isCurrent changes={<>
+        <Release versions="v1.8.235" date="Nov 25" title="Permissions: S3 assistant loses uniform sizes; promotion board hidden from S1/S3 assistants in cadet profile" isCurrent changes={<>
+          <C type="fix">AdminStaff canSeeUniformSizes: removed company_s3_assistant — S3 assistants no longer see the Uniform Sizes sub-tab in the S4 shop</C>
+          <C type="fix">AdminCadetProfile: Promotion Boards section (and Boards stat tile) now gated by canSeePromotionBoard — matches the same role allowlist as the Promotion Board sub-tab in AdminStaff; S1/S3 company assistants cannot view board scores on individual cadet profiles</C>
+        </>} />
+        <Release versions="v1.8.234" date="Nov 25" title="Fix: Profile card shows &quot;Company HQ PLT&quot; instead of &quot;Company HQ&quot;" isCurrent={false} changes={<>
           <C type="fix">CadetPortal profile header: platoon display no longer appends &quot; PLT&quot; when the platoon is &quot;Company HQ&quot; — HQ is not a numbered platoon and the suffix was incorrect</C>
         </>} />
         <Release versions="v1.8.233" date="Nov 25" title="Fix: S4/S7 assistants no longer redirected from Form Tracker — AdminS1 gate mismatch" isCurrent={false} changes={<>

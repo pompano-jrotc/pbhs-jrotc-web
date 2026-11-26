@@ -106,7 +106,8 @@ const AdminCadetProfile = () => {
   const [awardSaving,   setAwardSaving]   = useState(false);
   const [toast,         setToast]         = useState(null);
 
-  const canManageRibbons = userLevel >= STAFF_LEVEL;
+  const canManageRibbons    = userLevel >= STAFF_LEVEL;
+  const canSeePromotionBoard = ['company_1sg', 'company_xo', 'company_commander', 's7_special_projects', 's2_intelligence', 's1_adjutant', 'sergeant_major'].includes(role) || userLevel >= 85;
 
   // ── Photo management ──────────────────────────────────────────────────────
   const [linkedUserData,   setLinkedUserData]   = useState(null);
@@ -172,7 +173,7 @@ const AdminCadetProfile = () => {
 
   // ── Promotion board scores ────────────────────────────────────────────────
   useEffect(() => {
-    if (!rosterDocId || !canView) return;
+    if (!rosterDocId || !canView || !canSeePromotionBoard) return;
     const q = query(
       collection(db, 'promotionScores'),
       where('rosterDocId', '==', rosterDocId),
@@ -660,7 +661,7 @@ const AdminCadetProfile = () => {
           {/* Quick stats */}
           <div className="grid grid-cols-3 gap-2 shrink-0">
             <Tile label="Challenge" value={challengeRecs.length > 0 ? `${challengeRecs.length} cycle${challengeRecs.length !== 1 ? 's' : ''}` : 'None'} />
-            <Tile label="Boards"    value={boardScores.length || 'None'} />
+            {canSeePromotionBoard && <Tile label="Boards" value={boardScores.length || 'None'} />}
             <Tile label="Raised"    value={fmt$(fundraiser.total)} />
           </div>
         </div>
@@ -707,7 +708,7 @@ const AdminCadetProfile = () => {
       </Section>
 
       {/* ── Promotion Boards ── */}
-      <Section icon={ClipboardList} title="Promotion Boards" badge={boardScores.length > 0 ? boardScores.length : null}>
+      {canSeePromotionBoard && <Section icon={ClipboardList} title="Promotion Boards" badge={boardScores.length > 0 ? boardScores.length : null}>
         {sortedScores.length === 0 ? (
           <p className="text-xs text-slate-400 italic">No promotion board scores found.</p>
         ) : (
@@ -764,7 +765,7 @@ const AdminCadetProfile = () => {
             })}
           </div>
         )}
-      </Section>
+      </Section>}
 
       {/* ── Ribbon Recommendations ── */}
       {canManageRibbons && (

@@ -69,7 +69,7 @@ const AdminStaff = () => {
   const canSeeS6 = ['company_s6_assistant', 'company_1sg'].includes(role) || userLevel >= 50;
 
   // ── S4 sub-tab visibility ─────────────────────────────────────────────────────
-  const canSeeUniformSizes    = ['company_s4_assistant', 'company_s3_assistant', 'company_s1_assistant'].includes(role) || userLevel >= 45;
+  const canSeeUniformSizes    = ['company_s4_assistant', 'company_s1_assistant'].includes(role) || userLevel >= 45;
   const canSeeSupplyRequests  = userLevel >= 12;
   const canSeeUniformItems    = role === 'company_s4_assistant' || userLevel >= 45;
 
