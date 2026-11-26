@@ -477,7 +477,7 @@ const AppContent = () => {
             {/* Teams Private — internal roster, competition results, notes */}
             <Route
               path="/admin/teams-private"
-              element={<ProtectedRoute minLevel={COMMAND_LEVEL}><AdminTeamsPrivate /></ProtectedRoute>}
+              element={<ProtectedRoute minLevel={COMMAND_LEVEL} excludedRoles={['company_master_sergeant']}><AdminTeamsPrivate /></ProtectedRoute>}
             />
           </Route>
 

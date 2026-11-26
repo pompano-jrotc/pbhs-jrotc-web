@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.239" label="Current"     />
+        <Stat value="v1.8.240" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,15 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.239" date="Nov 25" title="Feature: Print PDF button for S1 Form Tracker and Uniform Sizes" isCurrent changes={<>
+        <Release versions="v1.8.240" date="Nov 25" title="Permissions: Company Master Sergeant access adjustments" isCurrent changes={<>
+          <C type="fix">Teams (Internal): excluded company_master_sergeant from route guard and sidebar link — MSgt does not need team management access</C>
+          <C type="fix">S2 Shop: removed company_master_sergeant from canSeeS2 — S2 intelligence access is not part of their role</C>
+          <C type="fix">Service Hours: excluded company_master_sergeant from canSeeServiceHours — logging service hours is not part of their role</C>
+          <C type="fix">AFI Prep: excluded company_master_sergeant from canSeeAFIPrep — AFI prep administration is not part of their role</C>
+          <C type="feat">S1 Form Tracker: added company_master_sergeant to CAN_MARK_ROLES — MSgt can now mark/edit form submissions for their company</C>
+          <C type="feat">Uniform Sizes: already accessible at level 45 (no change needed) — MSgt can view their company&apos;s uniform size records</C>
+        </>} />
+        <Release versions="v1.8.239" date="Nov 25" title="Feature: Print PDF button for S1 Form Tracker and Uniform Sizes" isCurrent={false} changes={<>
           <C type="feat">AdminS1 detail view: Print Roster button — column picker dropdown (Status, Notes, Company for battalion events, blank column); generates a jsPDF roster via the shared printRoster utility, same format as Cadet Challenge</C>
           <C type="feat">AdminUniformSizes: Print Roster button — column picker for all 6 uniform size categories (Class B Shirt/Pants/Shoes, PT Shirt, Company Shirt, Class A Jacket); generates a jsPDF roster grouped by LET level</C>
         </>} />

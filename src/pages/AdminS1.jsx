@@ -61,7 +61,7 @@ const CAN_CREATE_ROLES = [
 ];
 const CAN_MARK_ROLES = [
   's1_adjutant', 's3_operations',
-  'company_s1_assistant', 'company_xo', 'company_s3_assistant',
+  'company_s1_assistant', 'company_xo', 'company_s3_assistant', 'company_master_sergeant',
 ];
 const CAN_VIEW_ROLES = [
   ...CAN_MARK_ROLES,
