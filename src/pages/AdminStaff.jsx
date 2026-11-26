@@ -47,7 +47,7 @@ const AdminStaff = () => {
   // ── Tab visibility ────────────────────────────────────────────────────────────
   const canSeeS1 = userLevel >= 5;
   const canSeeS2 = ['company_s2_assistant', 'company_master_sergeant', 'company_1sg'].includes(role) || userLevel >= 50;
-  const canSeeS3 = userLevel >= 20;
+  const canSeeS3 = userLevel >= COMMAND_LEVEL;
   const canSeeS4 = userLevel >= 12;
   const canSeeS5 = ['company_s5_assistant', 'company_1sg'].includes(role) || userLevel >= 50;
   const canSeeS6 = ['company_s6_assistant', 'company_1sg'].includes(role) || userLevel >= 50;
@@ -64,7 +64,7 @@ const AdminStaff = () => {
   const canSeeAFIPrep          = userLevel >= 45;
 
   // ── S3 sub-tab visibility ─────────────────────────────────────────────────────
-  const canSeeAAR                  = userLevel >= 20;
+  const canSeeAAR                  = userLevel >= COMMAND_LEVEL;
   const canSeeCalendarEvents       = isBattalionStaff;
   const canSeeHonorCompanyTab      = isBattalionStaff;
 
