@@ -66,6 +66,7 @@ const CAN_VIEW_ROLES = [
   ...CAN_MARK_ROLES,
   'battalion_xo',
   'company_commander', 'company_1sg', 'company_master_sergeant',
+  'company_s4_assistant', 'company_s7_assistant',
 ];
 
 // Companies that are battalion HQ, not line companies.
