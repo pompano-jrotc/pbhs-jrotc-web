@@ -21,7 +21,7 @@
 //   S4 Logistics clicks "Acknowledge" → clears pending flag
 //
 // Role matrix:
-//   Input (own company): company_s4_assistant, company_commander, company_xo, company_1sg
+//   Input (own company): company_s4_assistant, company_s1_assistant, company_commander, company_xo, company_1sg
 //   View / manage all:   s4_logistics, battalion level 85+
 //   Finalize:            company_s4_assistant
 //   Acknowledge:         s4_logistics
@@ -79,7 +79,7 @@ const JACKET_SIZES_FEMALE = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20].flatMap(n => ['
 // Roster entries stored under any of these company values are Battalion/HQ members.
 const BATTALION_COMPANIES = ['Battalion', 'Zulu'];
 
-const INPUT_ROLES    = ['company_s4_assistant', 'company_commander', 'company_xo', 'company_1sg'];
+const INPUT_ROLES    = ['company_s4_assistant', 'company_s1_assistant', 'company_commander', 'company_xo', 'company_1sg'];
 const FINALIZE_ROLE  = 'company_s4_assistant';
 const ACKNOWLEDGE_ROLE = 's4_logistics';
 const VIEW_ALL_LEVEL = 85; // battalion XO and above
