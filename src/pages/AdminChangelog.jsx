@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.230" label="Current"     />
+        <Stat value="v1.8.231" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,16 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.230" date="Nov 25" title="Fix: Staff shop sub-tabs blank when role loads async" isCurrent changes={<>
+        <Release versions="v1.8.231" date="Nov 25" title="Fix: Staff shop permissions aligned with spec — Meeting Logs, AAR, S3 tab, Form Tracker" isCurrent changes={<>
+          <C type="fix">AdminStaff canSeeMeetingLogs: L45 → L5 — spec allows Sq Member (L5) and all roles above to view meeting logs</C>
+          <C type="fix">AdminStaff canSeeAAR: L45 → L20 — spec allows Platoon Sergeant (L20) and all company assistants (L35) to view AARs</C>
+          <C type="fix">AdminStaff canSeeS1/canSeeS3: now derived from their sub-tab gates — a role that can see any sub-tab will always see the shop tab; removing the previous fixed level floors</C>
+          <C type="fix">AdminStaff canSeeFormTracker: replaced company_s2_assistant (should be No View) with company_s3_assistant (should have Edit); removed SGM tag from S3 tab</C>
+          <C type="fix">AdminAARLogs isAuthorized: L45 → L20; canCreate stays L45 — L20–L44 can view company AARs read-only, L45+ can create/edit</C>
+          <C type="fix">firestore.rules aarLogs read: L45 → L20 for company-scoped reads — allows platoon and company assistant roles to query their company&apos;s AAR logs</C>
+          <C type="fix">firestore.rules meetingLogs read: L45 → L5 for companyAccess logs — client-side isLogAccessible() handles finer-grained group filtering; Firestore now permits the read for all signed-in users</C>
+        </>} />
+        <Release versions="v1.8.230" date="Nov 25" title="Fix: Staff shop sub-tabs blank when role loads async" isCurrent={false} changes={<>
           <C type="fix">AdminStaff S1/S4/S6 sub-tab state: added useEffect to reset sub-tab selection to the first visible tab when role loads — on mount the user&apos;s role is not yet resolved from Firebase so sub-tab lists are empty; when role resolves the lists populate but the selected key stays &apos;&apos;, causing all sub-tab content to be hidden</C>
         </>} />
         <Release versions="v1.8.229" date="Nov 25" title="Fix: COMMAND_LEVEL not imported in AdminStaff — crash on staff page" isCurrent={false} changes={<>

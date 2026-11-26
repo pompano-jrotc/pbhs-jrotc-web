@@ -148,12 +148,12 @@ const AdminAARLogs = ({ hideHeader = false }) => {
   const myCompany  = userData?.company || '';
 
   // ── Access flags ──────────────────────────────────────────────────────────────
-  const isAuthorized    = userLevel >= COMMAND_LEVEL;          // 45+
-  const canCreate       = isAuthorized;
+  const isAuthorized    = userLevel >= 20;                     // 20+ can view
+  const canCreate       = userLevel >= COMMAND_LEVEL;          // 45+ can create/edit
   const isStaff         = userLevel >= STAFF_LEVEL;            // 70+
   const canElevatedEdit = ELEVATED_EDIT_ROLES.includes(role) || userLevel >= 85;
   const canDelete       = canElevatedEdit;
-  // Company command (45–69) see their own company's AARs only:
+  // Below battalion staff (L20–69) see their own company's AARs only:
   const isCompanyViewer = !isStaff && isAuthorized;
   const uid             = auth.currentUser?.uid;
 

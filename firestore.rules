@@ -784,7 +784,7 @@ service cloud.firestore {
     match /meetingLogs/{id} {
       allow read: if isSignedIn() && (
         myLevel() >= 70 ||
-        (myLevel() >= 45 && myLevel() < 70 && resource.data.companyAccess == true)
+        (myLevel() >= 5 && myLevel() < 70 && resource.data.companyAccess == true)
       );
       allow create: if isSignedIn() && myLevel() >= 70 &&
         request.resource.data.createdBy == request.auth.uid;
@@ -807,7 +807,7 @@ service cloud.firestore {
     match /aarLogs/{id} {
       allow read: if isSignedIn() && (
         myLevel() >= 70 ||
-        (myLevel() >= 45 && myLevel() < 70 &&
+        (myLevel() >= 20 && myLevel() < 70 &&
           resource.data.company != null &&
           resource.data.company.lower() == userDoc().company.lower())
       );

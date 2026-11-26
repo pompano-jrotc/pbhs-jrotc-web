@@ -44,18 +44,10 @@ const AdminStaff = () => {
   const userLevel = ROLE_HIERARCHY[role] || 0;
   const isBattalionStaff = userLevel >= STAFF_LEVEL;
 
-  // ── Tab visibility ────────────────────────────────────────────────────────────
-  const canSeeS1 = userLevel >= 5;
-  const canSeeS2 = ['company_s2_assistant', 'company_master_sergeant', 'company_1sg'].includes(role) || userLevel >= 50;
-  const canSeeS3 = userLevel >= COMMAND_LEVEL;
-  const canSeeS4 = userLevel >= 12;
-  const canSeeS5 = ['company_s5_assistant', 'company_1sg'].includes(role) || userLevel >= 50;
-  const canSeeS6 = ['company_s6_assistant', 'company_1sg'].includes(role) || userLevel >= 50;
-
-  // ── S1 sub-tab visibility ─────────────────────────────────────────────────────
-  const canSeeFormTracker    = ['company_s7_assistant', 'company_s4_assistant', 'company_s2_assistant', 'company_s1_assistant'].includes(role) || userLevel >= 45;
+  // ── S1 sub-tab visibility (computed first so canSeeS1 can derive from them) ────
+  const canSeeFormTracker    = ['company_s7_assistant', 'company_s4_assistant', 'company_s3_assistant', 'company_s1_assistant'].includes(role) || userLevel >= 45;
   const canSeePromotionBoard = ['company_1sg', 'company_xo', 'company_commander', 's7_special_projects', 's2_intelligence', 's1_adjutant', 'sergeant_major'].includes(role) || userLevel >= 85;
-  const canSeeMeetingLogs    = userLevel >= 45;
+  const canSeeMeetingLogs    = userLevel >= 5;
   const canSeeCamps          = isBattalionStaff;
   const canSeeParticipation  = isBattalionStaff;
   const canSeeAwardsRegistry   = userLevel >= 45;
@@ -63,10 +55,18 @@ const AdminStaff = () => {
   const canSeeAttendance       = userLevel >= 45;
   const canSeeAFIPrep          = userLevel >= 45;
 
-  // ── S3 sub-tab visibility ─────────────────────────────────────────────────────
-  const canSeeAAR                  = userLevel >= COMMAND_LEVEL;
+  // ── S3 sub-tab visibility (computed before canSeeS3) ─────────────────────────
+  const canSeeAAR                  = userLevel >= 20;
   const canSeeCalendarEvents       = isBattalionStaff;
   const canSeeHonorCompanyTab      = isBattalionStaff;
+
+  // ── Tab visibility — S1/S3 derived from their sub-tabs ───────────────────────
+  const canSeeS1 = canSeeFormTracker || canSeePromotionBoard || canSeeMeetingLogs || canSeeCamps || canSeeParticipation || canSeeAwardsRegistry || canSeeServiceHours || canSeeAttendance || canSeeAFIPrep;
+  const canSeeS2 = ['company_s2_assistant', 'company_master_sergeant', 'company_1sg'].includes(role) || userLevel >= 50;
+  const canSeeS3 = canSeeAAR || canSeeCalendarEvents || canSeeHonorCompanyTab;
+  const canSeeS4 = userLevel >= 12;
+  const canSeeS5 = ['company_s5_assistant', 'company_1sg'].includes(role) || userLevel >= 50;
+  const canSeeS6 = ['company_s6_assistant', 'company_1sg'].includes(role) || userLevel >= 50;
 
   // ── S4 sub-tab visibility ─────────────────────────────────────────────────────
   const canSeeUniformSizes    = ['company_s4_assistant', 'company_s3_assistant', 'company_s1_assistant'].includes(role) || userLevel >= 45;
@@ -83,7 +83,7 @@ const AdminStaff = () => {
   const tabs = [
     { key: 's1', label: 'S1 Shop',  icon: ClipboardList,  show: canSeeS1 },
     { key: 's2', label: 'S2 Shop',  icon: Shield,         show: canSeeS2 },
-    { key: 's3', label: 'S3 Shop',  icon: Swords,         show: canSeeS3, tag: 'SGM' },
+    { key: 's3', label: 'S3 Shop',  icon: Swords,         show: canSeeS3 },
     { key: 's4', label: 'S4 Shop',  icon: Package,        show: canSeeS4 },
     { key: 's5', label: 'S5 Shop',  icon: Sparkles,       show: canSeeS5 },
     { key: 's6', label: 'S6 Shop',  icon: Laptop,         show: canSeeS6 },
