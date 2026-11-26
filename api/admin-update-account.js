@@ -8,7 +8,7 @@ const ROLE_HIERARCHY = {
   battalion_commander: 90, battalion_xo: 85, battalion_csm: 85, sergeant_major: 80,
   s1_adjutant: 70, s2_intelligence: 70, s3_operations: 70, s4_logistics: 70,
   s5_public_affairs: 70, s6_technology: 70, s7_special_projects: 70,
-  company_commander: 55, company_xo: 50, company_1sg: 45,
+  company_commander: 55, company_xo: 50, company_1sg: 45, company_master_sergeant: 45,
   company_s1_assistant: 35, company_s2_assistant: 35, company_s3_assistant: 35,
   company_s4_assistant: 35, company_s5_assistant: 35, company_s6_assistant: 35, company_s7_assistant: 35,
   platoon_leader: 25, platoon_sergeant: 20,
