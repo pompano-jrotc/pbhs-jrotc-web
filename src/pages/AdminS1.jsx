@@ -938,7 +938,9 @@ const AdminS1 = ({ hideHeader = false, forceTab = null }) => {
   const handlePrintFormRoster = () => {
     const selectedColDefs = FORM_PRINT_COL_DEFS.filter(d => printFormCols.includes(d.key));
     const cols = selectedColDefs.length > 0 ? selectedColDefs : null;
-    const scope = selectedEvent?.scope === 'battalion' ? 'Battalion-Wide' : `${selectedEvent?.company} Company`;
+    const scope = selectedEvent?.scope === 'battalion'
+      ? (isBattalionLevel ? 'Battalion-Wide' : `${myCompany} Company`)
+      : `${selectedEvent?.company} Company`;
     const title = `${selectedEvent?.title} — ${scope}`;
     const cadetsForPrint = statSubs.map(s => ({
       fullName: s.cadetName || '',
