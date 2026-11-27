@@ -138,11 +138,11 @@ const AdminChangelog = () => {
 
       {/* Stats bar */}
       <div className="flex flex-wrap mb-6 rounded-2xl border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/40 overflow-hidden">
-        <Stat value="404"    label="Patches"     />
-        <Stat value="720"    label="Commits"     />
+        <Stat value="406"    label="Patches"     />
+        <Stat value="722"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.246" label="Current"     />
+        <Stat value="v1.8.247" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,14 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.246" date="Nov 27" title="Permissions: Company XO and Commander excluded from AFI Prep and Teams (Internal)" isCurrent changes={<>
+        <Release versions="v1.8.247" date="Nov 27" title="iOS App — Messaging: push notifications, group admin, group chat" isCurrent changes={<>
+          <C type="feat">send-message-push API — new Vercel endpoint that sends FCM push notifications to conversation participants when a DM or group message is sent; callable by any approved user (no staff gate); stale tokens cleaned automatically</C>
+          <C type="feat">iOS: FirebaseMessaging linked to target — APNs + FCM token registration on sign-in; token stored to users/{'{uid}'}/fcmTokens array in Firestore; refresh handled by MessagingDelegate</C>
+          <C type="feat">iOS: push notification fired after every sendMessage call — foreground banner + sound enabled via UNUserNotificationCenterDelegate</C>
+          <C type="feat">iOS: GroupInfoView — group admin sheet accessible from group conversation toolbar (person.2.circle icon); rename group (admin only), remove member (admin only), leave group (any member)</C>
+          <C type="feat">iOS: Conversation model — adminUids field parsed from Firestore; used in GroupInfoView to gate rename/remove actions</C>
+        </>} />
+        <Release versions="v1.8.246" date="Nov 27" title="Permissions: Company XO and Commander excluded from AFI Prep and Teams (Internal)" isCurrent={false} changes={<>
           <C type="perm">AFI Prep sub-tab: company_xo and company_commander added to canSeeAFIPrep exclusion array (now excludes MSgt, 1SG, XO, Commander)</C>
           <C type="perm">Teams (Internal): company_xo and company_commander added to excludedRoles in App.jsx route and sidebar link gate</C>
         </>} />
