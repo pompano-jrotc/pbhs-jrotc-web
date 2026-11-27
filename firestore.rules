@@ -956,21 +956,11 @@ service cloud.firestore {
     // Update (mark complete): creator, assignees in scope, or battalion staff.
     // Delete: battalion staff (L70+) only.
     match /leadershipTasks/{id} {
-      allow read: if isSignedIn() && (
-        myLevel() >= 70 ||
-        (myLevel() >= 45 && resource.data.createdByUid == request.auth.uid) ||
-        (myLevel() >= 45 && resource.data.isAssigned == true && (
-          // New schema: assignedCompanies + assignedPositions (empty = all)
-          (resource.data.keys().hasAll(['assignedCompanies']) && (
-            (resource.data.assignedCompanies.size() == 0 || resource.data.assignedCompanies.hasAny([userDoc().company])) &&
-            (resource.data.assignedPositions.size() == 0 || resource.data.assignedPositions.hasAny([userDoc().position]))
-          )) ||
-          // Old schema backward compat
-          resource.data.assignedScope == 'all' ||
-          (resource.data.assignedScope == 'company' && resource.data.assignedCompany == userDoc().company) ||
-          (resource.data.assignedScope == 'position' && resource.data.assignedPositions.hasAny([userDoc().position]))
-        ))
-      );
+      // Read: any company command or above (L45+). Client-side filtering restricts
+      // what each role actually sees — same pattern as leadershipCalendar. This
+      // avoids per-document rule evaluation that breaks collection queries for L45
+      // users (1SG, MSgt) who can't read all docs via a full scan.
+      allow read: if isSignedIn() && myLevel() >= 45;
       allow create: if isSignedIn() && (
         (request.resource.data.isAssigned == false && myLevel() >= 45) ||
         (request.resource.data.isAssigned == true  && myLevel() >= 70)

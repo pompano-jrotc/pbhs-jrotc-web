@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.243" label="Current"     />
+        <Stat value="v1.8.244" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,13 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.243" date="Nov 27" title="Fix: Uniform Sizes status subscription retry on permission error" isCurrent changes={<>
+        <Release versions="v1.8.244" date="Nov 27" title="Permissions: First Sergeant access adjustments" isCurrent changes={<>
+          <C type="perm">S1 Forms: company_1sg added to CAN_MARK_ROLES — First Sergeants can now toggle/edit S1 form submission status</C>
+          <C type="perm">AFI Prep sub-tab: company_1sg excluded alongside company_master_sergeant — canSeeAFIPrep now uses an array exclude</C>
+          <C type="perm">Teams (Internal): company_1sg added to excludedRoles in App.jsx route and sidebar link gate — First Sergeants no longer see or can reach the internal teams page</C>
+          <C type="fix">Leadership Calendar: leadershipTasks Firestore read rule relaxed to myLevel &gt;= 45 (same pattern as leadershipCalendar) — per-document conditions on a full collection query caused permission-denied for 1SG; client-side filtering unchanged; added error handler with 3 s retry to subscription</C>
+        </>} />
+        <Release versions="v1.8.243" date="Nov 27" title="Fix: Uniform Sizes status subscription retry on permission error" isCurrent={false} changes={<>
           <C type="fix">AdminUniformSizes uniformSizeStatus subscription: added error handler with 3 s auto-retry (same pattern as uniformSizes) — transient Firestore auth-propagation errors at mount time caused an unhandled rejection that blocked the status doc from loading; statusFetchKey bumped on error to restart the listener after auth settles</C>
         </>} />
         <Release versions="v1.8.242" date="Nov 27" title="Fix: Company Master Sergeant can now view their company&apos;s uniform sizes" isCurrent={false} changes={<>

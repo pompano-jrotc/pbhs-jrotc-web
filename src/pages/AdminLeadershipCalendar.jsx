@@ -796,15 +796,23 @@ const AdminLeadershipCalendar = ({ hideHeader = false }) => {
     return () => { unsubPub(); unsubPriv(); };
   }, [isBattalion, myCompany]);
 
+  const [taskFetchKey, setTaskFetchKey] = useState(0);
+
   // ── Load tasks ────────────────────────────────────────────────────────────
   useEffect(() => {
+    let retryTimer = null;
     const q = query(collection(db, 'leadershipTasks'), orderBy('dueDate', 'asc'));
-    return onSnapshot(q, snap => {
+    const unsub = onSnapshot(q, snap => {
       const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setTasks(all);
       setSelectedTask(prev => prev ? (all.find(t => t.id === prev.id) ?? prev) : null);
+    }, err => {
+      console.warn('[leadershipTasks] snapshot error:', err.code, '— retrying in 3 s');
+      retryTimer = setTimeout(() => setTaskFetchKey(k => k + 1), 3000);
     });
-  }, []);
+    return () => { unsub(); if (retryTimer) clearTimeout(retryTimer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskFetchKey]);
 
   // Visible tasks for the current user
   const visibleTasks = useMemo(() => {

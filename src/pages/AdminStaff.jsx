@@ -53,7 +53,7 @@ const AdminStaff = () => {
   const canSeeAwardsRegistry   = userLevel >= 45;
   const canSeeServiceHours     = userLevel >= 5 && role !== 'company_master_sergeant';
   const canSeeAttendance       = userLevel >= 45;
-  const canSeeAFIPrep          = userLevel >= 45 && role !== 'company_master_sergeant';
+  const canSeeAFIPrep          = userLevel >= 45 && !['company_master_sergeant', 'company_1sg'].includes(role);
 
   // ── S3 sub-tab visibility (computed before canSeeS3) ─────────────────────────
   const canSeeAAR                  = userLevel >= 20;

@@ -300,7 +300,7 @@ const AdminSidebar = ({
         {/* ── MY TOOLS ───────────────────────────────────────── */}
         <div className={`mt-3 pt-3 border-t border-slate-100 dark:border-white/5 ${collapsed ? '' : 'space-y-0.5'}`}>
           {navLink('/admin/scholarships', GraduationCap, 'Scholarships')}
-          {isCommander && role !== 'company_master_sergeant' && navLink('/admin/teams-private', Shield, 'Teams (Internal)')}
+          {isCommander && role !== 'company_master_sergeant' && role !== 'company_1sg' && navLink('/admin/teams-private', Shield, 'Teams (Internal)')}
         </div>
 
         {/* ── PORTAL ─────────────────────────────────────────── */}
