@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.242" label="Current"     />
+        <Stat value="v1.8.243" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,10 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.242" date="Nov 27" title="Fix: Company Master Sergeant can now view their company&apos;s uniform sizes" isCurrent changes={<>
+        <Release versions="v1.8.243" date="Nov 27" title="Fix: Uniform Sizes status subscription retry on permission error" isCurrent changes={<>
+          <C type="fix">AdminUniformSizes uniformSizeStatus subscription: added error handler with 3 s auto-retry (same pattern as uniformSizes) — transient Firestore auth-propagation errors at mount time caused an unhandled rejection that blocked the status doc from loading; statusFetchKey bumped on error to restart the listener after auth settles</C>
+        </>} />
+        <Release versions="v1.8.242" date="Nov 27" title="Fix: Company Master Sergeant can now view their company&apos;s uniform sizes" isCurrent={false} changes={<>
           <C type="fix">AdminUniformSizes INPUT_ROLES: added company_master_sergeant — MSgt was shown the personal &quot;no sizes on file&quot; view instead of their company&apos;s size table; v1.8.240 changelog incorrectly stated this already worked at level 45</C>
         </>} />
         <Release versions="v1.8.241" date="Nov 25" title="Fix: Uniform Sizes — eliminate spurious permission errors for personal-view users" isCurrent={false} changes={<>

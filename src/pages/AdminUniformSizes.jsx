@@ -186,7 +186,8 @@ const AdminUniformSizes = ({ hideHeader = false }) => {
   const [detectingLeader,setDetectingLeader]= useState(false);
   // Bump to force the uniformSizes subscription to restart (used after
   // a successful save and as an auto-retry after a permission error).
-  const [sizesFetchKey,  setSizesFetchKey]  = useState(0);
+  const [sizesFetchKey,   setSizesFetchKey]   = useState(0);
+  const [statusFetchKey,  setStatusFetchKey]  = useState(0);
 
   // ── Column config state (S4 logistics only) ───────────────────────────────────
   const [showConfigPanel,  setShowConfigPanel]  = useState(false);
@@ -311,14 +312,23 @@ const AdminUniformSizes = ({ hideHeader = false }) => {
 
   // ── Subscribe: cycle/status doc ───────────────────────────────────────────────
   // Only runs for input/view-all users — personal-view users don't need status.
+  // statusFetchKey is bumped on a permission error so the subscription retries
+  // after auth propagation settles (same pattern as sizesFetchKey above).
   useEffect(() => {
     if (!canInput && !canViewAll) { setStatusDoc({}); return; }
     if (!activeCompany) { setStatusDoc({}); return; }
-    const unsub = onSnapshot(doc(db, 'uniformSizeStatus', activeCompany), snap => {
-      setStatusDoc(snap.exists() ? snap.data() : {});
-    });
-    return () => unsub();
-  }, [canInput, canViewAll, activeCompany]);
+    let retryTimer = null;
+    const unsub = onSnapshot(
+      doc(db, 'uniformSizeStatus', activeCompany),
+      snap => { setStatusDoc(snap.exists() ? snap.data() : {}); },
+      err => {
+        console.warn('[uniformSizeStatus] snapshot error:', err.code, '— retrying in 3 s');
+        retryTimer = setTimeout(() => setStatusFetchKey(k => k + 1), 3000);
+      },
+    );
+    return () => { unsub(); if (retryTimer) clearTimeout(retryTimer); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canInput, canViewAll, activeCompany, statusFetchKey]);
 
   // ── Personal-view effects ─────────────────────────────────────────────────────
   // Step 1: find the user's roster doc by linkedUid
