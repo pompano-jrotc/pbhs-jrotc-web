@@ -142,7 +142,7 @@ const AdminChangelog = () => {
         <Stat value="720"    label="Commits"     />
         <Stat value="23"     label="Role Levels" />
         <Stat value="247d"   label="In Dev"      />
-        <Stat value="v1.8.244" label="Current"     />
+        <Stat value="v1.8.246" label="Current"     />
       </div>
 
       {/* Legend */}
@@ -155,7 +155,14 @@ const AdminChangelog = () => {
       <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600 mb-3 px-1">Admin Portal Overhaul</p>
 
       <Minor version="v1.8" title="Admin Portal Overhaul" date="Oct 7, 2026" isMajor defaultOpen>
-        <Release versions="v1.8.244" date="Nov 27" title="Permissions: First Sergeant access adjustments" isCurrent changes={<>
+        <Release versions="v1.8.246" date="Nov 27" title="Permissions: Company XO and Commander excluded from AFI Prep and Teams (Internal)" isCurrent changes={<>
+          <C type="perm">AFI Prep sub-tab: company_xo and company_commander added to canSeeAFIPrep exclusion array (now excludes MSgt, 1SG, XO, Commander)</C>
+          <C type="perm">Teams (Internal): company_xo and company_commander added to excludedRoles in App.jsx route and sidebar link gate</C>
+        </>} />
+        <Release versions="v1.8.245" date="Nov 27" title="Fix: chunk-reload handler now recovers per-chunk after new deploy" isCurrent={false} changes={<>
+          <C type="fix">main.jsx vite:preloadError handler: event.payload is an Error object (not {{id}}), so the previous key-derivation used payload?.id which was always undefined — all chunk failures shared the same sessionStorage key &apos;vpr_&apos;, and after any 2 failures across the whole app the auto-reload silently stopped; fix extracts the chunk URL from the error message and keys per-chunk hash so each lazy-loaded route gets its own 2-attempt counter; Personnel Hub was the most visible casualty (reported as Master Sergeant access lost)</C>
+        </>} />
+        <Release versions="v1.8.244" date="Nov 27" title="Permissions: First Sergeant access adjustments" isCurrent={false} changes={<>
           <C type="perm">S1 Forms: company_1sg added to CAN_MARK_ROLES — First Sergeants can now toggle/edit S1 form submission status</C>
           <C type="perm">AFI Prep sub-tab: company_1sg excluded alongside company_master_sergeant — canSeeAFIPrep now uses an array exclude</C>
           <C type="perm">Teams (Internal): company_1sg added to excludedRoles in App.jsx route and sidebar link gate — First Sergeants no longer see or can reach the internal teams page</C>
